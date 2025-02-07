@@ -11,11 +11,11 @@ import scala.collection.mutable
 
 private[spark] class ArmadaClusterManager extends ExternalClusterManager {
   val master = "armada"
-  val protocol = s"$master://"
+  val protocol = s"local://$master://"
 
   override def canCreate(masterURL: String): Boolean = {
     println(s"Connecting to Armada Control Plane: $masterURL")
-    masterURL.toLowerCase.startsWith(master)
+    masterURL.toLowerCase.startsWith(protocol)
   }
 
   override def createTaskScheduler(sc: SparkContext, masterURL: String): TaskScheduler = {
