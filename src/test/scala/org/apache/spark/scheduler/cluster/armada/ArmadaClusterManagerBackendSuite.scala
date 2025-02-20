@@ -17,15 +17,18 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-import org.jmock.lib.concurrent.DeterministicScheduler
-import org.scalatest.BeforeAndAfter
+//import org.jmock.lib.concurrent.DeterministicScheduler
+//import org.scalatest.BeforeAndAfter
 
-import org.apache.spark.SparkFunSuite
+//import org.apache.spark.SparkFunSuite
 
-class ArmadaClusterManagerBackendSuite extends SparkFunSuite with BeforeAndAfter {
-  private val schedulerExecutorService = new DeterministicScheduler()
+class ArmadaClusterManagerBackendSuite
 
-  test("FIXME - Fill in!") {
-    assert(1 == 1)
-  }
-}
+//  GBJTODO: restore these
+//     extends SparkFunSuite with BeforeAndAfter {
+//   private val schedulerExecutorService = new DeterministicScheduler()
+
+//   test("FIXME - Fill in!") {
+//     assert(1 == 1)
+//   }
+// }
