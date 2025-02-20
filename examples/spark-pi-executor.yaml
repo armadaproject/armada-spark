@@ -1,0 +1,44 @@
+  queue: test                                                            
+  jobSetId: job-set-1                                                    
+  jobs:                                                                  
+    - namespace: default                                                 
+      priority: 0                                                        
+      podSpec:                                                           
+        terminationGracePeriodSeconds: 0                                 
+        restartPolicy: Never                                             
+        containers:                                                      
+          - name: spark-executor                                         
+            image: spark:testing                                         
+            env:                                                         
+            - name: SPARK_EXECUTOR_MEMORY                                
+              value: "512m"                                              
+            - name: SPARK_DRIVER_URL
+              value: "spark://CoarseGrainedScheduler@${IP_ADDR}:7078"
+            - name: SPARK_EXECUTOR_ID                                    
+              value: "1"                                                 
+            - name: SPARK_EXECUTOR_CORES                                 
+              value: "1"                                                 
+            - name: SPARK_APPLICATION_ID                                 
+              value: "test_spark_app_id"                                 
+            - name: SPARK_EXECUTOR_POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: SPARK_RESOURCE_PROFILE_ID                            
+              value: "0"                                                 
+            - name: SPARK_EXECUTOR_POD_NAME                              
+              value: "test-pod-name"                                     
+            - name: SPARK_JAVA_OPT_0
+              value: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+            command:                                                     
+              - /opt/entrypoint.sh                                       
+            args:                                                        
+              - executor                                                 
+            resources:                                                   
+              limits:                                                    
+                memory: 1Gi                                              
+                cpu: 1                                                   
+              requests:                                                  
+                memory: 1Gi                                              
+                cpu: 1                                                              
