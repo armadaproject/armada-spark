@@ -36,7 +36,13 @@ import org.apache.spark.util.{ThreadUtils} // {Clock, SystemClock, ThreadUtils, 
 private[spark] class ArmadaClusterManager extends ExternalClusterManager with Logging {
   // import SparkMasterRegex._
 
-  override def canCreate(masterURL: String): Boolean = masterURL.startsWith("armada")
+  val master = "armada"
+  val protocol = s"local://$master://"
+
+  override def canCreate(masterURL: String): Boolean = {
+    println(s"Connecting to Armada Control Plane: $masterURL")
+    masterURL.toLowerCase.startsWith(protocol)
+  }
 
   private def isLocal(conf: SparkConf): Boolean =
     true
