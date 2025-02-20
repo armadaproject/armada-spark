@@ -9,7 +9,7 @@
 
     <!-- Project Coordinates -->
     <groupId>org.apache.spark.scheduler.armada</groupId>
-    <artifactId>armada-cluster-manager</artifactId>
+    <artifactId>armada-cluster-manager_2.13</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -24,8 +24,8 @@
         <!-- Set your desired Java version -->
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <scala.version>2.13.6</scala.version>
         <scala.binary.version>2.13</scala.binary.version>
+        <scala.version>${scala.binary.version}.6</scala.version>
         <spark.version>4.1.0-SNAPSHOT</spark.version>
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
     </properties>
