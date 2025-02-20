@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'master'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build Scala ${{ matrix.scala_binary_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scala_binary_version: "2.12"
+            scala_patch_version: "18"
+          - scala_binary_version: "2.13"
+            scala_patch_version: "8"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'zulu'
+      - name: Set Scala version
+        run: |
+          sed -i -E \
+              -e "s%(<artifactId>armada-cluster-manager_)[0-9_]+(</artifactId>)%\1${{ matrix.scala_binary_version }}\2%" \
+              -e "s%(<scala.binary.version>).*(</scala.binary.version>)%\1${{ matrix.scala_binary_version }}\2%" \
+              -e "s%(scala.binary.version}.)[0-9]+(</scala.version>)%\1${{ matrix.scala_patch_version }}\2%" \
+              pom.xml
+          git diff
+      - name: Build
+        run: mvn install
+
