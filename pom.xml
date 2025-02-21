@@ -26,7 +26,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <scala.version>2.13.6</scala.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <spark.version>3.5.3</spark.version>
+        <spark.version>4.0.0-SNAPSHOT</spark.version>
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
     </properties>
 
@@ -34,6 +34,12 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-common-utils_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
         </dependency>
 
