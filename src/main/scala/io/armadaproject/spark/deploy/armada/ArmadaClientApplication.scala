@@ -241,7 +241,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication.start() called!")
+    log("ArmadaClientApplication.start() called! -gbj12")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -326,7 +326,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           clientArguments.mainClass,
           "--master",
-          "armada://armada-server.armada.svc.cluster.local:50051",
+          "local://armada://armada-server.armada.svc.cluster.local:50051",
           "--conf",
           s"spark.executor.instances=${conf.get("spark.executor.instances")}",
           "--conf",
