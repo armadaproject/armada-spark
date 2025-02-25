@@ -241,7 +241,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication.start() called! -gbj12")
+    log("ArmadaClientApplication.start() called! -gbj1a2")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -302,7 +302,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
-      new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source)
+      new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
+      new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
     val primaryResource = clientArguments.mainAppResource match {

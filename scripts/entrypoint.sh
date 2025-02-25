@@ -79,8 +79,7 @@ fi
 SPARK_CLASSPATH="$SPARK_CLASSPATH:$PWD"
 
 ARMADA_CMD=()
-if [ -e /opt/spark/jars/armada-cluster-manager* ]; then
-   echo executing Armada commands
+if [ "$EXTERNAL_CLUSTER_SUPPORT_ENABLED" = "true" ]; then
    ARMADA_CMD=(--conf "spark.driver.host=$SPARK_DRIVER_BIND_ADDRESS")
 fi
 
