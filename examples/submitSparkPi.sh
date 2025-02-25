@@ -7,6 +7,6 @@ ARMADA_MASTER=$1
 SPARK_ROOT=$2
 ARMADA_SPARK_ROOT=`pwd`
 # run spark pi app on armada
-SPARK_DRIVER_BIND_ADDRESS=localhost  $SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
+$SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --master $ARMADA_MASTER --deploy-mode cluster \
-  --jars $ARMADA_SPARK_ROOT/target/armada-cluster-manager-1.0.0-SNAPSHOT.jar  --name spark-pi --class org.apache.spark.examples.SparkPi --conf spark.executor.instances=2 --conf spark.kubernetes.container.image=spark:testingSubmit local:///opt/spark/examples/jars/spark-examples.jar 100
+  --jars $ARMADA_SPARK_ROOT/target/armada-cluster-manager-1.0.0-SNAPSHOT.jar  --name spark-pi --class org.apache.spark.examples.SparkPi --conf spark.executor.instances=2 --conf spark.kubernetes.container.image=spark:testingSubmit3 local:///opt/spark/examples/jars/spark-examples.jar 100
