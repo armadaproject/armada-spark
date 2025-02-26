@@ -26,10 +26,52 @@
         <maven.compiler.target>17</maven.compiler.target>
         <scala.version>2.13.6</scala.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <spark.version>4.0.0-SNAPSHOT</spark.version>
+        <spark.version>4.1.0-SNAPSHOT</spark.version>
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
     </properties>
 
+    <repositories>
+      <repository>
+        <id>gcs-maven-central-mirror</id>
+        <!--
+            Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
+            See https://storage-download.googleapis.com/maven-central/index.html
+        -->
+        <name>GCS Maven Central mirror</name>
+        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+        <releases>
+          <enabled>true</enabled>
+        </releases>
+        <snapshots>
+          <enabled>true</enabled>
+        </snapshots>
+      </repository>
+      <repository>
+        <id>apache-snapshots</id>
+        <name>apache-snapshots</name>
+        <url>https://repository.apache.org/content/repositories/snapshots</url>
+        <releases>
+          <enabled>true</enabled>
+        </releases>
+        <snapshots>
+          <enabled>true</enabled>
+        </snapshots>
+      </repository>
+      <repository>
+        <!--
+            This is used as a fallback when the first try fails.
+        -->
+        <id>central</id>
+        <name>Maven Repository</name>
+        <url>https://repo.maven.apache.org/maven2</url>
+        <releases>
+          <enabled>true</enabled>
+        </releases>
+        <snapshots>
+          <enabled>true</enabled>
+        </snapshots>
+      </repository>
+    </repositories>
     <dependencies>
         <dependency>
             <groupId>org.apache.spark</groupId>
