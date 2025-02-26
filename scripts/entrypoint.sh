@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+# Originally copied from: https://raw.githubusercontent.com/apache/spark/0c7b4306c7c5fbdd6c577774f8172f82e1d23e3b/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh
+
 # echo commands to the terminal output
 set -ex
 
@@ -78,6 +80,11 @@ fi
 # SPARK-43540: add current working directory into executor classpath
 SPARK_CLASSPATH="$SPARK_CLASSPATH:$PWD"
 
+ARMADA_CMD=()
+if [ "$EXTERNAL_CLUSTER_SUPPORT_ENABLED" = "true" ]; then
+   ARMADA_CMD=(--conf "spark.driver.host=$SPARK_DRIVER_BIND_ADDRESS")
+fi
+
 case "$1" in
   driver)
     shift 1
@@ -86,6 +93,7 @@ case "$1" in
       --conf "spark.driver.bindAddress=$SPARK_DRIVER_BIND_ADDRESS"
       --conf "spark.executorEnv.SPARK_DRIVER_POD_IP=$SPARK_DRIVER_BIND_ADDRESS"
       --deploy-mode client
+      "${ARMADA_CMD[@]}"
       "$@"
     )
     ;;
