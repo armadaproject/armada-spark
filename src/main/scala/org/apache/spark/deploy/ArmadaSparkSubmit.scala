@@ -17,6 +17,9 @@
 
 package org.apache.spark.deploy
 
+// Initially copied from: https://raw.githubusercontent.com/apache/spark/9cf98ed41b2de1b44c44f0b4d1273d46761459fe/core/src/main/scala/org/apache/spark/deploy/SparkSubmit.scala
+
+
 import java.io._
 import java.lang.reflect.{InvocationTargetException, UndeclaredThrowableException}
 import java.net.{URI, URL}
@@ -47,26 +50,17 @@ import org.apache.spark.util._
 import org.apache.spark.util.ArrayImplicits._
 
 /**
- * Whether to submit, kill, or request the status of an application.
- * The latter two operations are currently supported only for standalone cluster mode.
- */
-private[deploy] object SparkSubmitAction extends Enumeration {
-  type SparkSubmitAction = Value
-  val SUBMIT, KILL, REQUEST_STATUS, PRINT_VERSION = Value
-}
-
-/**
  * Main gateway of launching a Spark application.
  *
  * This program handles setting up the classpath with relevant Spark dependencies and provides
  * a layer over the different cluster managers and deploy modes that Spark supports.
  */
-private[spark] class SparkSubmit extends Logging {
+private[spark] class ArmadaSparkSubmit extends Logging {
 
-  override protected def logName: String = classOf[SparkSubmit].getName
+  override protected def logName: String = classOf[ArmadaSparkSubmit].getName
 
   import DependencyUtils._
-  import SparkSubmit._
+  import ArmadaSparkSubmit._
 
   def doSubmit(args: Array[String]): Unit = {
     val appArgs = parseArguments(args)
@@ -118,7 +112,7 @@ private[spark] class SparkSubmit extends Logging {
       }
     } else {
       sparkConf.set("spark.master", args.master)
-      SparkSubmitUtils
+      ArmadaSparkSubmitUtils
         .getSubmitOperations(args.master)
         .kill(args.submissionToKill, sparkConf)
     }
@@ -133,7 +127,7 @@ private[spark] class SparkSubmit extends Logging {
         .requestSubmissionStatus(args.submissionToRequestStatusFor)
     } else {
       sparkConf.set("spark.master", args.master)
-      SparkSubmitUtils
+      ArmadaSparkSubmitUtils
         .getSubmitOperations(args.master)
         .printSubmissionStatus(args.submissionToRequestStatusFor, sparkConf)
     }
@@ -260,9 +254,10 @@ private[spark] class SparkSubmit extends Logging {
           case "yarn" => YARN
           case m if m.startsWith("spark") => STANDALONE
           case m if m.startsWith("k8s") => KUBERNETES
+          case m if m.startsWith("armada") => ARMADA
           case m if m.startsWith("local") => LOCAL
           case _ =>
-            error("Master must either be yarn or start with spark, k8s, or local")
+            error("Master must either be yarn or start with spark, k8s, armada, or local")
             -1
         }
       case None => LOCAL // default master or remote mode.
@@ -293,6 +288,15 @@ private[spark] class SparkSubmit extends Logging {
         error(
           "Could not load KUBERNETES classes. " +
             "This copy of Spark may not have been compiled with KUBERNETES support.")
+      }
+    }
+
+    if (clusterManager == ARMADA) {
+      printMessage(s"Armada selected as cluster manager.")
+      if (!Utils.classIsLoadable(ARMADA_CLUSTER_SUBMIT_CLASS) && !Utils.isTesting) {
+        error(
+          s"Could not load ARMADA class \"${ARMADA_CLUSTER_SUBMIT_CLASS}\". " +
+          "This copy of Spark may not have been compiled with ARMADA support.")
       }
     }
 
@@ -329,6 +333,8 @@ private[spark] class SparkSubmit extends Logging {
     val isKubernetesClient = clusterManager == KUBERNETES && deployMode == CLIENT
     val isKubernetesClusterModeDriver = isKubernetesClient &&
       sparkConf.getBoolean("spark.kubernetes.submitInDriver", false)
+    val isArmadaCluster = clusterManager == ARMADA && deployMode == CLUSTER
+    // TODO: Support armada & client?
     val isCustomClasspathInClusterModeDisallowed =
       !sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE) &&
       args.proxyUser != null &&
@@ -416,6 +422,7 @@ private[spark] class SparkSubmit extends Logging {
         downloadFileList(_, targetDir, sparkConf, hadoopConf)
       }.orNull
 
+      // TODO: May have to do the same/similar for Armada
       if (isKubernetesClusterModeDriver) {
         // SPARK-33748: this mimics the behaviour of Yarn cluster mode. If the driver is running
         // in cluster mode, the archives should be available in the driver's current working
@@ -670,6 +677,7 @@ private[spark] class SparkSubmit extends Logging {
         confKey = KEYTAB.key),
       OptionAssigner(args.pyFiles, ALL_CLUSTER_MGRS, CLUSTER, confKey = SUBMIT_PYTHON_FILES.key),
 
+      // TODO: Add Armada where appropriate.
       // Propagate attributes for dependency resolution at the driver side
       OptionAssigner(args.packages, STANDALONE | KUBERNETES,
         CLUSTER, confKey = JAR_PACKAGES.key),
@@ -692,7 +700,7 @@ private[spark] class SparkSubmit extends Logging {
         mergeFn = Some(mergeFileLists(_, _))),
 
       // Other options
-      OptionAssigner(args.numExecutors, YARN | KUBERNETES, ALL_DEPLOY_MODES,
+      OptionAssigner(args.numExecutors, YARN | KUBERNETES | ARMADA, ALL_DEPLOY_MODES,
         confKey = EXECUTOR_INSTANCES.key),
       OptionAssigner(args.executorCores, STANDALONE | YARN | KUBERNETES, ALL_DEPLOY_MODES,
         confKey = EXECUTOR_CORES.key),
@@ -861,6 +869,30 @@ private[spark] class SparkSubmit extends Logging {
       // Pass the proxyUser to the k8s app so it is possible to add it to the driver args
       if (args.proxyUser != null) {
         childArgs += "--proxy-user" += args.proxyUser
+      }
+    }
+
+    if (isArmadaCluster) {
+      childMainClass = ARMADA_CLUSTER_SUBMIT_CLASS
+      if (args.primaryResource != SparkLauncher.NO_RESOURCE) {
+        if (args.isPython) {
+          childArgs ++= Array("--primary-py-file", args.primaryResource)
+          childArgs ++= Array("--main-class", "org.apache.spark.deploy.PythonRunner")
+        } else if (args.isR) {
+          childArgs ++= Array("--primary-r-file", args.primaryResource)
+          childArgs ++= Array("--main-class", "org.apache.spark.deploy.RRunner")
+        }
+        else {
+          childArgs ++= Array("--primary-java-resource", args.primaryResource)
+          childArgs ++= Array("--main-class", args.mainClass)
+        }
+      } else {
+        childArgs ++= Array("--main-class", args.mainClass)
+      }
+      if (args.childArgs != null) {
+        args.childArgs.foreach { arg =>
+          childArgs += "--arg" += arg
+        }
       }
     }
 
@@ -1058,20 +1090,21 @@ private[spark] class SparkSubmit extends Logging {
 private[spark] object InProcessSparkSubmit {
 
   def main(args: Array[String]): Unit = {
-    val submit = new SparkSubmit()
+    val submit = new ArmadaSparkSubmit()
     submit.doSubmit(args)
   }
 
 }
 
-object SparkSubmit extends CommandLineUtils with Logging {
+object ArmadaSparkSubmit extends CommandLineUtils with Logging {
 
   // Cluster managers
   private val YARN = 1
   private val STANDALONE = 2
   private val LOCAL = 8
   private val KUBERNETES = 16
-  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | LOCAL | KUBERNETES
+  private val ARMADA = 32
+  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | LOCAL | KUBERNETES | ARMADA
 
   // Deploy modes
   private val CLIENT = 1
@@ -1095,11 +1128,13 @@ object SparkSubmit extends CommandLineUtils with Logging {
   private[deploy] val STANDALONE_CLUSTER_SUBMIT_CLASS = classOf[ClientApp].getName()
   private[deploy] val KUBERNETES_CLUSTER_SUBMIT_CLASS =
     "org.apache.spark.deploy.k8s.submit.KubernetesClientApplication"
+  private[deploy] val ARMADA_CLUSTER_SUBMIT_CLASS =
+    "org.apache.spark.deploy.armada.submit.ArmadaClientApplication"
 
   override def main(args: Array[String]): Unit = {
     Option(System.getenv("SPARK_PREFER_IPV6"))
       .foreach(System.setProperty("java.net.preferIPv6Addresses", _))
-    val submit = new SparkSubmit() {
+    val submit = new ArmadaSparkSubmit() {
       self =>
 
       override protected def parseArguments(args: Array[String]): SparkSubmitArguments = {
@@ -1201,7 +1236,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
 
 }
 
-private[spark] object SparkSubmitUtils {
+private[spark] object ArmadaSparkSubmitUtils {
   private[deploy] def getSubmitOperations(master: String): SparkSubmitOperation = {
     val loader = Utils.getContextOrSparkClassLoader
     val serviceLoaders =
@@ -1239,12 +1274,3 @@ private case class OptionAssigner(
     clOption: String = null,
     confKey: String = null,
     mergeFn: Option[(String, String) => String] = None)
-
-private[spark] trait SparkSubmitOperation {
-
-  def kill(submissionId: String, conf: SparkConf): Unit
-
-  def printSubmissionStatus(submissionId: String, conf: SparkConf): Unit
-
-  def supports(master: String): Boolean
-}
