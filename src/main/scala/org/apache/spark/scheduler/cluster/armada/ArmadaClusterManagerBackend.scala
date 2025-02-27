@@ -113,7 +113,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
     val client = ArmadaClient(host, port)
     val jobSubmitResponse = client.submitJobs("test", "executor", Seq(testJob))
 
-    logInfo(s"Driver Job Submit Response-gbj1a2")
+    logInfo("Driver Job Submit Response")
     for (respItem <- jobSubmitResponse.jobResponseItems) {
       logInfo(s"JobID: ${respItem.jobId}  Error: ${respItem.error} ")
 

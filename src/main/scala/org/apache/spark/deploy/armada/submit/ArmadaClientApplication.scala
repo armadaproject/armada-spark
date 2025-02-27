@@ -241,7 +241,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication.start() called! -gbj1a2")
+    log("ArmadaClientApplication.start() called!")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -335,7 +335,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--conf",
           "spark.driver.port=7078",
           "--conf",
-          s"spark.driver.extraJavaOptions=$javaOptions"
+          s"spark.driver.extraJavaOptions=$javaOptions",
+          "--conf",
+          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
 
         ) ++ primaryResource ++ clientArguments.driverArgs
       )
