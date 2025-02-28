@@ -10,7 +10,7 @@ SCALA_BIN_VERSION=$3
 # Get the dependencies to be copied into docker image
 mvn --batch-mode package dependency:copy-dependencies
 dependencies=(
-    target/armada-cluster-manager-1.0.0-SNAPSHOT.jar
+    target/armada-cluster-manager_${SCALA_BIN_VERSION}-1.0.0-SNAPSHOT.jar
     target/dependency/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
