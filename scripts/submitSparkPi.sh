@@ -6,6 +6,13 @@
 ARMADA_MASTER=$1
 SPARK_ROOT=$2
 ARMADA_SPARK_ROOT=`pwd`
+ARMADA_QUEUE=test
+# Ensure our "test" queue exists on Armada
+armadactl get queues | grep -q -w $ARMADA_QUEUE
+if [ $? -ne 0 ]; then
+  armadactl create queue $ARMADA_QUEUE
+fi
+
 # run spark pi app on armada.  Note we are using the "ArmadaSparkSubmit" class below
 #  instead of the standard "SparkSubmit".  The rest of the parameters are standard spark
 $SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
