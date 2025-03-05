@@ -8,7 +8,7 @@ SPARK_ROOT=$2
 ARMADA_SPARK_ROOT=`pwd`
 ARMADA_QUEUE=test
 # Ensure our "test" queue exists on Armada
-if armadactl get queue $ARMADA_QUEUE; then
+if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
   armadactl create queue $ARMADA_QUEUE
 fi
 
