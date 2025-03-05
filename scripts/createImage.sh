@@ -18,7 +18,7 @@ dependencies=(
 )
 
 # Copy dependencies to the docker image directory
-cp "${dependencies[@]}" $SPARK_ROOT/assembly/target/scala-2.13/jars/
+cp "${dependencies[@]}" $SPARK_ROOT/assembly/target/scala-${SCALA_BIN_VERSION}/jars/
 
 # Make the image
 cd $SPARK_ROOT

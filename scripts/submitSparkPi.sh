@@ -8,8 +8,7 @@ SPARK_ROOT=$2
 ARMADA_SPARK_ROOT=`pwd`
 ARMADA_QUEUE=test
 # Ensure our "test" queue exists on Armada
-armadactl get queues | grep -q -w $ARMADA_QUEUE
-if [ $? -ne 0 ]; then
+if armadactl get queue $ARMADA_QUEUE; then
   armadactl create queue $ARMADA_QUEUE
 fi
 
@@ -17,4 +16,9 @@ fi
 #  instead of the standard "SparkSubmit".  The rest of the parameters are standard spark
 $SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --master $ARMADA_MASTER --deploy-mode cluster \
-  --jars $ARMADA_SPARK_ROOT/target/armada-cluster-manager-1.0.0-SNAPSHOT.jar  --name spark-pi --class org.apache.spark.examples.SparkPi --conf spark.executor.instances=2 --conf spark.kubernetes.container.image=spark:testing local:///opt/spark/examples/jars/spark-examples.jar 100
+  --jars $ARMADA_SPARK_ROOT/target/armada-cluster-manager-1.0.0-SNAPSHOT.jar \
+  --name spark-pi \
+  --class org.apache.spark.examples.SparkPi \
+  --conf spark.executor.instances=2 \
+  --conf spark.kubernetes.container.image=spark:testing \
+  local:///opt/spark/examples/jars/spark-examples.jar 100
