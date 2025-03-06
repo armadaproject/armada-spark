@@ -8,8 +8,8 @@ source scripts/functions.sh
 SCALA_BIN_VERSION=`get_scala_bin_version $SPARK_HOME`
 SPARK_VERSION=`get_spark_version $SPARK_HOME`
 
-cp versions/v${SPARK_VERSION}/pom.xml pom.xml
-cp versions/v${SPARK_VERSION}/SparkSubmit.scala src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala
+cp versions/${SPARK_VERSION}/pom.xml pom.xml
+cp versions/${SPARK_VERSION}/SparkSubmit.scala src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala
 
 # Get the dependencies to be copied into docker image
 mvn --batch-mode clean package dependency:copy-dependencies
