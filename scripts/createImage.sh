@@ -14,7 +14,7 @@ dependencies=(
     target/dependency/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/scala-armada-client_${SCALA_BIN_VERSION}-0.1.0-SNAPSHOT.jar
+    target/dependency/armada-scala-client_${SCALA_BIN_VERSION}-0.1.0-SNAPSHOT.jar
 )
 
 # Copy dependencies to the docker image directory
