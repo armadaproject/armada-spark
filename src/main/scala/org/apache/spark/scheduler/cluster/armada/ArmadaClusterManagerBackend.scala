@@ -73,6 +73,20 @@ private[spark] class ArmadaClusterSchedulerBackend(
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
+      EnvVar().withName("SPARK_JAVA_OPT_1").withValue("--add-opens=java.base/java.lang=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_2").withValue("--add-opens=java.base/java.lang.invoke=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_3").withValue("--add-opens=java.base/java.lang.reflect=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_4").withValue("--add-opens=java.base/java.io=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_5").withValue("--add-opens=java.base/java.net=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_6").withValue("--add-opens=java.base/java.nio=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_7").withValue("--add-opens=java.base/java.util=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_8").withValue("--add-opens=java.base/java.util.concurrent=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_9").withValue("--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_10").withValue("--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_12").withValue("--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_13").withValue("--add-opens=java.base/sun.nio.cs=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_14").withValue("--add-opens=java.base/sun.security.action=ALL-UNNAMED"),
+      EnvVar().withName("SPARK_JAVA_OPT_15").withValue("--add-opens=java.base/sun.util.calendar=ALL-UNNAMED"),
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     )
     val executorContainer = Container()

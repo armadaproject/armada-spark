@@ -3,10 +3,8 @@
 #command should be run like so:
 #  examples/submitSparkPi.sh armada://localhost:30002 ~/incoming/spark
 
-ARMADA_MASTER=$1
-SPARK_ROOT=$2
+source scripts/config.sh
 ARMADA_SPARK_ROOT=`pwd`
-ARMADA_QUEUE=test
 # Ensure our "test" queue exists on Armada
 if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
   armadactl create queue $ARMADA_QUEUE
@@ -20,5 +18,5 @@ $SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --name spark-pi \
   --class org.apache.spark.examples.SparkPi \
   --conf spark.executor.instances=2 \
-  --conf spark.kubernetes.container.image=spark:testing \
-  local:///opt/spark/examples/jars/spark-examples.jar 100
+  --conf spark.kubernetes.container.image=spark:$IMAGE_NAME \
+  local:///opt/spark/examples/jars/examples_2.12-3.3.4.jar 100

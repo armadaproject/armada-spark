@@ -1,0 +1,88 @@
+--- SparkSubmit.scala
++++ SparkSubmit.scala
+@@ -49,27 +52,18 @@ import org.apache.spark.launcher.SparkLauncher
+ import org.apache.spark.util._
+ import org.apache.spark.util.ArrayImplicits._
+ 
+-/**
+- * Whether to submit, kill, or request the status of an application.
+- * The latter two operations are currently supported only for standalone cluster mode.
+- */
+-private[deploy] object SparkSubmitAction extends Enumeration {
+-  type SparkSubmitAction = Value
+-  val SUBMIT, KILL, REQUEST_STATUS, PRINT_VERSION = Value
+-}
+-
+ /**
+  * Main gateway of launching a Spark application.
+  *
+  * This program handles setting up the classpath with relevant Spark dependencies and provides
+  * a layer over the different cluster managers and deploy modes that Spark supports.
+  */
+-private[spark] class SparkSubmit extends Logging {
++private[spark] class ArmadaSparkSubmit extends Logging {
+ 
+-  override protected def logName: String = classOf[SparkSubmit].getName
++  override protected def logName: String = classOf[ArmadaSparkSubmit].getName
+ 
+   import DependencyUtils._
+-  import SparkSubmit._
++  import ArmadaSparkSubmit._
+ 
+   def doSubmit(args: Array[String]): Unit = {
+     val appArgs = parseArguments(args)
+@@ -136,7 +130,7 @@ private[spark] class SparkSubmit extends Logging {
+         .requestSubmissionStatus(args.submissionToRequestStatusFor)
+     } else {
+       sparkConf.set("spark.master", args.master)
+-      SparkSubmitUtils
++      ArmadaSparkSubmitUtils
+         .getSubmitOperations(args.master)
+         .printSubmissionStatus(args.submissionToRequestStatusFor, sparkConf)
+     }
+@@ -263,9 +257,10 @@ private[spark] class SparkSubmit extends Logging {
+           case "yarn" => YARN
+           case m if m.startsWith("spark") => STANDALONE
+           case m if m.startsWith("k8s") => KUBERNETES
++          case m if m.startsWith("armada") => ARMADA
+           case m if m.startsWith("local") => LOCAL
+           case _ =>
+-            error("Master must either be yarn or start with spark, k8s, or local")
++            error("Master must either be yarn or start with spark, k8s, armada, or local")
+             -1
+         }
+       case None => LOCAL // default master or remote mode.
+@@ -1098,20 +1130,21 @@ private[spark] class SparkSubmit extends Logging {
+ private[spark] object InProcessSparkSubmit {
+ 
+   def main(args: Array[String]): Unit = {
+-    val submit = new SparkSubmit()
++    val submit = new ArmadaSparkSubmit()
+     submit.doSubmit(args)
+   }
+ 
+ }
+ 
+-object SparkSubmit extends CommandLineUtils with Logging {
++object ArmadaSparkSubmit extends CommandLineUtils with Logging {
+ 
+   // Cluster managers
+   private val YARN = 1
+   private val STANDALONE = 2
+   private val LOCAL = 8
+   private val KUBERNETES = 16
+-  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | LOCAL | KUBERNETES
++  private val ARMADA = 32
++  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | LOCAL | KUBERNETES | ARMADA
+ 
+   // Deploy modes
+   private val CLIENT = 1
+@@ -1243,7 +1278,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
+ 
+ }
+ 
+-private[spark] object SparkSubmitUtils {
++private[spark] object ArmadaSparkSubmitUtils {
+   private[deploy] def getSubmitOperations(master: String): SparkSubmitOperation = {
+     val loader = Utils.getContextOrSparkClassLoader
+     val serviceLoaders =
