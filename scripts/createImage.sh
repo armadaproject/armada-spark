@@ -19,8 +19,9 @@ dependencies=(
     target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
     target/dependency/armada-scala-client_${SCALA_BIN_VERSION}-0.1.0-SNAPSHOT.jar
+)
 
-    # both
+spark_v3_dependencies=(
     target/dependency/grpc-api-1.47.1.jar
     target/dependency/grpc-core-1.47.1.jar
     target/dependency/grpc-netty-1.47.1.jar
@@ -30,16 +31,22 @@ dependencies=(
     target/dependency/guava-31.0.1-android.jar
     target/dependency/failureaccess-1.0.1.jar
     target/dependency/perfmark-api-0.25.0.jar
+)
 
-    #3.3
+spark_v334_dependencies=(
     target/dependency/netty-codec-http2-4.1.72.Final.jar
     target/dependency/netty-codec-http-4.1.72.Final.jar
     target/dependency/protobuf-java-3.19.6.jar
-
-
-
-
 )
+
+if [[ $SPARK_VERSION == 3* ]]; then
+    dependencies+=("${spark_v3_dependencies[@]}")
+fi
+
+if [[ $SPARK_VERSION == "3.3.4" ]]; then
+    dependencies+=("${spark_v334_dependencies[@]}")
+fi
+
 
 if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar ]; then
     rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar
