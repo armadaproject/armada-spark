@@ -19,4 +19,4 @@ $SPARK_ROOT/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --class org.apache.spark.examples.SparkPi \
   --conf spark.executor.instances=2 \
   --conf spark.kubernetes.container.image=spark:$IMAGE_NAME \
-  local:///opt/spark/examples/jars/examples_2.12-3.3.4.jar 100
+  local:///opt/spark/examples/jars/spark-examples_2.12-3.3.4.jar 100

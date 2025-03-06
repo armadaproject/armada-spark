@@ -1,6 +1,6 @@
-+#!/bin/bash
-+set -e
-+source scripts/config.sh
+#!/bin/bash
+set -e
+source scripts/config.sh
 
 # generate armada docker image
 #  run like so: scripts/createImage.sh /home/gbj/incoming/spark testing 2.13
@@ -52,6 +52,7 @@ cp "${dependencies[@]}" $SPARK_ROOT/assembly/target/scala-${SCALA_BIN_VERSION}/j
 
 # Make the image
 export   SPARK_HOME=$SPARK_ROOT
+cd $SPARK_HOME
 #cp ./bin/docker-image-tool.sh /tmp
 chmod 755 /tmp/docker-image-tool.sh
 /tmp/docker-image-tool.sh -t $IMAGE_NAME build
