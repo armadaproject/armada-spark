@@ -15,4 +15,4 @@
 # limitations under the License.
 #
 
-org.apache.spark.scheduler.cluster.armada.ArmadaClusterManager
+io.armadaproject.spark.deploy.submit.ArmadaSubmitOperation
