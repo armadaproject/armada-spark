@@ -1,14 +1,8 @@
 #!/bin/bash
 
 #command should be run like so:
-#  examples/submitSparkPi.sh armada://localhost:30002 ~/incoming/spark
 
-source scripts/config.sh
 source scripts/functions.sh
-
-SCALA_BIN_VERSION=`get_scala_bin_version $SPARK_HOME`
-SPARK_VERSION=`get_spark_version $SPARK_HOME`
-ARMADA_SPARK_ROOT=`pwd`
 
 # Ensure our "test" queue exists on Armada
 if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then

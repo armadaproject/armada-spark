@@ -1,12 +1,10 @@
 #!/bin/bash
 set -e
-source scripts/config.sh
+
 source scripts/functions.sh
 
 # generate armada docker image
-#  run like so: scripts/createImage.sh /home/gbj/incoming/spark testing 2.13
-SCALA_BIN_VERSION=`get_scala_bin_version $SPARK_HOME`
-SPARK_VERSION=`get_spark_version $SPARK_HOME`
+
 
 cp versions/${SPARK_VERSION}/pom.xml pom.xml
 cp versions/${SPARK_VERSION}/SparkSubmit.scala src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala
@@ -63,6 +61,4 @@ cp "${dependencies[@]}" $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/j
 
 # Make the image
 cd $SPARK_HOME
-#cp ./bin/docker-image-tool.sh /tmp
-chmod 755 /tmp/docker-image-tool.sh
-SPARK_HOME=$SPARK_HOME /tmp/docker-image-tool.sh -t $IMAGE_NAME build
+./bin/docker-image-tool.sh -t $IMAGE_NAME build
