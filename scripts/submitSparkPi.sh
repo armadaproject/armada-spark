@@ -13,7 +13,6 @@ fi
 #  instead of the standard "SparkSubmit".  The rest of the parameters are standard spark
 $SPARK_HOME/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --master $ARMADA_MASTER --deploy-mode cluster \
-  --jars $ARMADA_SPARK_ROOT/target/armada-cluster-manager-1.0.0-SNAPSHOT.jar \
   --name spark-pi \
   --class org.apache.spark.examples.SparkPi \
   --conf spark.executor.instances=2 \
