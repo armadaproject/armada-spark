@@ -1,10 +1,9 @@
 #!/bin/bash
 set -e
 
-source scripts/functions.sh
-
 # generate armada docker image
 
+source scripts/init.sh
 
 cp versions/${SPARK_VERSION}/pom.xml pom.xml
 cp versions/${SPARK_VERSION}/SparkSubmit.scala src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala

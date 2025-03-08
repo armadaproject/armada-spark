@@ -1,10 +1,8 @@
 #!/bin/bash
 
-#command should be run like so:
+source scripts/init.sh
 
-source scripts/functions.sh
-
-# Ensure our "test" queue exists on Armada
+# Ensure queue exists on Armada
 if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
   armadactl create queue $ARMADA_QUEUE
 fi
