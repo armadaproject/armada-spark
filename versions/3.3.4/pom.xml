@@ -130,29 +130,6 @@
                     </archive>
                 </configuration>
             </plugin>
-            <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-antrun-plugin</artifactId>
-              <version>3.1.0</version>
-              <executions>
-                <execution>
-                  <id>run-script-post-clean</id>
-                  <phase>clean</phase>
-                  <goals>
-                    <goal>run</goal>
-                  </goals>
-                  <configuration>
-                    <target>
-                      <exec executable="bash">
-                        <arg value="-c"/>
-                        <arg value="echo 'Running after clean'; source /tmp/my-script.sh ${scala.binary.version}"/>
-                      </exec>
-                    </target>
-                  </configuration>
-                </execution>
-              </executions>
-            </plugin>
         </plugins>
     </build>
-
 </project>
