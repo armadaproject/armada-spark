@@ -6,8 +6,25 @@ if [ -e "scripts/config.sh" ]; then
     source scripts/config.sh
 fi
 
-while getopts "s:i:m:q" opt; do
+print_usage () {
+    echo ' Usage:'
+    echo '   -h  help'
+    echo '   -s  <spark-home>'
+    echo '   -i  <image-name>'
+    echo '   -m  <armada-master-url>'
+    echo '   -q  <armada-queue>'
+    echo ''
+    echo 'You also can specify those parameters in scripts/config.sh, like so:'
+    echo '   SPARK_HOME=../spark'
+    echo '   IMAGE_NAME=testing'
+    echo '   ARMADA_MASTER=armada://localhost:30002'
+    echo '   ARMADA_QUEUE=test'
+    exit 1
+}
+
+while getopts "hs:i:m:q" opt; do
   case "$opt" in
+    h) print_usage ;;
     s) SPARK_HOME=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
