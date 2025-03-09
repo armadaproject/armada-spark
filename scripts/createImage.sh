@@ -45,6 +45,7 @@ if [[ $SPARK_VERSION == "3.3.4" ]]; then
 fi
 
 
+# Replace these with newer versions below
 if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar ]; then
     rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar
 fi

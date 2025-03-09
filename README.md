@@ -23,7 +23,7 @@ Spark versions, older than spark4, use scala 2.12, so you will need to build tha
 
 To build the images, run the "scripts/createImage.sh" script.
 
-That script requires the following config:
+That script requires config similiar to the following:
 ```
 SPARK_HOME=../spark
 IMAGE_NAME=testing
@@ -39,9 +39,9 @@ cd $SPARK_HOME
 git checkout origin/master
 ./build/sbt -Pkubernetes clean package
 ```
-createImage.sh also supports spark versions "3.3.4" and "3.5.3" so you can build those as well.
+Spark versions "3.3.4" and "3.5.3" are also supported.
 
-Whichever spark/scala versions are used in the $SPARK_HOME/pom.xml are the versions that will be built for Armada.
+The spark/scala versions used are the ones specificied in the spark repo, here: $SPARK_HOME/pom.xml.
 
 ## KIND Armada clusters
 If you are using "kind", you can load the image like so:
