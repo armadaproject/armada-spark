@@ -5,8 +5,8 @@ set -e
 
 source scripts/init.sh
 
-cp versions/${SPARK_VERSION}/pom.xml pom.xml
-cp versions/${SPARK_VERSION}/SparkSubmit.scala src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala
+# Set this project's Spark and Scala version according to the Spark sources in $SPARK_HOME
+./scripts/set-version "$SPARK_VERSION" $"SCALA_VERSION"
 
 # Get the dependencies to be copied into docker image
 mvn --batch-mode clean package dependency:copy-dependencies

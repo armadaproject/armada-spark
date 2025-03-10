@@ -19,6 +19,19 @@ Spark versions, older than spark4, use scala 2.12, so you will need to build tha
 -val scala2Version = "2.13.15"
 +val scala2Version = "2.12.20"
 ```
+
+## Building the project
+
+First, set the Spark and Scala version that you want to build for (unless the default works for you), e.g.:
+```
+scripts/set-version.sh 3.5.3 2.13.15
+```
+
+Then you can build the project:
+```
+mvn package
+```
+
 ## Building Docker Images
 
 To build the images, run the "scripts/createImage.sh" script.
@@ -32,6 +45,8 @@ ARMADA_QUEUE=test
 ```
 
 You can specify those parameters in scripts/config.sh, or on the command line with "-s", "-i", "-m" and "-q".
+
+This script will set Spark and Scala versions of this project according to the version set in $SPARK_HOME.
 
 Before running the command you will need to build the spark code like so:
 ```
