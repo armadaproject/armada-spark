@@ -6,7 +6,7 @@ set -e
 source scripts/init.sh
 
 # Set this project's Spark and Scala version according to the Spark sources in $SPARK_HOME
-./scripts/set-version "$SPARK_VERSION" $"SCALA_VERSION"
+./scripts/set-version.sh $SPARK_VERSION $SCALA_VERSION
 
 # Get the dependencies to be copied into docker image
 mvn --batch-mode clean package dependency:copy-dependencies
