@@ -52,15 +52,12 @@ private[spark] class ArmadaClusterSchedulerBackend(
 
   private def submitJob(executorId: Int): Unit = {
 
-    val header = "local://"
-    val masterWithoutHeader = masterURL.substring(header.length)
-    val urlArray = masterWithoutHeader.split(":")
+    val urlArray = masterURL.split(":")
     // Remove leading "/"'s
     val host = if (urlArray(1).startsWith("/")) urlArray(1).substring(2) else urlArray(1)
     val port = urlArray(2).toInt
 
     val driverAddr = sys.env("SPARK_DRIVER_BIND_ADDRESS")
-
 
     val driverURL = s"spark://CoarseGrainedScheduler@$driverAddr:7078"
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
