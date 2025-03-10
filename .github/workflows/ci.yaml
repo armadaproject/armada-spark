@@ -43,7 +43,7 @@ jobs:
           distribution: 'zulu'
       - name: Set Spark and Scala versions
         run: |
-          ./scripts/set-version.sh "${{ matrix.scala_version }}" "${{ matrix.scala_version }}"
+          ./scripts/set-version.sh "${{ matrix.spark_version }}" "${{ matrix.scala_version }}"
           git diff
       - name: Build
         run: mvn install
