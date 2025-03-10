@@ -37,7 +37,7 @@ private[spark] class ArmadaClusterManager extends ExternalClusterManager with Lo
   // import SparkMasterRegex._
 
   val master = "armada"
-  val protocol = s"local://$master://"
+  val protocol = s"$master://"
 
   override def canCreate(masterURL: String): Boolean = {
     println(s"Connecting to Armada Control Plane: $masterURL")

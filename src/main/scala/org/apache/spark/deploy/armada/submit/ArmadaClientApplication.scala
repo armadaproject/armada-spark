@@ -327,7 +327,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           clientArguments.mainClass,
           "--master",
-          "local://armada://armada-server.armada.svc.cluster.local:50051",
+          "armada://armada-server.armada.svc.cluster.local:50051",
           "--conf",
           s"spark.executor.instances=${conf.get("spark.executor.instances")}",
           "--conf",
@@ -337,7 +337,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--conf",
           s"spark.driver.extraJavaOptions=$javaOptions",
           "--conf",
-          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
+          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)",
+          "--conf",
+          "spark.submit.external.class=org.apache.spark.deploy.armada.submit.ArmadaClientApplication",
 
         ) ++ primaryResource ++ clientArguments.driverArgs
       )
