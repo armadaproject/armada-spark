@@ -15,16 +15,23 @@ permissions: {}
 
 jobs:
   build:
-    name: Build Scala ${{ matrix.scala_binary_version }}
+    name: Build Spark ${{ matrix.scala_version }} Scala ${{ matrix.scala_version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - scala_binary_version: "2.12"
-            scala_patch_version: "18"
-          - scala_binary_version: "2.13"
-            scala_patch_version: "8"
+          - scala_version: "2.12.15"
+            spark_version: "3.3.4"
+          - scala_version: "2.12.18"
+            spark_version: "3.5.5"
+
+          - scala_version: "2.13.8"
+            spark_version: "3.3.4"
+          - scala_version: "2.13.8"
+            spark_version: "3.5.5"
+          - scala_version: "2.13.8"
+            spark_version: "4.1.0-SNAPSHOT"
 
     steps:
       - name: Checkout
@@ -34,14 +41,9 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
-      - name: Set Scala version
+      - name: Set Spark and Scala versions
         run: |
-          sed -i -E \
-              -e "s%(<artifactId>armada-cluster-manager_)[0-9_]+(</artifactId>)%\1${{ matrix.scala_binary_version }}\2%" \
-              -e "s%(<scala.binary.version>).*(</scala.binary.version>)%\1${{ matrix.scala_binary_version }}\2%" \
-              -e "s%(scala.binary.version}.)[0-9]+(</scala.version>)%\1${{ matrix.scala_patch_version }}\2%" \
-              pom.xml
+          ./scripts/set-version.sh "${{ matrix.scala_version }}" "${{ matrix.scala_version }}"
           git diff
       - name: Build
         run: mvn install
-
