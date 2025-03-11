@@ -15,7 +15,7 @@ permissions: {}
 
 jobs:
   build:
-    name: Build Spark ${{ matrix.scala_version }} Scala ${{ matrix.scala_version }}
+    name: Build Spark ${{ matrix.spark_version }} Scala ${{ matrix.scala_version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
