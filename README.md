@@ -13,11 +13,13 @@ cd client/scala/armada-scala-client
 sbt publishM2
 ```
 
-Spark versions, older than spark4, use scala 2.12, so you will need to build that version of the client as well.  To do so modify $ARMADA_ROOT/client/scala/armada-scala-client/build.sbt like so:
+This project by default uses Scala 2.13.
+
+Spark versions older than Spark4 supports Scala 2.12 and 2.13. If you need Scala 2.12 support, you will need to build that version of the client as well:
 
 ```
--val scala2Version = "2.13.15"
-+val scala2Version = "2.12.20"
+cd client/scala/armada-scala-client
+sbt ++2.12 publishM2
 ```
 
 ## Building the project
