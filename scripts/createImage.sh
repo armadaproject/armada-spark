@@ -45,12 +45,14 @@ if [[ $SPARK_VERSION == "3.3."* ]]; then
 fi
 
 
-# Replace these with newer versions below
+# These jar version don't work with the Armada client.  Replace them with newer versions below.
 if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar ]; then
+    # will be replaced with: guava-31.0.1-android.jar
     rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar
 fi
 
 if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-java-2.5.0.jar ]; then
+    # will be replaced with: protobuf-java-3.19.6.jar
     rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-java-2.5.0.jar
 fi
 
