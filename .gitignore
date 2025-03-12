@@ -72,8 +72,3 @@ project/**/metals.sbt
 
 # don't check in your config file
 scripts/config.sh
-
-# these files are copied over depending on what version of spark is used
-/pom.xml
-src/main/scala/org/apache/spark/deploy/ArmadaSparkSubmit.scala
-

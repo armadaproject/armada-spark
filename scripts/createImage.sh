@@ -30,7 +30,7 @@ spark_v3_dependencies=(
     target/dependency/perfmark-api-0.25.0.jar
 )
 
-spark_v334_dependencies=(
+spark_v33_dependencies=(
     target/dependency/netty-codec-http2-4.1.72.Final.jar
     target/dependency/netty-codec-http-4.1.72.Final.jar
     target/dependency/protobuf-java-3.19.6.jar
@@ -40,8 +40,8 @@ if [[ $SPARK_VERSION == 3* ]]; then
     dependencies+=("${spark_v3_dependencies[@]}")
 fi
 
-if [[ $SPARK_VERSION == "3.3.4" ]]; then
-    dependencies+=("${spark_v334_dependencies[@]}")
+if [[ $SPARK_VERSION == "3.3."* ]]; then
+    dependencies+=("${spark_v33_dependencies[@]}")
 fi
 
 

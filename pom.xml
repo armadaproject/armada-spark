@@ -9,7 +9,7 @@
 
     <!-- Project Coordinates -->
     <groupId>io.armadaproject.armada</groupId>
-    <artifactId>armada-cluster-manager_2.12</artifactId>
+    <artifactId>armada-cluster-manager_2.13</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
