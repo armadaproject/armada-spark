@@ -261,6 +261,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // to turn into driver / cluster manager mode.
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
     log(s"Got job ID: $jobId")
+
+    val lookoutURL = s"http://$host:30000/?page=0&sort[id]=jobId&sort[desc]=true&" +
+      s"ps=50&sb=$jobId&active=false&refresh=true"
+    log(s"Lookout URL for this job is $lookoutURL")
+
     // For constructing the app ID, we can't use the Spark application name, as the app ID is going
     // to be added as a label to group resources belonging to the same application. Label values are
     // considerably restrictive, e.g. must be no longer than 63 characters in length. So we generate
