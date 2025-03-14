@@ -73,6 +73,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
+      EnvVar().withName("SPARK_JAVA_OPT_1").withValue("--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"),
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     )
     val executorContainer = Container()
