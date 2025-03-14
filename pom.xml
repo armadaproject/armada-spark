@@ -8,7 +8,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!-- Project Coordinates -->
-    <groupId>org.apache.spark.scheduler.armada</groupId>
+    <groupId>io.armadaproject.armada</groupId>
     <artifactId>armada-cluster-manager_2.13</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -24,9 +24,19 @@
         <!-- Set your desired Java version -->
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <scala.binary.version>2.13</scala.binary.version>
-        <scala.version>${scala.binary.version}.6</scala.version>
-        <spark.version>4.1.0-SNAPSHOT</spark.version>
+        <!-- configure Scala version -->
+        <scala.major.version>2</scala.major.version>
+        <scala.minor.version>13</scala.minor.version>
+        <scala.patch.version>6</scala.patch.version>
+        <scala.binary.version>${scala.major.version}.${scala.minor.version}</scala.binary.version>
+        <scala.version>${scala.binary.version}.${scala.patch.version}</scala.version>
+        <!-- configure Spark version -->
+        <spark.major.version>3</spark.major.version>
+        <spark.minor.version>3</spark.minor.version>
+        <spark.patch.version>4</spark.patch.version>
+        <spark.binary.version>${spark.major.version}.${spark.minor.version}</spark.binary.version>
+        <spark.version>${spark.binary.version}.${spark.patch.version}</spark.version>
+
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
     </properties>
 
@@ -81,22 +91,54 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-common-utils_${scala.binary.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
           <groupId>io.armadaproject.armada</groupId>
           <artifactId>armada-scala-client_${scala.binary.version}</artifactId>
           <version>0.1.0-SNAPSHOT</version> <!-- TODO: Actually pin to a "real" release of this client -->
         </dependency>
     </dependencies>
 
+    <profiles>
+        <profile>
+            <id>spark-4</id>
+            <activation>
+                <property>
+                    <name>spark.major.version</name>
+                    <value>4</value>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-common-utils_${scala.binary.version}</artifactId>
+                    <version>${spark.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <!-- Build Plugins -->
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>spark-version-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/scala-spark-${spark.binary.version}</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Compiler Plugin -->
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
@@ -139,5 +181,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>
