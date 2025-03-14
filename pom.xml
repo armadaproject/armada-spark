@@ -47,11 +47,14 @@
         </snapshots>
       </repository>
       <repository>
+        <!--
+            This is where Apache publishes snapshots.
+        -->
         <id>apache-snapshots</id>
         <name>apache-snapshots</name>
         <url>https://repository.apache.org/content/repositories/snapshots</url>
         <releases>
-          <enabled>true</enabled>
+          <enabled>false</enabled>
         </releases>
         <snapshots>
           <enabled>true</enabled>
@@ -66,6 +69,20 @@
         <url>https://repo.maven.apache.org/maven2</url>
         <releases>
           <enabled>true</enabled>
+        </releases>
+        <snapshots>
+          <enabled>false</enabled>
+        </snapshots>
+      </repository>
+      <repository>
+          <!--
+              This is where Armada (and Apache) publishes snapshots.
+          -->
+        <id>central-portal-snapshots</id>
+        <name>Central Portal Snapshots</name>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <releases>
+          <enabled>false</enabled>
         </releases>
         <snapshots>
           <enabled>true</enabled>
