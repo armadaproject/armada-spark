@@ -69,3 +69,6 @@ project/**/metals.sbt
 
 .bsp
 .history
+
+# don't check in your config file
+scripts/config.sh
