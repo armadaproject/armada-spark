@@ -15,4 +15,5 @@ $SPARK_HOME/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --class org.apache.spark.examples.SparkPi \
   --conf spark.executor.instances=2 \
   --conf spark.kubernetes.container.image=spark:$IMAGE_NAME \
+  --conf armada.lookout.urlbase=http://mocha:3000 \
   local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar 100

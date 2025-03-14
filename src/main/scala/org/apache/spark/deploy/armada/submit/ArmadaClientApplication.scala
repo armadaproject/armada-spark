@@ -262,7 +262,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
     log(s"Got job ID: $jobId")
 
-    val lookoutURL = s"http://$host:30000/?page=0&sort[id]=jobId&sort[desc]=true&" +
+    var lookoutBaseURL = sparkConf.get("armada.lookout.urlbase")
+    if (lookoutBaseURL.length() == 0) {
+      lookoutBaseURL = "http://localhost:30000"
+    }
+
+    val lookoutURL = s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
       s"ps=50&sb=$jobId&active=false&refresh=true"
     log(s"Lookout URL for this job is $lookoutURL")
 
