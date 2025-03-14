@@ -134,12 +134,12 @@ private[spark] class ArmadaClusterSchedulerBackend(
     }
 
     def checkMin(): Unit = {
-      if (getAliveCount < 2) {
+      if (getAliveCount < numberOfExecutors) {
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
         }
         else if (Duration(clock.getTimeMillis() - startTime, TimeUnit.MILLISECONDS) > 10.seconds ) {
-          scheduler.error("Exiting")
+          scheduler.error("Sufficient executors failed to start.  Driver exiting.")
         }
       } else {
         startTime = 0
