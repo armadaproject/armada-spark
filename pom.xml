@@ -112,6 +112,30 @@
           <artifactId>armada-scala-client_${scala.binary.version}</artifactId>
           <version>0.1.0-SNAPSHOT</version>
         </dependency>
+        <dependency>
+          <groupId>org.jmock</groupId>
+          <artifactId>jmock-junit5</artifactId>
+          <scope>test</scope>
+          <version>2.13.1</version>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatest</groupId>
+          <artifactId>scalatest_${scala.binary.version}</artifactId>
+          <scope>test</scope>
+          <version>3.2.16</version>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatestplus</groupId>
+          <artifactId>scalacheck-1-18_${scala.binary.version}</artifactId>
+          <version>3.2.19.0</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatestplus</groupId>
+          <artifactId>mockito-5-12_${scala.binary.version}</artifactId>
+          <version>3.2.19.0</version>
+          <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <profiles>
