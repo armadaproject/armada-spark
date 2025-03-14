@@ -4,24 +4,6 @@
 
 This repo allows you build docker images with spark and armada support and to load those images as armada jobs.  It requires you specify a spark repo which is used as the baseline config for those docker images.
 
-## Building the Armada Client
-Before you can build the project you need to build the Armada client:
-```
-cd $ARMADA_ROOT
-mage buildScala
-cd client/scala/armada-scala-client
-sbt publishM2
-```
-
-This project by default uses Scala 2.13.
-
-Spark versions older than Spark4 supports Scala 2.12 and 2.13. If you need Scala 2.12 support, you will need to build that version of the client as well:
-
-```
-cd client/scala/armada-scala-client
-sbt ++2.12 publishM2
-```
-
 ## Building the project
 
 First, set the Spark and Scala version that you want to build for (unless the default works for you), e.g.:
