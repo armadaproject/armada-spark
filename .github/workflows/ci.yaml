@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'master'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build Spark ${{ matrix.spark_version }} Scala ${{ matrix.scala_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scala_version: "2.12.15"
+            spark_version: "3.3.4"
+          - scala_version: "2.12.18"
+            spark_version: "3.5.5"
+
+          - scala_version: "2.13.8"
+            spark_version: "3.3.4"
+          - scala_version: "2.13.8"
+            spark_version: "3.5.5"
+          - scala_version: "2.13.8"
+            spark_version: "4.1.0-SNAPSHOT"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'zulu'
+      - name: Set Spark and Scala versions
+        run: |
+          ./scripts/set-version.sh "${{ matrix.spark_version }}" "${{ matrix.scala_version }}"
+          git diff
+      - name: Build
+        run: mvn install
