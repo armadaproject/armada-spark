@@ -150,18 +150,6 @@
           <version>3.2.19.0</version>
           <scope>test</scope>
         </dependency>
-        <dependency>
-          <groupId>net.bytebuddy</groupId>
-          <artifactId>byte-buddy</artifactId>
-          <version>1.17.2</version>
-          <scope>test</scope>
-        </dependency>
-        <dependency>
-          <groupId>net.bytebuddy</groupId>
-          <artifactId>byte-buddy-agent</artifactId>
-          <version>1.17.2</version>
-          <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <profiles>
@@ -375,29 +363,6 @@
                 <filereports>SparkTestSuite.txt</filereports>
                 <argLine>-ea -Xmx4g -Xss4m -XX:MaxMetaspaceSize=2g ${extraJavaTestArgs} -Dio.netty.tryReflectionSetAccessible=true</argLine>
                 <stderr/>
-                <environmentVariables>
-                  <!--
-                      Setting SPARK_DIST_CLASSPATH is a simple way to make sure any child processes
-                      launched by the tests have access to the correct test-time classpath.
-                  -->
-                  <SPARK_DIST_CLASSPATH>${test_classpath}</SPARK_DIST_CLASSPATH>
-                  <SPARK_PREPEND_CLASSES>1</SPARK_PREPEND_CLASSES>
-                  <SPARK_SCALA_VERSION>${scala.binary.version}</SPARK_SCALA_VERSION>
-                  <SPARK_TESTING>1</SPARK_TESTING>
-                  <JAVA_HOME>${test.java.home}</JAVA_HOME>
-                </environmentVariables>
-                <systemProperties>
-                  <log4j.configurationFile>file:src/test/resources/log4j2.properties</log4j.configurationFile>
-                  <derby.system.durability>test</derby.system.durability>
-                  <java.awt.headless>true</java.awt.headless>
-                  <spark.test.home>${spark.test.home}</spark.test.home>
-                  <spark.testing>1</spark.testing>
-                  <spark.ui.enabled>false</spark.ui.enabled>
-                  <spark.ui.showConsoleProgress>false</spark.ui.showConsoleProgress>
-                  <spark.unsafe.exceptionOnMemoryLeak>true</spark.unsafe.exceptionOnMemoryLeak>
-                </systemProperties>
-                <tagsToExclude>${test.exclude.tags},${test.default.exclude.tags}</tagsToExclude>
-                <tagsToInclude>${test.include.tags}</tagsToInclude>
               </configuration>
               <executions>
                 <execution>
@@ -411,5 +376,3 @@
         </plugins>
     </build>
 </project>
-
-
