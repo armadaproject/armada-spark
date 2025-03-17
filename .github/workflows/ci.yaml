@@ -36,6 +36,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Restore Maven packages cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-${{ hashFiles('pom.xml') }}
+          restore-keys:
+            ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-${{ hashFiles('pom.xml') }}
+            ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
@@ -45,5 +53,7 @@ jobs:
         run: |
           ./scripts/set-version.sh "${{ matrix.spark_version }}" "${{ matrix.scala_version }}"
           git diff
+      - name: Fetch mvn dependencies
+        run: mvn --batch-mode dependency:go-offline
       - name: Build
-        run: mvn install
+        run: mvn --batch-mode install
