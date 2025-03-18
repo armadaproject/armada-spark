@@ -27,10 +27,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
-import org.apache.spark.scheduler.cluster.SchedulerBackendUtils.getInitialTargetExecutorNumber
-import org.apache.spark.util.{Clock, ThreadUtils}
+import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
-import scala.concurrent.duration.{Duration, DurationInt}
 
 
 // TODO: Implement for Armada
@@ -45,6 +43,8 @@ private[spark] class ArmadaClusterSchedulerBackend(
   private val appId = "fake_app_id_FIXME"
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+  private val executorTracker = new ExecutorTracker(conf, new SystemClock(), initialExecutors)
+
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(appId)
@@ -139,12 +139,13 @@ private[spark] class ArmadaClusterSchedulerBackend(
     }
 
     def checkMin(): Unit = {
+      logInfo("Checking number of Executors")
       if (getAliveCount < numberOfExecutors) {
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
         }
         else if (clock.getTimeMillis() - startTime > timeout ) {
-          scheduler.error("Sufficient executors failed to start.  Driver exiting.")
+          scheduler.error("Inufficient executors running.  Driver exiting.")
         }
       } else {
         startTime = 0
@@ -162,11 +163,13 @@ private[spark] class ArmadaClusterSchedulerBackend(
   }
 
   override def start(): Unit = {
-    val numberOfExecutors = getInitialTargetExecutorNumber(conf)
-    1 to numberOfExecutors foreach {j: Int => submitJob(j)}
+    1 to initialExecutors foreach {j: Int => submitJob(j)}
+    executorTracker.start()
   }
 
-    override def stop(): Unit = {}
+    override def stop(): Unit = {
+      executorTracker.stop()
+    }
 
     /*
     override def doRequestTotalExecutors(
