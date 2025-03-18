@@ -22,7 +22,8 @@ import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated.{Container, PodSpec, ResourceRequirements}
 import k8s.io.api.core.v1.generated.{EnvVar, EnvVarSource, ObjectFieldSelector}
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import org.apache.spark.SparkContext
+import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
@@ -121,16 +122,20 @@ private[spark] class ArmadaClusterSchedulerBackend(
     }
   }
 
-  class ExecutorTracker(val clock: Clock,
+  class ExecutorTracker(val conf: SparkConf,
+                        val clock: Clock,
                         val numberOfExecutors: Int) {
 
     private val daemon = ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-min-executor-daemon")
+    private val pollingInterval = conf.get(ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL)
+    private val timeout = conf.get(ARMADA_EXECUTOR_TRACKER_TIMEOUT)
+
     private var startTime = 0L
 
     def start(): Unit = {
       daemon.scheduleWithFixedDelay(
         () => checkMin(),
-        3, 10, TimeUnit.SECONDS)
+        pollingInterval, pollingInterval, TimeUnit.MILLISECONDS)
     }
 
     def checkMin(): Unit = {
@@ -138,7 +143,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
         }
-        else if (Duration(clock.getTimeMillis() - startTime, TimeUnit.MILLISECONDS) > 10.seconds ) {
+        else if (clock.getTimeMillis() - startTime > timeout ) {
           scheduler.error("Sufficient executors failed to start.  Driver exiting.")
         }
       } else {
