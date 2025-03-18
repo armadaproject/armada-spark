@@ -115,11 +115,16 @@ private[spark] class ArmadaClusterSchedulerBackend(
     val client = ArmadaClient(host, port)
     val jobSubmitResponse = client.submitJobs("test", "executor", Seq(testJob))
 
-    logInfo("Driver Job Submit Response -gbjexit")
+    logInfo("Driver Job Submit Response")
     for (respItem <- jobSubmitResponse.jobResponseItems) {
       logInfo(s"JobID: ${respItem.jobId}  Error: ${respItem.error} ")
 
     }
+  }
+
+  override def start(): Unit = {
+    1 to initialExecutors foreach {j: Int => submitJob(j)}
+    executorTracker.start()
   }
 
   class ExecutorTracker(val conf: SparkConf,
@@ -162,16 +167,11 @@ private[spark] class ArmadaClusterSchedulerBackend(
     }
   }
 
-  override def start(): Unit = {
-    1 to initialExecutors foreach {j: Int => submitJob(j)}
-    executorTracker.start()
+  override def stop(): Unit = {
+    executorTracker.stop()
   }
 
-    override def stop(): Unit = {
-      executorTracker.stop()
-    }
-
-    /*
+  /*
     override def doRequestTotalExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Future[Boolean] = {
         //podAllocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)
@@ -179,49 +179,49 @@ private[spark] class ArmadaClusterSchedulerBackend(
     }
     */
 
-    override def sufficientResourcesRegistered(): Boolean = {
-      totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
-    }
+  override def sufficientResourcesRegistered(): Boolean = {
+    totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
+  }
 
-    override def createDriverEndpoint(): DriverEndpoint = {
-      new ArmadaDriverEndpoint()
-    }
+  override def createDriverEndpoint(): DriverEndpoint = {
+    new ArmadaDriverEndpoint()
+  }
 
-    private class ArmadaDriverEndpoint extends DriverEndpoint {
-      private val execIDRequester = new HashMap[RpcAddress, String]
+  private class ArmadaDriverEndpoint extends DriverEndpoint {
+    private val execIDRequester = new HashMap[RpcAddress, String]
 
-      override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] =
-            super.receiveAndReply(context)
-        /* generateExecID(context).orElse(
+    override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] =
+      super.receiveAndReply(context)
+    /* generateExecID(context).orElse(
           ignoreRegisterExecutorAtStoppedContext.orElse(
             super.receiveAndReply(context))) */
 
-      override def onDisconnected(rpcAddress: RpcAddress): Unit = {
-        val execId = addressToExecutorId.get(rpcAddress)
-        execId match {
-          case Some(id) =>
-            executorsPendingDecommission.get(id) match {
-              case Some(_) =>
-                // We don't pass through the host because by convention the
-                // host is only populated if the entire host is going away
-                // and we don't know if that's the case or just one container.
-                removeExecutor(id, ExecutorDecommission(None))
-              case _ =>
-                // Don't do anything besides disabling the executor - allow the K8s API events to
-                // drive the rest of the lifecycle decisions.
+    override def onDisconnected(rpcAddress: RpcAddress): Unit = {
+      val execId = addressToExecutorId.get(rpcAddress)
+      execId match {
+        case Some(id) =>
+          executorsPendingDecommission.get(id) match {
+            case Some(_) =>
+              // We don't pass through the host because by convention the
+              // host is only populated if the entire host is going away
+              // and we don't know if that's the case or just one container.
+              removeExecutor(id, ExecutorDecommission(None))
+            case _ =>
+              // Don't do anything besides disabling the executor - allow the K8s API events to
+              // drive the rest of the lifecycle decisions.
                 // If it's disconnected due to network issues eventually heartbeat will clear it up.
-                disableExecutor(id)
-            }
-          case _ =>
-            val newExecId = execIDRequester.get(rpcAddress)
-            newExecId match {
-              case Some(_) =>
-                execIDRequester -= rpcAddress
-                // Expected, executors re-establish a connection with an ID
+              disableExecutor(id)
+          }
+        case _ =>
+          val newExecId = execIDRequester.get(rpcAddress)
+          newExecId match {
+            case Some(_) =>
+              execIDRequester -= rpcAddress
+            // Expected, executors re-establish a connection with an ID
               case _ =>
                 logDebug(s"No executor found for $rpcAddress")
-            }
-        }
+          }
+      }
     }
   }
 }

@@ -9,7 +9,7 @@ source scripts/init.sh
 ./scripts/set-version.sh $SPARK_VERSION $SCALA_VERSION
 
 # Get the dependencies to be copied into docker image
-mvn --batch-mode clean package dependency:copy-dependencies
+mvn --batch-mode -DskipTests clean package dependency:copy-dependencies
 dependencies=(
     target/armada-cluster-manager_${SCALA_BIN_VERSION}-1.0.0-SNAPSHOT.jar
     target/dependency/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
