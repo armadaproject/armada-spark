@@ -47,8 +47,6 @@ class ArmadaClusterSchedulerBackendSuite
   private val timeout = 10000
   private val sparkConf = new SparkConf(false)
     .set("spark.armada.executor.trackerTimeout", timeout.toString)
-    .set(RPC_ASK_TIMEOUT.key, "120s")
-    .set(NETWORK_TIMEOUT.key, "120s")
 
   before {
     MockitoAnnotations.openMocks(this).close()
