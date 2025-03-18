@@ -16,18 +16,18 @@
  */
 package org.apache.spark.scheduler.cluster.armada
 
+import io.armadaproject.armada.ArmadaClient
+import k8s.io.api.core.v1.generated._
+import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
+import org.apache.spark.SparkContext
+import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
+import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
+import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
+import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
+
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import scala.collection.mutable.HashMap
-import io.armadaproject.armada.ArmadaClient
-import k8s.io.api.core.v1.generated.{Container, PodSpec, ResourceRequirements}
-import k8s.io.api.core.v1.generated.{EnvVar, EnvVarSource, ObjectFieldSelector}
-import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
-import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
-import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
-import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
 
 
@@ -43,7 +43,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
   private val appId = "fake_app_id_FIXME"
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-  private val executorTracker = new ExecutorTracker(conf, new SystemClock(), initialExecutors)
+  private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
 
 
   override def applicationId(): String = {
@@ -127,8 +127,8 @@ private[spark] class ArmadaClusterSchedulerBackend(
     executorTracker.start()
   }
 
-  class ExecutorTracker(val conf: SparkConf,
-                        val clock: Clock,
+  // Track executors to make sure we have the expected number
+  class ExecutorTracker(val clock: Clock,
                         val numberOfExecutors: Int) {
 
     private val daemon = ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-min-executor-daemon")

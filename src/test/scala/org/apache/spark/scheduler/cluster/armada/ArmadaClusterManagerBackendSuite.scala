@@ -63,7 +63,7 @@ class ArmadaClusterSchedulerBackendSuite
     val backend = new ArmadaClusterSchedulerBackend(
       taskSchedulerImpl, sc, null, "master"
     )
-    val executorTracker = new backend.ExecutorTracker(sparkConf, clock, 2)
+    val executorTracker = new backend.ExecutorTracker(clock, 2)
     clock.advance(timeout - 1)
     executorTracker.checkMin()
     verify(taskSchedulerImpl, never()).error(anyString())
