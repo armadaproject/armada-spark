@@ -38,38 +38,47 @@ class ArmadaClusterSchedulerBackendSuite
   @Mock
   private var env: SparkEnv = _
 
+  @Mock
+  private var taskSchedulerImpl: TaskSchedulerImpl = _
+
+  @Mock
+  private var rpcEnv: RpcEnv = _
+
   private val timeout = 10000
   private val sparkConf = new SparkConf(false)
     .set("spark.armada.executor.trackerTimeout", timeout.toString)
     .set(RPC_ASK_TIMEOUT.key, "120s")
     .set(NETWORK_TIMEOUT.key, "120s")
 
-  @Mock
-  private var taskSchedulerImpl: TaskSchedulerImpl = _
-  @Mock
-  private var rpcEnv: RpcEnv = _
   before {
     MockitoAnnotations.openMocks(this).close()
     when(sc.conf).thenReturn(sparkConf)
     when(sc.env).thenReturn(env)
     when(taskSchedulerImpl.sc).thenReturn(sc)
     when(env.rpcEnv).thenReturn(rpcEnv)
-  }
-  test("ExecutorTracker") {
     when(taskSchedulerImpl.isExecutorAlive("1")).thenReturn(true)
-    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(false)
+  }
+  def runTrackerTest(): Unit = {
     val clock = new ManualClock()
-
     val backend = new ArmadaClusterSchedulerBackend(
       taskSchedulerImpl, sc, null, "master"
     )
     val executorTracker = new backend.ExecutorTracker(sparkConf, clock, 2)
-    clock.advance(1000)
+    clock.advance(timeout - 1)
     executorTracker.checkMin()
     verify(taskSchedulerImpl, never()).error(anyString())
-    clock.advance(11000)
+    clock.advance(timeout + 1)
     executorTracker.checkMin()
+  }
+  test("Verify ExecutorTracker discovers insufficient executor") {
+    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(false)
+    runTrackerTest()
     verify(taskSchedulerImpl).error(anyString())
+  }
 
+  test("Verify ExecutorTracker no errors on sufficient executor") {
+    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(true)
+    runTrackerTest()
+    verify(taskSchedulerImpl, never()).error(anyString())
   }
 }

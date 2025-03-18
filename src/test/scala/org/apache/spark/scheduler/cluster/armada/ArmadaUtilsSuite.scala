@@ -18,8 +18,8 @@
 package org.apache.spark.deploy.armada.submit
 
 
-import ArmadaUtilsExceptions._
 import org.scalatest.funsuite.AnyFunSuite
+import ArmadaUtilsExceptions._
 
 class ArmadaUtilSuite
  extends AnyFunSuite {
