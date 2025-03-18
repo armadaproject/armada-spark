@@ -38,7 +38,9 @@ class ArmadaClusterSchedulerBackendSuite
   @Mock
   private var env: SparkEnv = _
 
+  private val timeout = 10000
   private val sparkConf = new SparkConf(false)
+    .set("spark.armada.executor.trackerTimeout", timeout.toString)
     .set("spark.executor.instances", "3")
     .set("spark.app.id", "TEST_SPARK_APP_ID")
     .set(RPC_ASK_TIMEOUT.key, "120s")
@@ -52,7 +54,7 @@ class ArmadaClusterSchedulerBackendSuite
     MockitoAnnotations.openMocks(this).close()
     when(sc.conf).thenReturn(sparkConf)
     when(sc.env).thenReturn(env)
-    when(taskSchedulerImpl.sc)thenReturn(sc)
+    when(taskSchedulerImpl.sc).thenReturn(sc)
     when(env.rpcEnv).thenReturn(rpcEnv)
   }
   test("ExecutorTracker") {
@@ -63,7 +65,7 @@ class ArmadaClusterSchedulerBackendSuite
     val backend = new ArmadaClusterSchedulerBackend(
       taskSchedulerImpl, sc, null, "master"
     )
-    val executorTracker = new backend.ExecutorTracker(clock, 2)
+    val executorTracker = new backend.ExecutorTracker(sparkConf, clock, 2)
     clock.advance(1000)
     executorTracker.checkMin()
     verify(taskSchedulerImpl, never()).error(anyString())
