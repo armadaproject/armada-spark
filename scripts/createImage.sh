@@ -12,9 +12,9 @@ source scripts/init.sh
 mvn --batch-mode clean package dependency:copy-dependencies
 dependencies=(
     target/armada-cluster-manager_${SCALA_BIN_VERSION}-1.0.0-SNAPSHOT.jar
-    target/dependency/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
+    target/dependency/lenses_${SCALA_BIN_VERSION}-0.9.8.jar
+    target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.9.8.jar
+    target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.9.8.jar
     target/dependency/armada-scala-client_${SCALA_BIN_VERSION}-0.1.0-SNAPSHOT.jar
 )
 
@@ -55,6 +55,12 @@ if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-ja
     # will be replaced with: protobuf-java-3.19.6.jar
     rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-java-2.5.0.jar
 fi
+
+# Remove no longer used jars
+rm -f $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
+rm -f $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
+rm -f $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
+
 
 
 # Copy dependencies to the docker image directory
