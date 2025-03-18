@@ -183,10 +183,6 @@ private[spark] class ArmadaClusterSchedulerBackend(
       totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
     }
 
-    override def getExecutorIds(): Seq[String] = synchronized {
-      super.getExecutorIds()
-    }
-
     override def createDriverEndpoint(): DriverEndpoint = {
       new ArmadaDriverEndpoint()
     }

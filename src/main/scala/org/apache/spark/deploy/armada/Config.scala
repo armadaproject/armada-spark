@@ -1,12 +1,10 @@
 package org.apache.spark.deploy.armada
 
-import java.util.Locale
 import java.util.concurrent.TimeUnit
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
-import org.apache.spark.internal.config.ConfigBuilder
-
-object Config {
-  val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL =
+private[spark] object Config {
+  val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
       .doc("Interval between polls to check the " +
         "state of executors.")
@@ -15,7 +13,7 @@ object Config {
         " positive time value.")
       .createWithDefaultString("60s")
 
-  val ARMADA_EXECUTOR_TRACKER_TIMEOUT =
+  val ARMADA_EXECUTOR_TRACKER_TIMEOUT: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerTimeout")
       .doc("Time to wait for the minimum number of executors.")
       .timeConf(TimeUnit.MILLISECONDS)

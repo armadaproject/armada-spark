@@ -41,8 +41,6 @@ class ArmadaClusterSchedulerBackendSuite
   private val timeout = 10000
   private val sparkConf = new SparkConf(false)
     .set("spark.armada.executor.trackerTimeout", timeout.toString)
-    .set("spark.executor.instances", "3")
-    .set("spark.app.id", "TEST_SPARK_APP_ID")
     .set(RPC_ASK_TIMEOUT.key, "120s")
     .set(NETWORK_TIMEOUT.key, "120s")
 
