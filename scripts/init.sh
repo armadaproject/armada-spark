@@ -13,22 +13,25 @@ print_usage () {
     echo '   -i  <image-name>'
     echo '   -m  <armada-master-url>'
     echo '   -q  <armada-queue>'
+    echo '   -l  <armada-lookout-url>'
     echo ''
     echo 'You also can specify those parameters in scripts/config.sh, like so:'
     echo '   SPARK_HOME=../spark'
     echo '   IMAGE_NAME=testing'
     echo '   ARMADA_MASTER=armada://localhost:30002'
     echo '   ARMADA_QUEUE=test'
+    echo '   ARMADA_LOOKOUT_URL=http://localhost:30000'
     exit 1
 }
 
-while getopts "hs:i:m:q" opt; do
+while getopts "hs:i:l:m:q" opt; do
   case "$opt" in
     h) print_usage ;;
     s) SPARK_HOME=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
     q) ARMADA_QUEUE=$OPTARG ;;
+    l) ARMADA_LOOKOUT_URL=$OPTARG ;;
   esac
 done
 
