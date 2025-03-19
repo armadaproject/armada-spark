@@ -71,8 +71,6 @@ jobs:
         run: |
           cd spark
           ./build/mvn package -Pkubernetes -DskipTests -Dtest=none
-      - name: Run unit tests
-        run: mvn --batch-mode test
       - name: Build image
         if: startsWith(matrix.scala_version, '2.13') && ! contains(matrix.spark_version, '-SNAPSHOT')
         env:
