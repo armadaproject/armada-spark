@@ -36,7 +36,7 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-
+import org.apache.spark.deploy.armada.submit.Config.{ARMADA_LOOKOUTURL}
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -262,11 +262,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
     log(s"Got job ID: $jobId")
 
-    var lookoutBaseURL = sparkConf.get("spark.armada.lookouturl")
-    if (lookoutBaseURL.length() == 0) {
-      lookoutBaseURL = "http://localhost:30000"
-    }
-
+    var lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
     val lookoutURL = s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
       s"ps=50&sb=$jobId&active=false&refresh=true"
     log(s"Lookout URL for this job is $lookoutURL")
