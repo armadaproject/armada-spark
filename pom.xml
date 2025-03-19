@@ -132,11 +132,13 @@
           <artifactId>armada-scala-client_${scala.binary.version}</artifactId>
           <version>0.1.0-SNAPSHOT</version>
         </dependency>
+
+        <!-- Test dependencies -->
         <dependency>
           <groupId>org.scalatest</groupId>
           <artifactId>scalatest_${scala.binary.version}</artifactId>
-          <scope>test</scope>
           <version>3.2.16</version>
+          <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>org.scalatestplus</groupId>
