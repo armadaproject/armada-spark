@@ -9,6 +9,9 @@ inputs:
   scala_version:
     description: Scala version to build with, e.g. "2.13.8"
     required: true
+  java_version:
+    description: Java version to build with, e.g. "11"
+    required: true
 
 runs:
   using: composite
@@ -17,14 +20,14 @@ runs:
     uses: actions/cache@v4
     with:
       path: ~/.m2/repository
-      key: ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-${{ hashFiles('pom.xml') }}
+      key: ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
       restore-keys:
-        ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-${{ hashFiles('pom.xml') }}
-        ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-
+        ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
+        ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
-      java-version: 17
+      java-version: ${{ inputs.java_version }}
       distribution: 'zulu'
 
   - name: Set Spark and Scala versions
@@ -33,28 +36,16 @@ runs:
       git diff
     shell: bash
   - name: Fetch mvn dependencies
+    continue-on-error: true
     run: mvn --batch-mode dependency:go-offline
     shell: bash
   - name: Build package
     run: mvn --batch-mode install
     shell: bash
 
-  - name: Checkout Spark sources
-    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
-    uses: actions/checkout@v4
-    with:
-      repository: apache/spark
-      ref: "v${{ inputs.spark_version }}"
-      path: spark
-  - name: Build Spark
-    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
-    run: |
-      cd spark
-      ./build/mvn package -Pkubernetes -DskipTests -Dtest=none
-    shell: bash
   - name: Build image
-    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
+    if: ( ! contains(inputs.spark_version, '-SNAPSHOT') )
     env:
-      SPARK_HOME: ${{ github.workspace }}/spark
+      JAVA_VERSION: ${{ inputs.java_version }}
     run: ./scripts/createImage.sh
     shell: bash
