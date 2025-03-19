@@ -105,6 +105,15 @@
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
             <scope>provided</scope>
+            <exclusions>
+                <!-- The Armada Scala client transitively depends on io.netty -->
+                <!-- Spark also depends on io.netty, so it might pull in versions that supersedes those Armada Scala dependencies -->
+                <!-- We need to exclude the Spark netty dependencies (which are scope provided), otherwise our shaded jar misses netty -->
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

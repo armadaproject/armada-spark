@@ -1,66 +1,40 @@
 #!/bin/bash
 set -e
 
-# generate armada docker image
+# generate armada spark docker image
 
-source scripts/init.sh
+root="$(cd "$(dirname "$0")/.."; pwd)"
+scripts="$(cd "$(dirname "$0")"; pwd)"
+source "$scripts/init.sh"
 
-# Set this project's Spark and Scala version according to the Spark sources in $SPARK_HOME
-./scripts/set-version.sh $SPARK_VERSION $SCALA_VERSION
-
-# Get the dependencies to be copied into docker image
-mvn --batch-mode clean package dependency:copy-dependencies
-dependencies=(
-    target/armada-cluster-manager_${SCALA_BIN_VERSION}-1.0.0-SNAPSHOT.jar
-    target/dependency/lenses_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/scalapb-runtime_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/scalapb-runtime-grpc_${SCALA_BIN_VERSION}-0.11.13.jar
-    target/dependency/armada-scala-client_${SCALA_BIN_VERSION}-0.1.0-SNAPSHOT.jar
-)
-
-spark_v3_dependencies=(
-    target/dependency/grpc-api-1.47.1.jar
-    target/dependency/grpc-core-1.47.1.jar
-    target/dependency/grpc-netty-1.47.1.jar
-    target/dependency/grpc-protobuf-1.47.1.jar
-    target/dependency/grpc-context-1.47.1.jar
-    target/dependency/grpc-stub-1.47.1.jar
-    target/dependency/guava-31.0.1-android.jar
-    target/dependency/failureaccess-1.0.1.jar
-    target/dependency/perfmark-api-0.25.0.jar
-)
-
-spark_v33_dependencies=(
-    target/dependency/netty-codec-http2-4.1.72.Final.jar
-    target/dependency/netty-codec-http-4.1.72.Final.jar
-    target/dependency/protobuf-java-3.19.6.jar
-)
-
-if [[ $SPARK_VERSION == 3* ]]; then
-    dependencies+=("${spark_v3_dependencies[@]}")
+image_prefix=apache/spark
+image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}-ubuntu"
+# There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
+if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
+  image_prefix=spark
+  if ! docker image inspect "$image_prefix:$image_tag" >/dev/null 2>/dev/null; then
+    echo "There are no Docker images released for Spark $SPARK_VERSION and Scala $SCALA_BIN_VERSION."
+    echo "A Docker image has to be built from Spark sources locally."
+    if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
+      echo "Checking out Spark sources for tag v$SPARK_VERSION."
+      git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+    fi
+    echo "Building Spark Docker image $image_prefix:$image_tag."
+    cd ".spark-$SPARK_VERSION"
+    ./dev/change-scala-version.sh $SCALA_BIN_VERSION
+    # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
+    # spark-examples jars are not released, so we need to build these from sources
+    ./build/mvn clean package -pl examples
+    ./build/mvn clean package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+    ./bin/docker-image-tool.sh -t "$image_tag" build
+    cd ..
+  fi
 fi
 
-if [[ $SPARK_VERSION == "3.3."* ]]; then
-    dependencies+=("${spark_v33_dependencies[@]}")
-fi
-
-
-# These jar version don't work with the Armada client.  Replace them with newer versions below.
-if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar ]; then
-    # will be replaced with: guava-31.0.1-android.jar
-    rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/guava-14.0.1.jar
-fi
-
-if [ -e  $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-java-2.5.0.jar ]; then
-    # will be replaced with: protobuf-java-3.19.6.jar
-    rm $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/protobuf-java-2.5.0.jar
-fi
-
-
-# Copy dependencies to the docker image directory
-cp "${dependencies[@]}" $SPARK_HOME/assembly/target/scala-${SCALA_BIN_VERSION}/jars/
-
-
-# Make the image
-cd $SPARK_HOME
-./bin/docker-image-tool.sh -t $IMAGE_NAME build
+docker build \
+  --tag $IMAGE_NAME \
+  --build-arg spark_base_image_prefix=$image_prefix \
+  --build-arg spark_base_image_tag=$image_tag \
+  --build-arg scala_binary_version=$SCALA_BIN_VERSION \
+  -f "$root/docker/Dockerfile" \
+  "$root"
