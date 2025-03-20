@@ -36,4 +36,12 @@ private[spark] object Config {
       .checkValue(interval => interval > 0, s"Timeout must be a" +
         " positive time value.")
       .createWithDefaultString("600s")
+
+  val ARMADA_LOOKOUTURL: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.lookouturl")
+      .doc("URL base for the Armada Lookout UI.")
+      .stringConf
+      .checkValue(urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
+        s"Value must be a valid URL, like http://host:8080 or https://host:443")
+      .createWithDefaultString("http://localhost:30000")
 }

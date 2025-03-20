@@ -36,7 +36,7 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.submit.Config.{ARMADA_LOOKOUTURL}
+import org.apache.spark.deploy.armada.Config.ARMADA_LOOKOUTURL
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -234,7 +234,7 @@ private[spark] object Client {
  */
 private[spark] class ArmadaClientApplication extends SparkApplication {
   // FIXME: Find the real way to log properly.
-  def log(msg: String): Unit = {
+  private def log(msg: String): Unit = {
     // scalastyle:off println
     System.err.println(msg)
     // scalastyle:on println
@@ -262,7 +262,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
     log(s"Got job ID: $jobId")
 
-    var lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
+    val lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
     val lookoutURL = s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
       s"ps=50&sb=$jobId&active=false&refresh=true"
     log(s"Lookout URL for this job is $lookoutURL")
@@ -307,7 +307,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     conf: SparkConf): String = {
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
       .withApiVersion("v1").withFieldPath("status.podIP"))
-    val envVars = Seq(
+    val envVars = scala.Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
@@ -325,9 +325,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
       .withEnv(envVars)
-      .withCommand(Seq("/opt/entrypoint.sh"))
+      .withCommand(scala.Seq("/opt/entrypoint.sh"))
       .withArgs(
-        Seq(
+        scala.Seq(
           "driver",
           "--verbose",
           "--class",
@@ -363,7 +363,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
-      .withContainers(Seq(driverContainer))
+      .withContainers(scala.Seq(driverContainer))
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
@@ -372,11 +372,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(podSpec)
 
     // FIXME: Plumb config for queue, job-set-id
-    val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
+    val jobSubmitResponse = armadaClient.submitJobs("test", "driver", scala.Seq(driverJob))
 
     for (respItem <- jobSubmitResponse.jobResponseItems) {
       val error = if (respItem.error == "") "None" else respItem.error
-      log(s"JobID: ${respItem.jobId}  Error: ${error}")
+      log(s"JobID: ${respItem.jobId}  Error: $error")
     }
     jobSubmitResponse.jobResponseItems.head.jobId
   }
