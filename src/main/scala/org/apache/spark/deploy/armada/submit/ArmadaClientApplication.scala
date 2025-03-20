@@ -36,7 +36,7 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-
+import org.apache.spark.deploy.armada.submit.Config.{ARMADA_LOOKOUTURL}
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -261,6 +261,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // to turn into driver / cluster manager mode.
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
     log(s"Got job ID: $jobId")
+
+    var lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
+    val lookoutURL = s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
+      s"ps=50&sb=$jobId&active=false&refresh=true"
+    log(s"Lookout URL for this job is $lookoutURL")
+
     // For constructing the app ID, we can't use the Spark application name, as the app ID is going
     // to be added as a label to group resources belonging to the same application. Label values are
     // considerably restrictive, e.g. must be no longer than 63 characters in length. So we generate
