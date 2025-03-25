@@ -307,7 +307,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     conf: SparkConf): String = {
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
       .withApiVersion("v1").withFieldPath("status.podIP"))
-    val envVars = Seq(
+    val envVars = scala.Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
@@ -325,9 +325,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
       .withEnv(envVars)
-      .withCommand(Seq("/opt/entrypoint.sh"))
+      .withCommand(scala.Seq("/opt/entrypoint.sh"))
       .withArgs(
-        Seq(
+        scala.Seq(
           "driver",
           "--verbose",
           "--class",
@@ -363,7 +363,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
-      .withContainers(Seq(driverContainer))
+      .withContainers(scala.Seq(driverContainer))
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
@@ -372,7 +372,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(podSpec)
 
     // FIXME: Plumb config for queue, job-set-id
-    val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
+    val jobSubmitResponse = armadaClient.submitJobs("test", "driver", scala.Seq(driverJob))
 
     for (respItem <- jobSubmitResponse.jobResponseItems) {
       val error = if (respItem.error == "") "None" else respItem.error
