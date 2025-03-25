@@ -38,6 +38,26 @@
         <spark.version>${spark.binary.version}.${spark.patch.version}</spark.version>
 
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
+        <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
+        <!-- SPARK-36796 for JDK-17 test-->
+        <extraJavaTestArgs>
+          -XX:+IgnoreUnrecognizedVMOptions
+          --add-opens=java.base/java.lang=ALL-UNNAMED
+          --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+          --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+          --add-opens=java.base/java.io=ALL-UNNAMED
+          --add-opens=java.base/java.net=ALL-UNNAMED
+          --add-opens=java.base/java.nio=ALL-UNNAMED
+          --add-opens=java.base/java.util=ALL-UNNAMED
+          --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+          --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+          --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+          --add-opens=java.base/sun.security.action=ALL-UNNAMED
+          --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+          -Djdk.reflect.useDirectMethodHandle=false
+        </extraJavaTestArgs>
     </properties>
 
     <repositories>
@@ -111,6 +131,26 @@
           <groupId>io.armadaproject</groupId>
           <artifactId>armada-scala-client_${scala.binary.version}</artifactId>
           <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+          <groupId>org.scalatest</groupId>
+          <artifactId>scalatest_${scala.binary.version}</artifactId>
+          <version>3.2.16</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatestplus</groupId>
+          <artifactId>scalacheck-1-18_${scala.binary.version}</artifactId>
+          <version>3.2.19.0</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.scalatestplus</groupId>
+          <artifactId>mockito-5-12_${scala.binary.version}</artifactId>
+          <version>3.2.19.0</version>
+          <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -197,7 +237,6 @@
                     </archive>
                 </configuration>
             </plugin>
-
             <!-- Fatjar and dependency shading Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -313,6 +352,28 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- Scalatest runs all Scala tests -->
+            <plugin>
+              <groupId>org.scalatest</groupId>
+              <artifactId>scalatest-maven-plugin</artifactId>
+              <version>${scalatest-maven-plugin.version}</version>
+              <!-- Note config is repeated in surefire config -->
+              <configuration>
+                <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+                <junitxml>.</junitxml>
+                <filereports>SparkTestSuite.txt</filereports>
+                <argLine>-ea -Xmx4g -Xss4m -XX:MaxMetaspaceSize=2g ${extraJavaTestArgs} -Dio.netty.tryReflectionSetAccessible=true</argLine>
+                <stderr/>
+              </configuration>
+              <executions>
+                <execution>
+                  <id>test</id>
+                  <goals>
+                    <goal>test</goal>
+                  </goals>
+                </execution>
+              </executions>
             </plugin>
         </plugins>
     </build>

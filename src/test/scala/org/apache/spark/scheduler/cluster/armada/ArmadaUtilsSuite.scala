@@ -17,14 +17,12 @@
 
 package org.apache.spark.deploy.armada.submit
 
-//import org.apache.spark.{/*SparkConf, SparkContext, SparkEnv,*/ SparkFunSuite}
 
+import org.scalatest.funsuite.AnyFunSuite
 import ArmadaUtilsExceptions._
 
 class ArmadaUtilSuite
-/*
- GBJTODO: restore these
- extends SparkFunSuite {
+ extends AnyFunSuite {
   test("parseMasterUrl") {
     case class TestCase(
       testUrl: String,
@@ -56,4 +54,3 @@ class ArmadaUtilSuite
     }
   }
 }
-*/

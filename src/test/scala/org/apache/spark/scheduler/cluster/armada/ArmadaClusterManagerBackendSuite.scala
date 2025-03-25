@@ -17,18 +17,66 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-//import org.jmock.lib.concurrent.DeterministicScheduler
-//import org.scalatest.BeforeAndAfter
+import org.apache.spark.internal.config.Network.{NETWORK_TIMEOUT, RPC_ASK_TIMEOUT}
+import org.apache.spark.rpc.RpcEnv
+import org.apache.spark.scheduler.TaskSchedulerImpl
+import org.apache.spark.util.ManualClock
+import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.{Mock, MockitoAnnotations}
+import org.mockito.Mockito.{never, verify, when}
+import org.scalatest.BeforeAndAfter
+import org.scalatest.funsuite.AnyFunSuite
 
-//import org.apache.spark.SparkFunSuite
+class ArmadaClusterSchedulerBackendSuite
 
-class ArmadaClusterManagerBackendSuite
+    extends AnyFunSuite with BeforeAndAfter {
 
-//  GBJTODO: restore these
-//     extends SparkFunSuite with BeforeAndAfter {
-//   private val schedulerExecutorService = new DeterministicScheduler()
+  @Mock
+  private var sc: SparkContext = _
 
-//   test("FIXME - Fill in!") {
-//     assert(1 == 1)
-//   }
-// }
+  @Mock
+  private var env: SparkEnv = _
+
+  @Mock
+  private var taskSchedulerImpl: TaskSchedulerImpl = _
+
+  @Mock
+  private var rpcEnv: RpcEnv = _
+
+  private val timeout = 10000
+  private val sparkConf = new SparkConf(false)
+    .set("spark.armada.executor.trackerTimeout", timeout.toString)
+
+  before {
+    MockitoAnnotations.openMocks(this).close()
+    when(sc.conf).thenReturn(sparkConf)
+    when(sc.env).thenReturn(env)
+    when(taskSchedulerImpl.sc).thenReturn(sc)
+    when(env.rpcEnv).thenReturn(rpcEnv)
+    when(taskSchedulerImpl.isExecutorAlive("1")).thenReturn(true)
+  }
+  def runTrackerTest(): Unit = {
+    val clock = new ManualClock()
+    val backend = new ArmadaClusterSchedulerBackend(
+      taskSchedulerImpl, sc, null, "master"
+    )
+    val executorTracker = new backend.ExecutorTracker(clock, 2)
+    clock.advance(timeout - 1)
+    executorTracker.checkMin()
+    verify(taskSchedulerImpl, never()).error(anyString())
+    clock.advance(timeout + 1)
+    executorTracker.checkMin()
+  }
+  test("Verify ExecutorTracker discovers insufficient executor") {
+    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(false)
+    runTrackerTest()
+    verify(taskSchedulerImpl).error(anyString())
+  }
+
+  test("Verify ExecutorTracker no errors on sufficient executor") {
+    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(true)
+    runTrackerTest()
+    verify(taskSchedulerImpl, never()).error(anyString())
+  }
+}
