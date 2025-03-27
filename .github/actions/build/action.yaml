@@ -1,0 +1,60 @@
+name: Build
+author: EnricoMi
+description: Github Action to build this project against a Spark and Scala version
+
+inputs:
+  spark_version:
+    description: Spark version to build against, e.g. "3.5.5" or "4.1.0-SNAPSHOT"
+    required: true
+  scala_version:
+    description: Scala version to build with, e.g. "2.13.8"
+    required: true
+
+runs:
+  using: composite
+  steps:
+  - name: Restore Maven packages cache
+    uses: actions/cache@v4
+    with:
+      path: ~/.m2/repository
+      key: ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-${{ hashFiles('pom.xml') }}
+      restore-keys:
+        ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-${{ hashFiles('pom.xml') }}
+        ${{ runner.os }}-mvn-build-${{ inputs.spark-version }}-${{ inputs.scala-version }}-
+  - name: Setup JDK
+    uses: actions/setup-java@v4
+    with:
+      java-version: 17
+      distribution: 'zulu'
+
+  - name: Set Spark and Scala versions
+    run: |
+      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
+      git diff
+    shell: bash
+  - name: Fetch mvn dependencies
+    run: mvn --batch-mode dependency:go-offline
+    shell: bash
+  - name: Build package
+    run: mvn --batch-mode install
+    shell: bash
+
+  - name: Checkout Spark sources
+    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
+    uses: actions/checkout@v4
+    with:
+      repository: apache/spark
+      ref: "v${{ inputs.spark_version }}"
+      path: spark
+  - name: Build Spark
+    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
+    run: |
+      cd spark
+      ./build/mvn package -Pkubernetes -DskipTests -Dtest=none
+    shell: bash
+  - name: Build image
+    if: startsWith(inputs.scala_version, '2.13') && ! contains(inputs.spark_version, '-SNAPSHOT')
+    env:
+      SPARK_HOME: ${{ github.workspace }}/spark
+    run: ./scripts/createImage.sh
+    shell: bash

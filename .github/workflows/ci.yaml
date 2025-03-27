@@ -15,64 +15,8 @@ permissions: {}
 
 jobs:
   build:
-    name: Build Spark ${{ matrix.spark_version }} Scala ${{ matrix.scala_version }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - scala_version: "2.12.15"
-            spark_version: "3.3.4"
-          - scala_version: "2.12.18"
-            spark_version: "3.5.5"
-
-          - scala_version: "2.13.8"
-            spark_version: "3.3.4"
-          - scala_version: "2.13.8"
-            spark_version: "3.5.5"
-          - scala_version: "2.13.8"
-            spark_version: "4.1.0-SNAPSHOT"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Restore Maven packages cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-${{ hashFiles('pom.xml') }}
-          restore-keys:
-            ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-${{ hashFiles('pom.xml') }}
-            ${{ runner.os }}-mvn-build-${{ matrix.spark-version }}-${{ matrix.scala-version }}-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: 'zulu'
-
-      - name: Set Spark and Scala versions
-        run: |
-          ./scripts/set-version.sh "${{ matrix.spark_version }}" "${{ matrix.scala_version }}"
-          git diff
-      - name: Fetch mvn dependencies
-        run: mvn --batch-mode dependency:go-offline
-      - name: Build package
-        run: mvn --batch-mode install
-
-      - name: Checkout Spark sources
-        if: startsWith(matrix.scala_version, '2.13') && ! contains(matrix.spark_version, '-SNAPSHOT')
-        uses: actions/checkout@v4
-        with:
-          repository: apache/spark
-          ref: "v${{ matrix.spark_version }}"
-          path: spark
-      - name: Build Spark
-        if: startsWith(matrix.scala_version, '2.13') && ! contains(matrix.spark_version, '-SNAPSHOT')
-        run: |
-          cd spark
-          ./build/mvn package -Pkubernetes -DskipTests -Dtest=none
-      - name: Build image
-        if: startsWith(matrix.scala_version, '2.13') && ! contains(matrix.spark_version, '-SNAPSHOT')
-        env:
-          SPARK_HOME: ${{ github.workspace }}/spark
-        run: ./scripts/createImage.sh
+    name: Build
+    uses: ./.github/workflows/build.yaml
+  build-snapshot:
+    name: Build snapshots
+    uses: ./.github/workflows/build-snapshots.yaml
