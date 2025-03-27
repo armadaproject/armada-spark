@@ -330,6 +330,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
+      new EnvVar().withName("SPARK_CONF_DIR").withValue("/opt/spark/conf"),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
@@ -338,10 +339,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       yield ("armada-spark-config/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
 
 
-    println ("gbjprinting")
-    for (x <- confData) {
-      println(x._1, x._2)
-    }
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource) => Seq(resource)
@@ -349,6 +346,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
+    val javaOptions = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005"
     val volumeMounts = Seq(VolumeMount()
       .withName("armada-spark-config-volume")
       .withMountPath("/opt/spark/conf")
@@ -372,6 +370,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           s"spark.kubernetes.container.image=${conf.get("spark.kubernetes.container.image")}",
           "--conf",
           "spark.driver.port=7078",
+          "--conf",
+          s"spark.driver.extraJavaOptions=$javaOptions",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
 
