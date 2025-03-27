@@ -346,7 +346,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
-    val javaOptions = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005"
     val volumeMounts = Seq(VolumeMount()
       .withName("armada-spark-config-volume")
       .withMountPath("/opt/spark/conf")
@@ -370,8 +369,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           s"spark.kubernetes.container.image=${conf.get("spark.kubernetes.container.image")}",
           "--conf",
           "spark.driver.port=7078",
-          "--conf",
-          s"spark.driver.extraJavaOptions=$javaOptions",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
 
