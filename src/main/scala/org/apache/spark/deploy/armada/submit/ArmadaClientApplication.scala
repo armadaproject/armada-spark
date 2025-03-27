@@ -16,14 +16,9 @@
  */
 package org.apache.spark.deploy.armada.submit
 
-import k8s.io.api.core.v1.generated.{DownwardAPIVolumeFile, DownwardAPIVolumeSource, Volume, VolumeMount, VolumeSource}
-import org.apache.spark.deploy.k8s.Constants.ENV_SPARK_CONF_DIR
+import org.apache.spark.deploy.armada.ArmadaConfigGenerator
 
 import scala.collection.mutable
-import org.apache.spark.deploy.k8s.submit.KubernetesClientUtils.buildSparkConfDirFilesMap
-
-import java.io.File
-import scala.io.Source
 
 /*
 import scala.jdk.CollectionConverters._
@@ -37,10 +32,8 @@ import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 import io.fabric8.kubernetes.client.Watcher.Action
 */
 import _root_.io.armadaproject.armada.ArmadaClient
-import k8s.io.api.core.v1.generated.{Container, EnvVar, PodSpec, ResourceRequirements}
-import k8s.io.api.core.v1.generated.{EnvVarSource, ObjectFieldSelector}
+import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config.ARMADA_LOOKOUTURL
@@ -253,20 +246,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     run(parsedArguments, conf)
   }
 
-  private[submit] def getConfDirFiles(conf: SparkConf): Seq[File] = {
-    val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR)).orElse(
-      conf.getOption("spark.home").map(dir => s"$dir/conf"))
-    val confFiles: Seq[File] = {
-      val dir = new File(confDir.get)
-      if (dir.isDirectory) {
-        dir.listFiles
-      } else {
-        Nil
-      }
-    }
-    confFiles
-  }
-
   private def run(clientArguments: ClientArguments, sparkConf: SparkConf): Unit = {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
@@ -334,11 +313,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
-    val confFiles = getConfDirFiles(conf)
-    var confData = (for (f <- confFiles)
-      yield ("armada-spark-config/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
-
-
+    val armadaConfigGenerator =
+      new ArmadaConfigGenerator("/opt/spark/conf", "armada-spark-config", conf)
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource) => Seq(resource)
@@ -346,17 +322,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
-    val volumeMounts = Seq(VolumeMount()
-      .withName("armada-spark-config-volume")
-      .withMountPath("/opt/spark/conf")
-      .withReadOnly(true))
     val driverContainer = Container()
       .withName("spark-driver")
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
       .withEnv(envVars)
       .withCommand(Seq("/opt/entrypoint.sh"))
-      .withVolumeMounts(volumeMounts)
+      .withVolumeMounts(armadaConfigGenerator.getVolumeMounts)
       .withArgs(
         Seq(
           "driver",
@@ -387,26 +359,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         )
       )
 
-    val dFiles = for (f <- confFiles)
-      yield DownwardAPIVolumeFile().withFieldRef(
-        ObjectFieldSelector().withFieldPath("metadata.annotations['armada-spark-config/" + f.getName + "']")).withPath(f.getName)
-    val volumeSource = VolumeSource()
-      .withDownwardAPI(DownwardAPIVolumeSource().withItems(dFiles))
-    val volume = Volume()
-      .withName("armada-spark-config-volume")
-      .withVolumeSource(volumeSource)
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
-      .withVolumes(Seq(volume))
+      .withVolumes(armadaConfigGenerator.getVolumes)
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
-      .withAnnotations(confData)
+      .withAnnotations(armadaConfigGenerator.getAnnotations)
 
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
