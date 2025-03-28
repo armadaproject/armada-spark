@@ -74,14 +74,19 @@ private[spark] class ArmadaClusterSchedulerBackend(
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
-      EnvVar().withName("SPARK_JAVA_OPT_1").withValue("--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"),
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     )
+    val javaOpts = conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+    val javaOptEnvVars = javaOpts.zipWithIndex.map {
+      case(value: String, index) =>
+        EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
+    }
     val executorContainer = Container()
       .withName("spark-executor")
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
-      .withEnv(envVars)
+      .withEnv(envVars ++ javaOptEnvVars)
       .withCommand(Seq("/opt/entrypoint.sh"))
       .withArgs(
         Seq(
