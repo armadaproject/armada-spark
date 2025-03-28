@@ -33,7 +33,8 @@ private[submit] class ConfigGenerator(val prefix: String,
   private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR)).orElse(
     conf.getOption("spark.home").map(dir => s"$dir/conf"))
 
-  private val confFiles : Array[File] = {
+  private val confFiles = getConfFiles
+  private def getConfFiles : Array[File] = {
     val dir = new File(confDir.get)
     if (dir.isDirectory) {
       dir.listFiles.filter(!_.isDirectory)
