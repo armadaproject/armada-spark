@@ -16,7 +16,6 @@
  */
 package org.apache.spark.deploy.armada.submit
 
-import org.apache.spark.scheduler.cluster.armada.ConfigGenerator
 import scala.collection.mutable
 
 /*
@@ -308,12 +307,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
-      new EnvVar().withName("SPARK_CONF_DIR").withValue("/opt/spark/conf"),
+      new EnvVar().withName("SPARK_CONF_DIR").withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
     val configGenerator =
-      new ConfigGenerator("/opt/spark/conf", "armada-spark-config", conf)
+      new ConfigGenerator("armada-spark-config", conf)
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource) => Seq(resource)

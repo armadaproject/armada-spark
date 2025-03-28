@@ -128,6 +128,13 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-kubernetes_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
           <groupId>io.armadaproject</groupId>
           <artifactId>armada-scala-client_${scala.binary.version}</artifactId>
           <version>0.1.0-SNAPSHOT</version>
