@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.armada
+package org.apache.spark.scheduler.cluster.armada
 
-import k8s.io.api.core.v1.generated.{DownwardAPIVolumeFile, DownwardAPIVolumeSource, ObjectFieldSelector, Volume, VolumeMount, VolumeSource}
+import k8s.io.api.core.v1.generated._
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.Constants.ENV_SPARK_CONF_DIR
 
@@ -24,15 +24,15 @@ import java.io.File
 import scala.io.Source
 
 
-class ArmadaConfigGenerator(val confDirName: String, val prefix: String,
-                            val conf: SparkConf) {
+class ConfigGenerator(val confDirName: String, val prefix: String,
+                      val conf: SparkConf) {
   private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR)).orElse(
     conf.getOption("spark.home").map(dir => s"$dir/conf"))
 
   private val confFiles : Array[File] = {
     val dir = new File(confDir.get)
     if (dir.isDirectory) {
-      dir.listFiles
+      dir.listFiles.filter(!_.isDirectory)
     } else {
       Array.empty[File]
     }

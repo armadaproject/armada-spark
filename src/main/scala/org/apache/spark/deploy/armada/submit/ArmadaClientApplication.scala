@@ -16,8 +16,7 @@
  */
 package org.apache.spark.deploy.armada.submit
 
-import org.apache.spark.deploy.armada.ArmadaConfigGenerator
-
+import org.apache.spark.scheduler.cluster.armada.ConfigGenerator
 import scala.collection.mutable
 
 /*
@@ -313,8 +312,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
-    val armadaConfigGenerator =
-      new ArmadaConfigGenerator("/opt/spark/conf", "armada-spark-config", conf)
+    val configGenerator =
+      new ConfigGenerator("/opt/spark/conf", "armada-spark-config", conf)
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource) => Seq(resource)
@@ -328,7 +327,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withImage(conf.get("spark.kubernetes.container.image"))
       .withEnv(envVars)
       .withCommand(Seq("/opt/entrypoint.sh"))
-      .withVolumeMounts(armadaConfigGenerator.getVolumeMounts)
+      .withVolumeMounts(configGenerator.getVolumeMounts)
       .withArgs(
         Seq(
           "driver",
@@ -363,15 +362,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
-      .withVolumes(armadaConfigGenerator.getVolumes)
+      .withVolumes(configGenerator.getVolumes)
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
-      .withAnnotations(armadaConfigGenerator.getAnnotations)
+      .withAnnotations(configGenerator.getAnnotations)
 
+    println("gbj12")
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
 
