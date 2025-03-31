@@ -18,14 +18,14 @@ package org.apache.spark.deploy.armada.submit
 
 import k8s.io.api.core.v1.generated._
 import org.apache.spark.SparkConf
-import org.apache.spark.deploy.armada.submit.ConfigGenerator.REMOTE_CONF_DIR_NAME
-import org.apache.spark.deploy.k8s.Constants.ENV_SPARK_CONF_DIR
+import org.apache.spark.deploy.armada.submit.ConfigGenerator.{REMOTE_CONF_DIR_NAME, ENV_SPARK_CONF_DIR}
 
 import java.io.File
 import scala.io.Source
 
 private[submit] object ConfigGenerator {
   val REMOTE_CONF_DIR_NAME = "/opt/spark/conf"
+  val ENV_SPARK_CONF_DIR = "SPARK_CONF_DIR"
 }
 
 private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
