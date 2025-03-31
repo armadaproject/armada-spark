@@ -79,7 +79,7 @@ class ConfigGeneratorSuite
     val cg = new ConfigGenerator("prefix", sparkConf)
     val ann = cg.getAnnotations
     val annString = ann.toString
-    assert(annString == "Map(prefix/spark-defaults.conf -> \nspark.app.name TestApp\nspark.master local[*]")
+    assert(annString == "Map(prefix/spark-defaults.conf -> \nspark.app.name TestApp\nspark.master local[*]\n)")
   }
 
   test("test volumes") {
@@ -100,6 +100,18 @@ class ConfigGeneratorSuite
     val cg = new ConfigGenerator("prefix", sparkConf)
     val vol = cg.getVolumes
     assert(vol.head.toProtoString == expectedString)
+  }
+
+  test("test volume mounts") {
+    val expectedString =
+     """|name: "prefix-volume"
+        |readOnly: true
+        |mountPath: "/opt/spark/conf"
+        |""".stripMargin
+
+    val cg = new ConfigGenerator("prefix", sparkConf)
+    val volMounts = cg.getVolumeMounts
+    assert(volMounts.head.toProtoString == expectedString)
   }
 
   after {
