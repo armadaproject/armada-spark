@@ -27,36 +27,13 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import java.nio.file.{Files, Path, StandardOpenOption}
 
-class ConfigGeneratorSuite
-
-    extends AnyFunSuite with BeforeAndAfter {
-  @Mock
-  private var sc: SparkContext = _
-
-  @Mock
-  private var env: SparkEnv = _
-
-  @Mock
-  private var taskSchedulerImpl: TaskSchedulerImpl = _
-
-  @Mock
-  private var rpcEnv: RpcEnv = _
-
-  private val timeout = 10000
+class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
   private val sparkConf = new SparkConf(false)
-    .set("spark.armada.executor.trackerTimeout", timeout.toString)
   var tempDir: Path = _
   var sparkConfFile: Path = _
   var confDir: Path = _
 
   before {
-    MockitoAnnotations.openMocks(this).close()
-    when(sc.conf).thenReturn(sparkConf)
-    when(sc.env).thenReturn(env)
-    when(taskSchedulerImpl.sc).thenReturn(sc)
-    when(env.rpcEnv).thenReturn(rpcEnv)
-    when(taskSchedulerImpl.isExecutorAlive("1")).thenReturn(true)
-
     // Create temporary directory
     tempDir = Files.createTempDirectory("spark-test-")
     confDir = Files.createDirectory(tempDir.resolve("conf"))
