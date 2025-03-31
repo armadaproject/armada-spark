@@ -82,6 +82,26 @@ class ConfigGeneratorSuite
     assert(annString == "Map(prefix/spark-defaults.conf -> \nspark.app.name TestApp\nspark.master local[*]")
   }
 
+  test("test volumes") {
+    val expectedString =
+     """|name: "prefix-volume"
+        |volumeSource {
+        |  downwardAPI {
+        |    items {
+        |      path: "spark-defaults.conf"
+        |      fieldRef {
+        |        fieldPath: "metadata.annotations['prefix/spark-defaults.conf']"
+        |      }
+        |    }
+        |  }
+        |}
+        |""".stripMargin
+
+    val cg = new ConfigGenerator("prefix", sparkConf)
+    val vol = cg.getVolumes
+    assert(vol.head.toProtoString == expectedString)
+  }
+
   after {
     // Clean up
     Files.deleteIfExists(sparkConfFile)

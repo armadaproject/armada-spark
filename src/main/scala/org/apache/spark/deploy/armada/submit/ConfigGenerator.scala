@@ -28,8 +28,7 @@ private[submit] object ConfigGenerator {
   val REMOTE_CONF_DIR_NAME = "/opt/spark/conf"
 }
 
-private[submit] class ConfigGenerator(val prefix: String,
-                      val conf: SparkConf) {
+private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
   private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR)).orElse(
     conf.getOption("spark.home").map(dir => s"$dir/conf"))
 
