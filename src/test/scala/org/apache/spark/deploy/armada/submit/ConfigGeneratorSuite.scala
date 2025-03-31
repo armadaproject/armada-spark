@@ -17,11 +17,7 @@
 
 package org.apache.spark.deploy.armada.submit
 
-import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.scheduler.TaskSchedulerImpl
-import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
-import org.mockito.Mockito.when
-import org.mockito.{Mock, MockitoAnnotations}
+import org.apache.spark.SparkConf
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -29,9 +25,15 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 
 class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
   private val sparkConf = new SparkConf(false)
-  var tempDir: Path = _
-  var sparkConfFile: Path = _
-  var confDir: Path = _
+  private var tempDir: Path = _
+  private var sparkConfFile: Path = _
+  private var confDir: Path = _
+  private val prefix = "testPrefix"
+  private val configFileContents =
+      """
+        |spark.app.name TestApp
+        |spark.master localhost
+        |""".stripMargin
 
   before {
     // Create temporary directory
@@ -41,52 +43,45 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
     sparkConfFile = confDir.resolve("spark-defaults.conf")
 
     // Write sample config to the file
-    val content =
-      """
-        |spark.app.name TestApp
-        |spark.master local[*]
-        |""".stripMargin
-
-    Files.writeString(sparkConfFile, content, StandardOpenOption.CREATE)
+    Files.writeString(sparkConfFile, configFileContents, StandardOpenOption.CREATE)
 
     sparkConf.set("spark.home", tempDir.toString)
 
   }
-  test("test annotations") {
-    val cg = new ConfigGenerator("prefix", sparkConf)
+  test("Test annotations") {
+    val cg = new ConfigGenerator(prefix, sparkConf)
     val ann = cg.getAnnotations
-    val annString = ann.toString
-    assert(annString == "Map(prefix/spark-defaults.conf -> \nspark.app.name TestApp\nspark.master local[*]\n)")
+    assert(ann.toString == s"Map($prefix/spark-defaults.conf -> $configFileContents)")
   }
 
-  test("test volumes") {
+  test("Test volumes") {
     val expectedString =
-     """|name: "prefix-volume"
+    s"""|name: "$prefix-volume"
         |volumeSource {
         |  downwardAPI {
         |    items {
         |      path: "spark-defaults.conf"
         |      fieldRef {
-        |        fieldPath: "metadata.annotations['prefix/spark-defaults.conf']"
+        |        fieldPath: "metadata.annotations['$prefix/spark-defaults.conf']"
         |      }
         |    }
         |  }
         |}
         |""".stripMargin
 
-    val cg = new ConfigGenerator("prefix", sparkConf)
+    val cg = new ConfigGenerator(prefix, sparkConf)
     val vol = cg.getVolumes
     assert(vol.head.toProtoString == expectedString)
   }
 
-  test("test volume mounts") {
+  test("Test volume mounts") {
     val expectedString =
-     """|name: "prefix-volume"
+    raw"""|name: "$prefix-volume"
         |readOnly: true
-        |mountPath: "/opt/spark/conf"
+        |mountPath: "${ConfigGenerator.REMOTE_CONF_DIR_NAME}"
         |""".stripMargin
 
-    val cg = new ConfigGenerator("prefix", sparkConf)
+    val cg = new ConfigGenerator(prefix, sparkConf)
     val volMounts = cg.getVolumeMounts
     assert(volMounts.head.toProtoString == expectedString)
   }
