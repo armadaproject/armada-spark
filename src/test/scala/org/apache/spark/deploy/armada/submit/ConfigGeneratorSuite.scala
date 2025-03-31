@@ -49,9 +49,10 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
 
   }
   test("Test annotations") {
+    val expectedString = s"Map($prefix/spark-defaults.conf -> $configFileContents)"
     val cg = new ConfigGenerator(prefix, sparkConf)
     val ann = cg.getAnnotations
-    assert(ann.toString == s"Map($prefix/spark-defaults.conf -> $configFileContents)")
+    assert(ann.toString == expectedString)
   }
 
   test("Test volumes") {
@@ -76,7 +77,7 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
 
   test("Test volume mounts") {
     val expectedString =
-    raw"""|name: "$prefix-volume"
+    s"""|name: "$prefix-volume"
         |readOnly: true
         |mountPath: "${ConfigGenerator.REMOTE_CONF_DIR_NAME}"
         |""".stripMargin
