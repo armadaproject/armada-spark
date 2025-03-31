@@ -42,18 +42,23 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
     }
   }
 
+  // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {
     confFiles.map(f =>
       (prefix + "/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
   }
 
+  private def volumeName = prefix + "-volume"
+
+  // Mount the annotation volume to the expected config directory
   def getVolumeMounts: Seq[VolumeMount] = {
     Seq(VolumeMount()
-      .withName(prefix + "-volume")
+      .withName(volumeName)
       .withMountPath(REMOTE_CONF_DIR_NAME)
       .withReadOnly(true))
   }
 
+  // Use the k8s downward api to mount the annotations as config files
   def getVolumes: Seq[Volume] = {
     def getDownAPIVolumeFile(f: File) = {
       DownwardAPIVolumeFile()
@@ -66,7 +71,7 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
     val volumeSource = VolumeSource()
       .withDownwardAPI(DownwardAPIVolumeSource().withItems(downwardAPIVolumeFiles))
     Seq(Volume()
-      .withName(prefix + "-volume")
+      .withName(volumeName)
       .withVolumeSource(volumeSource))
   }
 }
