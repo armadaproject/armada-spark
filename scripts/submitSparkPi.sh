@@ -9,7 +9,7 @@ fi
 
 # run spark pi app on armada.  Note we are using the "ArmadaSparkSubmit" class below
 #  instead of the standard "SparkSubmit".  The rest of the parameters are standard spark
-SPARK_CONF_DIR=$SPARK_HOME/conf $SPARK_HOME/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
+$SPARK_HOME/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
   --master $ARMADA_MASTER --deploy-mode cluster \
   --name spark-pi \
   --class org.apache.spark.examples.SparkPi \

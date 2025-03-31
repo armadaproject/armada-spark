@@ -55,14 +55,16 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
   }
 
   def getVolumes: Seq[Volume] = {
-    val dFiles = confFiles.map(
-      f => DownwardAPIVolumeFile()
+    def getDownAPIVolumeFile(f: File) = {
+      DownwardAPIVolumeFile()
         .withPath(f.getName)
         .withFieldRef(
           ObjectFieldSelector()
-            .withFieldPath("metadata.annotations['" + prefix + "/" + f.getName + "']")))
+            .withFieldPath("metadata.annotations['" + prefix + "/" + f.getName + "']"))
+    }
+    val downwardAPIVolumeFiles = confFiles.map(getDownAPIVolumeFile)
     val volumeSource = VolumeSource()
-      .withDownwardAPI(DownwardAPIVolumeSource().withItems(dFiles))
+      .withDownwardAPI(DownwardAPIVolumeSource().withItems(downwardAPIVolumeFiles))
     Seq(Volume()
       .withName(prefix + "-volume")
       .withVolumeSource(volumeSource))

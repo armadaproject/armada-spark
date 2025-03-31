@@ -307,7 +307,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
-      new EnvVar().withName("SPARK_CONF_DIR").withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
+      new EnvVar().withName(ConfigGenerator.ENV_SPARK_CONF_DIR).withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
@@ -370,7 +370,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(podSpec)
       .withAnnotations(configGenerator.getAnnotations)
 
-    println("gbj12")
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
 
