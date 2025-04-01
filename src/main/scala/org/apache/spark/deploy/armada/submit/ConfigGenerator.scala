@@ -65,7 +65,7 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
         .withPath(f.getName)
         .withFieldRef(
           ObjectFieldSelector()
-            .withFieldPath("metadata.annotations['" + prefix + "/" + f.getName + "']"))
+            .withFieldPath(s"metadata.annotations['$prefix/${f.getName}']"))
     }
     val downwardAPIVolumeFiles = confFiles.map(getDownAPIVolumeFile)
     val volumeSource = VolumeSource()
