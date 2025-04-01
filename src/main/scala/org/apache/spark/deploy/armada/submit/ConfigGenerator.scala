@@ -50,7 +50,7 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   private def volumeName = prefix + "-volume"
 
-  // Mount the annotation volume to the expected config directory
+  // Mount the config volume to the expected config directory
   def getVolumeMounts: Seq[VolumeMount] = {
     Seq(VolumeMount()
       .withName(volumeName)
@@ -58,7 +58,7 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
       .withReadOnly(true))
   }
 
-  // Use the k8s downward api to mount the annotations as config files
+  // Use the k8s downward api to map the config files to a volume
   def getVolumes: Seq[Volume] = {
     def getDownAPIVolumeFile(f: File) = {
       DownwardAPIVolumeFile()
