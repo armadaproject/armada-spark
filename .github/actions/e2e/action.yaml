@@ -34,6 +34,8 @@ runs:
       restore-keys:
         ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
         ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-
+  - name: Setup upterm session    
+    uses: lhotari/action-upterm@v1    
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
