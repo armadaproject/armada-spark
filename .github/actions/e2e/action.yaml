@@ -34,8 +34,6 @@ runs:
       restore-keys:
         ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
         ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-
-  - name: Setup upterm session    
-    uses: lhotari/action-upterm@v1    
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
@@ -120,6 +118,10 @@ runs:
     if: always() && steps.submit.outcome == 'success'
     run: curl -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
     shell: bash
+  - name: Setup upterm session    
+    uses: lhotari/action-upterm@v1
+    with:
+        wait-timeout-minutes: 600      
   - name: Upload logs
     if: always()
     uses: actions/upload-artifact@v4
