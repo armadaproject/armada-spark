@@ -39,7 +39,7 @@ private[spark] object Config {
 
   val ARMADA_LOOKOUTURL: ConfigEntry[String] =
     ConfigBuilder("spark.armada.lookouturl")
-      .doc("URL base for the Armada Lookout UI.")
+      .doc("URL base for the Armada Lookout UI. ")
       .stringConf
       .checkValue(urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
         s"Value must be a valid URL, like http://host:8080 or https://host:443")
