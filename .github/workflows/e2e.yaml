@@ -1,0 +1,38 @@
+name: E2E
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  build:
+    name: End-to-end test ${{ matrix.spark_version }} Scala ${{ matrix.scala_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scala_version: "2.12.15"
+            spark_version: "3.3.4"
+            java_version: "11"
+          - scala_version: "2.12.18"
+            spark_version: "3.5.5"
+            java_version: "17"
+
+          - scala_version: "2.13.8"
+            spark_version: "3.3.4"
+            java_version: "11"
+          - scala_version: "2.13.8"
+            spark_version: "3.5.5"
+            java_version: "17"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: E2E
+        uses: ./.github/actions/e2e/
+        with:
+          spark_version: ${{ matrix.spark_version }}
+          scala_version: ${{ matrix.scala_version }}
+          java_version: ${{ matrix.java_version }}
