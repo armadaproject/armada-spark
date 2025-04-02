@@ -100,7 +100,7 @@ jobs:
       - name: Submit SparkPi
         id: submit
         run: |
-          ./armada-spark/scripts/submitSparkPi.sh | tee submitSparkPi.log
+          ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
 
           while read line; do
             if [[ "$line" == "Got job ID:"* ]]; then
@@ -114,9 +114,9 @@ jobs:
         timeout-minutes: 5
         run: |
           sleep 10
-          armadactl watch test driver --exit-if-inactive | tee armadactl.watch.txt
+          armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
 
-          if grep "Job failed:" armadactl.watch.txt; then echo "Job failed"; exit 1; fi
+          if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
       - name: Inspect k8s pods
         id: k8s-pods
         if: always() && steps.kind.outcome == 'success'
@@ -129,15 +129,15 @@ jobs:
           kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
           do
             echo "::group::$pod"
-            kubectl logs "$pod" --namespace "$namespace" | tee "$pod.log"
+            kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$pod.log"
             echo "::endgroup::"
           done
       - name: Inspect Lookout
         if: always() && steps.submit.outcome == 'success'
         run: curl -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
       - name: Upload logs
-        if: always() && steps.k8s-pods.outcome != 'skipped'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: k8s-logs-${{ matrix.spark_version }}-${{ matrix.scala_version }}
+          name: logs-${{ matrix.spark_version }}-${{ matrix.scala_version }}
           path: "*.log"
