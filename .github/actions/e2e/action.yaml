@@ -119,6 +119,7 @@ runs:
     run: curl -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
     shell: bash
   - name: Setup upterm session    
+    if: always()
     uses: lhotari/action-upterm@v1
     with:
         wait-timeout-minutes: 600      
