@@ -32,11 +32,13 @@ This script provides options to confgure your build:
    -i  <image-name>
    -m  <armada-master-url>
    -q  <armada-queue>
+   -l  <armada-lookout-url>
 
 You also can specify those parameters in scripts/config.sh, like so:
    IMAGE_NAME=spark:armada
    ARMADA_MASTER=armada://localhost:30002
    ARMADA_QUEUE=test
+   ARMADA_LOOKOUT_URL=http://localhost:30000
 ```
 
 Spark versions "3.3.4" and "3.5.3" are supported.
@@ -53,4 +55,3 @@ It can be run like so:
 scripts/submitSparkPi.sh
 ```
 It uses the same config parameters as `createImage.sh`.
-
