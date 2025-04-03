@@ -105,11 +105,13 @@ private[spark] class ArmadaClusterSchedulerBackend(
       .withResources(
         ResourceRequirements(
           limits = Map(
-            "memory" -> Quantity(Option("1000Mi")),
+            "memory" -> Quantity(Option("512Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("100m"))
           ),
           requests = Map(
-            "memory" -> Quantity(Option("1000Mi")),
+            "memory" -> Quantity(Option("512Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("100m"))
           )
         )

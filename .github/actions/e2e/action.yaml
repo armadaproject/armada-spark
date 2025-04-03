@@ -75,7 +75,7 @@ runs:
       echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
     shell: bash
   - name: Create Armada queue
-    run: until armadactl create queue test; do sleep 1; echo; done; sleep 10
+    run: until armadactl create queue test; do sleep 1; echo; done; sleep 30
     shell: bash
   - name: Submit SparkPi
     id: submit
