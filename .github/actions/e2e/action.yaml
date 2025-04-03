@@ -77,6 +77,11 @@ runs:
   - name: Create Armada queue
     run: until armadactl create queue test; do sleep 1; echo; done; sleep 10
     shell: bash
+  - name: sleep more
+    run: |
+      #sleep more
+      sleep 60
+    shell: bash
   - name: Submit SparkPi
     id: submit
     run: |
