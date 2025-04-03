@@ -101,12 +101,11 @@ runs:
       do
         echo "::endgroup::"
         sleep 1
-        echo
         echo "::group::armadactl create queue test"
       done
       echo "::endgroup::"
 
-      sleep 30
+      sleep 60
     shell: bash
   - name: Submit SparkPi
     id: submit
