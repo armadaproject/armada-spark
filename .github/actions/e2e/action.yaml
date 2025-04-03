@@ -98,8 +98,29 @@ runs:
 
       if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
     shell: bash
-  - name: Setup upterm session    
+  - name: Inspect k8s pods
+    id: k8s-pods
+    if: always() && steps.kind.outcome == 'success'
+    run: |
+      # Inspect k8s pods
+      echo "::group::pods"
+      kubectl get pods -A
+      echo "::endgroup::"
+
+      kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
+      do
+        echo "::group::$pod"
+        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$pod.log"
+        echo "::endgroup::"
+      done
+    shell: bash
+  - name: Inspect Lookout
+    if: always() && steps.submit.outcome == 'success'
+    run: curl -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
+    shell: bash
+  - name: Upload logs
     if: always()
-    uses: lhotari/action-upterm@v1
+    uses: actions/upload-artifact@v4
     with:
-        wait-timeout-minutes: 600      
+      name: logs-${{ matrix.spark_version }}-${{ matrix.scala_version }}
+      path: "*.log"
