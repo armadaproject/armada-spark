@@ -351,10 +351,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ResourceRequirements(
           limits = Map(
             "memory" -> Quantity(Option("256Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("200m"))
           ),
           requests = Map(
             "memory" -> Quantity(Option("256Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("200m"))
           )
         )
