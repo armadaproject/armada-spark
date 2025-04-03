@@ -350,12 +350,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
         ResourceRequirements(
           limits = Map(
-            "memory" -> Quantity(Option("1Gi")),
-            "cpu" -> Quantity(Option("1"))
+            "memory" -> Quantity(Option("256Mi")),
+            "cpu" -> Quantity(Option("200m"))
           ),
           requests = Map(
-            "memory" -> Quantity(Option("1Gi")),
-            "cpu" -> Quantity(Option("1"))
+            "memory" -> Quantity(Option("256Mi")),
+            "cpu" -> Quantity(Option("200m"))
           )
         )
       )
