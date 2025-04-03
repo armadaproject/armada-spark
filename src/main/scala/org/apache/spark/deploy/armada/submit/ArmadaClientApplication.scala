@@ -30,10 +30,8 @@ import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 import io.fabric8.kubernetes.client.Watcher.Action
 */
 import _root_.io.armadaproject.armada.ArmadaClient
-import k8s.io.api.core.v1.generated.{Container, EnvVar, PodSpec, ResourceRequirements}
-import k8s.io.api.core.v1.generated.{EnvVarSource, ObjectFieldSelector}
+import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config.ARMADA_LOOKOUTURL
@@ -309,9 +307,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
+      new EnvVar().withName(ConfigGenerator.ENV_SPARK_CONF_DIR).withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
       new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
     )
 
+    val configGenerator =
+      new ConfigGenerator("armada-spark-config", conf)
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource) => Seq(resource)
@@ -319,13 +320,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
-    val javaOptions = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005"
     val driverContainer = Container()
       .withName("spark-driver")
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
       .withEnv(envVars)
       .withCommand(Seq("/opt/entrypoint.sh"))
+      .withVolumeMounts(configGenerator.getVolumeMounts)
       .withArgs(
         Seq(
           "driver",
@@ -335,13 +336,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--master",
           "local://armada://armada-server.armada.svc.cluster.local:50051",
           "--conf",
-          s"spark.executor.instances=${conf.get("spark.executor.instances")}",
-          "--conf",
           s"spark.kubernetes.container.image=${conf.get("spark.kubernetes.container.image")}",
           "--conf",
           "spark.driver.port=7078",
-          "--conf",
-          s"spark.driver.extraJavaOptions=$javaOptions",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
 
@@ -364,12 +361,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
+      .withVolumes(configGenerator.getVolumes)
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
+      .withAnnotations(configGenerator.getAnnotations)
 
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))

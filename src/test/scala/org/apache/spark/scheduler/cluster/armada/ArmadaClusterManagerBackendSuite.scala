@@ -17,14 +17,13 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-import org.apache.spark.internal.config.Network.{NETWORK_TIMEOUT, RPC_ASK_TIMEOUT}
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.util.ManualClock
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.mockito.ArgumentMatchers.anyString
-import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Mockito.{never, verify, when}
+import org.mockito.{Mock, MockitoAnnotations}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
