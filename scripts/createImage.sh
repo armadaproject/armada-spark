@@ -28,9 +28,9 @@ if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || 
     ./dev/change-scala-version.sh $SCALA_BIN_VERSION
     # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
     # spark-examples jars are not released, so we need to build these from sources
-    ./build/mvn clean
-    ./build/mvn package -pl examples
-    ./build/mvn package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+    ./build/mvn --batch-mode clean
+    ./build/mvn --batch-mode package -pl examples
+    ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
     ./bin/docker-image-tool.sh -t "$image_tag" build
     cd ..
   fi
