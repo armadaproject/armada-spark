@@ -32,20 +32,35 @@ runs:
 
   - name: Set Spark and Scala versions
     run: |
+      # Set Spark and Scala versions
       ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
+      echo "::group::changes"
       git diff
+      echo "::endgroup::"
     shell: bash
   - name: Fetch mvn dependencies
     continue-on-error: true
-    run: mvn --batch-mode dependency:go-offline
+    run: |
+      # Fetch mvn dependencies
+      echo "::group::mvn go-offline"
+      mvn --batch-mode dependency:go-offline
+      echo "::endgroup::"
     shell: bash
   - name: Build package
-    run: mvn --batch-mode install
+    run: |
+      # Build package
+      echo "::group::mvn install"
+      mvn --batch-mode install
+      echo "::endgroup::"
     shell: bash
 
   - name: Build image
     if: ( ! contains(inputs.spark_version, '-SNAPSHOT') )
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
-    run: ./scripts/createImage.sh
+    run: |
+      # Build image
+      echo "::group::createImage.sh"
+      ./scripts/createImage.sh
+      echo "::endgroup::"
     shell: bash

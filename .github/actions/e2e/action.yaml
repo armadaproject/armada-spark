@@ -30,14 +30,14 @@ runs:
     uses: actions/cache@v4
     with:
       path: ~/.m2/repository
-      key: ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+      key: ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
       restore-keys:
-        ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
-        ${{ runner.os }}-mvn-e2e-${{ matrix.spark_version }}-${{ matrix.scala_version }}-
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
-      java-version: ${{ matrix.java_version }}
+      java-version: ${{ inputs.java_version }}
       distribution: 'zulu'
   - name: Setup Go
     id: setup-go
@@ -48,45 +48,78 @@ runs:
   - name: Set Spark and Scala versions
     working-directory: armada-spark
     run: |
-      ./scripts/set-version.sh "${{ matrix.spark_version }}" "${{ matrix.scala_version }}"
+      # Set Spark and Scala versions
+      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
+      echo "::group::changes"
       git diff
+      echo "::endgroup::"
     shell: bash
   - name: Fetch mvn dependencies
     continue-on-error: true
     working-directory: armada-spark
-    run: mvn --batch-mode dependency:go-offline
+    run: |
+      # Fetch mvn dependencies
+      echo "::group::mvn go-offline"
+      mvn --batch-mode dependency:go-offline
+      echo "::endgroup::"
     shell: bash
   - name: Build package
     working-directory: armada-spark
-    run: mvn package
+    run: |
+      # Build package
+      echo "::group::mvn package"
+      mvn --batch-mode package
+      echo "::endgroup::"
     shell: bash
   - name: Build image
     env:
-      JAVA_VERSION: ${{ matrix.java_version }}
-    run: ./armada-spark/scripts/createImage.sh
+      JAVA_VERSION: ${{ inputs.java_version }}
+    run: |
+      # Build image
+      echo "::group::createImage.sh"
+      ./armada-spark/scripts/createImage.sh
+      echo "::endgroup::"
     shell: bash
 
   - name: Start Armada Kind cluster
     id: kind
     working-directory: armada-operator
     run: |
+      # Start Armada Kind cluster
+      echo "::group::make kind-all"
       make kind-all
+      echo "::endgroup::"
+
       echo "$PWD/bin/app/" >> "$GITHUB_PATH"
       echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
     shell: bash
   - name: Create Armada queue
-    run: until armadactl create queue test; do sleep 1; echo; done; sleep 30
+    run: |
+      # Create Armada queue
+      echo "::group::armadactl create queue test"
+      until armadactl create queue test
+      do
+        echo "::endgroup::"
+        sleep 1
+        echo
+        echo "::group::armadactl create queue test"
+      done
+      echo "::endgroup::"
+
+      sleep 30
     shell: bash
   - name: Submit SparkPi
     id: submit
     run: |
+      # Submit SparkPi
+      echo "::group::submitSparkPi.sh"
       ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
+      echo "::endgroup::"
 
       while read line; do
         if [[ "$line" == "Got job ID:"* ]]; then
           read got job id jobid <<< "$line"
           echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
-          echo "job id: $jobid"
         fi
       done < submitSparkPi.log
       if [[ -z "$jobid" ]]; then echo "No job id detected"; exit 1; fi
@@ -116,11 +149,15 @@ runs:
     shell: bash
   - name: Inspect Lookout
     if: always() && steps.submit.outcome == 'success'
-    run: curl -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
+    run: |
+      # Inspect k8s pods
+      echo "::group::jobSpec"
+      curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
+      echo "::endgroup::"
     shell: bash
   - name: Upload logs
     if: always()
     uses: actions/upload-artifact@v4
     with:
-      name: logs-${{ matrix.spark_version }}-${{ matrix.scala_version }}
+      name: logs-${{ inputs.spark_version }}-${{ inputs.scala_version }}
       path: "*.log"
