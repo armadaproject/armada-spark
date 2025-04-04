@@ -36,7 +36,7 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.Config.ARMADA_LOOKOUTURL
+import org.apache.spark.deploy.armada.Config.{ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL}
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -250,7 +250,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
     val armadaClient = ArmadaClient(host, port)
-    val healthResp = Await.result(armadaClient.submitHealth(), 5.seconds)
+    val healthTimeout = Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
+    val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
     if (healthResp.status.isServing) {
       log("Submit health good!")

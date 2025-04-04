@@ -44,4 +44,11 @@ private[spark] object Config {
       .checkValue(urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
         s"Value must be a valid URL, like http://host:8080 or https://host:443")
       .createWithDefaultString("http://localhost:30000")
+
+  val ARMADA_HEALTH_CHECK_TIMEOUT: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.health.checkTimeout")
+      .doc("Number of seconds to wait for an Armada health check result")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(interval => interval > 0, s"Timeout must be a positive time value.")
+      .createWithDefaultString("5")
 }
