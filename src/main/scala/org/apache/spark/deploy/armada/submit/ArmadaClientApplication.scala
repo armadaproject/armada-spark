@@ -17,6 +17,8 @@
 package org.apache.spark.deploy.armada.submit
 
 import scala.collection.mutable
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 /*
 import scala.jdk.CollectionConverters._
@@ -248,12 +250,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
     val armadaClient = ArmadaClient(host, port)
-    if (armadaClient.submitHealth().isServing) {
+    val healthResp = Await.result(armadaClient.submitHealth(), 5.seconds)
+
+    if (healthResp.status.isServing) {
       log("Submit health good!")
     } else {
       log("Could not contact Armada!")
     }
-
 
     // # FIXME: Need to check how this is launched whether to submit a job or
     // to turn into driver / cluster manager mode.
