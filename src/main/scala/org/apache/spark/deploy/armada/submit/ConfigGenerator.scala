@@ -34,6 +34,9 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   private val confFiles = getConfFiles
   private def getConfFiles : Array[File] = {
+    if (confDir.isEmpty) {
+      return Array.empty[File]
+    }
     val dir = new File(confDir.get)
     if (dir.isDirectory) {
       dir.listFiles.filter(!_.isDirectory)
