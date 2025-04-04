@@ -20,7 +20,7 @@ import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.deploy.armada.Config._
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -117,10 +117,12 @@ private[spark] class ArmadaClusterSchedulerBackend(
         )
       )
 
+
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(executorContainer))
+      .withNodeSelector(transformSelectorsToMap(conf.get("spark.armada.clusterSelectors")))
 
     val testJob = api.submit
       .JobSubmitRequestItem()

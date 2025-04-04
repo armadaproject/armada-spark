@@ -36,7 +36,7 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.Config.{ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL}
+import org.apache.spark.deploy.armada.Config._
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -370,6 +370,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
+      .withNodeSelector(transformSelectorsToMap(conf.get("spark.armada.clusterSelectors")))
 
     val driverJob = api.submit
       .JobSubmitRequestItem()

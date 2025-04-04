@@ -56,16 +56,23 @@ private[spark] object Config {
       .createWithDefaultString("5")
 
   // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
-  // Clients do not use the prefix, therefore we just accept label selectors.
-  private val labelRegex = "([a-z0-9A-z&&[^-_.]]([a-z0-9A-Z-_.]{0,61}[a-z0-9A-Z&&[^-_.]])?)"
-  private val labelSelectors: Regex = (s"^($labelRegex(,$labelRegex)*)?$$").r
+  // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
+  private val label = "([a-z0-9A-z&&[^-_.]]([a-z0-9A-Z-_.]{0,61}[a-z0-9A-Z&&[^-_.]])?)"
+  private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
   private[armada] val selectorsValidator = selectors => labelSelectors.matches(selectors)
 
+  def transformSelectorsToMap(str: String): Map[String,String] = {
+    str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
+  }
+
   val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
     ConfigBuilder("spark.armada.clusterSelectors")
-      .doc("A comma separated list of kubernetes label selectors to use when deploying spark driver and executors")
+      .doc("A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
+           "the spark driver and its executors are deployed to the same cluster.")
       .stringConf
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
-      .createWithDefaultString("armada-spark,spark-cluster-001")
+      .createWithDefaultString("armada-spark=true,armada-cluster-name=spark-cluster-001")
 }
+
+
