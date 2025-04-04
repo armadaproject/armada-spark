@@ -169,7 +169,7 @@ runs:
       expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitSparkPi.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
       actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" armada-${{ steps.submit.outputs.jobid }}-0.log | wc`
       echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount
-      if [ "$expectedExecutorCount" = "$actualExecutorCount" ]; then
+      if [ $expectedExecutorCount -eq $actualExecutorCount ]; then
         echo "got expected executor count"
       else
         echo "Bad executor count"; exit 1
