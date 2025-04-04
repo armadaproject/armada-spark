@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 ARG spark_base_image_prefix=apache/spark
-ARG spark_base_image_tag=3.3.3-scala
+ARG spark_base_image_tag=3.3.3-scala2.12-java11-ubuntu
 
 FROM ${spark_base_image_prefix}:${spark_base_image_tag}
 
