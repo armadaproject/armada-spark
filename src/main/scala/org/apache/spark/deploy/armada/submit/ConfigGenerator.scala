@@ -43,7 +43,6 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {
-    println(s"gbjconf $confFiles"}
     confFiles.map(f =>
       (prefix + "/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
   }
