@@ -1,0 +1,163 @@
+name: E2E
+author: EnricoMi
+description: Github Action to run end-to-end tests against a Spark and Scala version
+
+inputs:
+  spark_version:
+    description: Spark version to build against, e.g. "3.5.5" or "4.1.0-SNAPSHOT"
+    required: true
+  scala_version:
+    description: Scala version to build with, e.g. "2.13.8"
+    required: true
+  java_version:
+    description: Java version to build with, e.g. "11"
+    required: true
+
+runs:
+  using: composite
+  steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+    with:
+      path: armada-spark
+  - name: Checkout
+    uses: actions/checkout@v4
+    with:
+      repository: armadaproject/armada-operator
+      path: armada-operator
+
+  - name: Restore Maven packages cache
+    uses: actions/cache@v4
+    with:
+      path: ~/.m2/repository
+      key: ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+      restore-keys:
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
+  - name: Setup JDK
+    uses: actions/setup-java@v4
+    with:
+      java-version: ${{ inputs.java_version }}
+      distribution: 'zulu'
+  - name: Setup Go
+    id: setup-go
+    uses: ./armada-operator/.github/actions/setup-go-cache
+    with:
+      cache-prefix: go-e2e
+
+  - name: Set Spark and Scala versions
+    working-directory: armada-spark
+    run: |
+      # Set Spark and Scala versions
+      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
+      echo "::group::changes"
+      git diff
+      echo "::endgroup::"
+    shell: bash
+  - name: Fetch mvn dependencies
+    continue-on-error: true
+    working-directory: armada-spark
+    run: |
+      # Fetch mvn dependencies
+      echo "::group::mvn go-offline"
+      mvn --batch-mode --update-snapshots dependency:go-offline
+      echo "::endgroup::"
+    shell: bash
+  - name: Build package
+    working-directory: armada-spark
+    run: |
+      # Build package
+      echo "::group::mvn package"
+      mvn --batch-mode package
+      echo "::endgroup::"
+    shell: bash
+  - name: Build image
+    env:
+      JAVA_VERSION: ${{ inputs.java_version }}
+    run: |
+      # Build image
+      echo "::group::createImage.sh"
+      ./armada-spark/scripts/createImage.sh
+      echo "::endgroup::"
+    shell: bash
+
+  - name: Start Armada Kind cluster
+    id: kind
+    working-directory: armada-operator
+    run: |
+      # Start Armada Kind cluster
+      echo "::group::make kind-all"
+      make kind-all
+      echo "::endgroup::"
+
+      echo "$PWD/bin/app/" >> "$GITHUB_PATH"
+      echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
+    shell: bash
+  - name: Create Armada queue
+    run: |
+      # Create Armada queue
+      echo "::group::armadactl create queue test"
+      until armadactl create queue test
+      do
+        echo "::endgroup::"
+        sleep 1
+        echo "::group::armadactl create queue test"
+      done
+      echo "::endgroup::"
+
+      sleep 60
+    shell: bash
+  - name: Submit SparkPi
+    id: submit
+    run: |
+      # Submit SparkPi
+      echo "::group::submitSparkPi.sh"
+      ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
+      echo "::endgroup::"
+
+      while read line; do
+        if [[ "$line" == "Got job ID:"* ]]; then
+          read got job id jobid <<< "$line"
+          echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
+        fi
+      done < submitSparkPi.log
+      if [[ -z "$jobid" ]]; then echo "No job id detected"; exit 1; fi
+    shell: bash
+  - name: Watch job
+    run: |
+      # Watch job
+      sleep 10
+      timeout 15m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
+
+      if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
+    shell: bash
+  - name: Inspect k8s pods
+    id: k8s-pods
+    if: always() && steps.kind.outcome == 'success'
+    run: |
+      # Inspect k8s pods
+      echo "::group::pods"
+      kubectl get pods -A
+      echo "::endgroup::"
+
+      kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
+      do
+        echo "::group::$pod"
+        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$pod.log"
+        echo "::endgroup::"
+      done
+    shell: bash
+  - name: Inspect Lookout
+    if: always() && steps.submit.outcome == 'success'
+    run: |
+      # Inspect k8s pods
+      echo "::group::jobSpec"
+      curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
+      echo "::endgroup::"
+    shell: bash
+  - name: Upload logs
+    if: always()
+    uses: actions/upload-artifact@v4
+    with:
+      name: logs-${{ inputs.spark_version }}-${{ inputs.scala_version }}
+      path: "*.log"
