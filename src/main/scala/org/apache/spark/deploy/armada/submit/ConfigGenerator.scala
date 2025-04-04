@@ -34,13 +34,12 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   private val confFiles = getConfFiles
   private def getConfFiles : Array[File] = {
-    val dir = new File(confDir.get)
-    if (dir.isDirectory) {
-      dir.listFiles.filter(!_.isDirectory)
-    } else {
-      Array.empty[File]
-    }
+    confDir.map(new File(_))
+      .filter(_.isDirectory)
+      .map(_.listFiles.filter(!_.isDirectory))
+      .getOrElse(Array.empty)
   }
+
 
   // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {

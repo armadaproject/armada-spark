@@ -324,6 +324,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
+
+    val confSeq = conf.getAll.flatMap {
+      case(k, v) => Seq("--conf", s"$k=$v")
+    }
     val driverContainer = Container()
       .withName("spark-driver")
       .withImagePullPolicy("IfNotPresent")
@@ -340,13 +344,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--master",
           "local://armada://armada-server.armada.svc.cluster.local:50051",
           "--conf",
-          s"spark.kubernetes.container.image=${conf.get("spark.kubernetes.container.image")}",
-          "--conf",
           "spark.driver.port=7078",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
 
-        ) ++ primaryResource ++ clientArguments.driverArgs
+        ) ++ confSeq ++ primaryResource ++ clientArguments.driverArgs
       )
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
         ResourceRequirements(
