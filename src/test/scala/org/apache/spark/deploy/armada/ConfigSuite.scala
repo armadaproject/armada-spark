@@ -33,6 +33,7 @@ class ConfigSuite
     val testCases = List[TestCase](
       // Valid cases
       TestCase("", true, "empty case"),
+      TestCase("a=1", true, "One character long name and value"),
       TestCase("armada-spark=true", true, "One valid selector"),
       TestCase("armada-spark=true,spark-cluster-name=001", true, "Two valid selectors"),
       TestCase("armada-spark=false,name=spark-cluster-001,a=1,b=2,c=3", true, "Several valid selectors"),
