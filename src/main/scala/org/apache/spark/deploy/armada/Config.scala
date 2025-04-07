@@ -60,7 +60,7 @@ private[spark] object Config {
   private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
   private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
-  private[armada] val selectorsValidator = selectors => labelSelectors.matches(selectors)
+  private[armada] val selectorsValidator: CharSequence => Boolean = selectors => labelSelectors.matches(selectors)
 
   def transformSelectorsToMap(str: String): Map[String,String] = {
     str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
