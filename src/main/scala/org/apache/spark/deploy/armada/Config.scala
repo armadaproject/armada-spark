@@ -57,7 +57,7 @@ private[spark] object Config {
 
   // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
   // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
-  private val label = "([a-z0-9A-z&&[^-_.]]([a-z0-9A-Z-_.]{0,61}[a-z0-9A-Z&&[^-_.]])?)"
+  private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
   private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
   private[armada] val selectorsValidator = selectors => labelSelectors.matches(selectors)
