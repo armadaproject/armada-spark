@@ -43,3 +43,6 @@ docker build \
   --build-arg scala_binary_version=$SCALA_BIN_VERSION \
   -f "$root/docker/Dockerfile" \
   "$root"
+
+# Load on armada test cluster
+kind load docker-image spark:armada-testing --name armada-test

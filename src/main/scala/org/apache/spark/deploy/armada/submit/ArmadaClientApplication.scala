@@ -36,8 +36,8 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.Config.{DEFAULT_CLUSTER_SELECTORS, ARMADA_CLUSTER_SELECTORS,
-  ARMADA_LOOKOUTURL, transformSelectorsToMap}
+import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
+  ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL, DEFAULT_CLUSTER_SELECTORS, transformSelectorsToMap}
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
