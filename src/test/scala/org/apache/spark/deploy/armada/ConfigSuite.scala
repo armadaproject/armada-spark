@@ -18,6 +18,7 @@
 package org.apache.spark.deploy.armada
 
 
+import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import Config._
 
@@ -56,5 +57,10 @@ class ConfigSuite
         val result = Config.selectorsValidator(tc.testSelectors)
         assert(result == tc.expectedValid, s"test name: '${tc.name}', test value: '${tc.testSelectors}'")
     }
+  }
+
+  test("defaultClusterSelectors") {
+    val conf = new SparkConf(true)
+    assert(conf.get(ARMADA_CLUSTER_SELECTORS) == DEFAULT_CLUSTER_SELECTORS)
   }
 }

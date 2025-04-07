@@ -66,13 +66,13 @@ private[spark] object Config {
     str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
   }
 
+  val DEFAULT_CLUSTER_SELECTORS = "armada-spark=true,armada-cluster-name=spark-cluster-001"
+
   val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
     ConfigBuilder("spark.armada.clusterSelectors")
       .doc("A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
            "the spark driver and its executors are deployed to the same cluster.")
       .stringConf
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
-      .createWithDefaultString("armada-spark=true,armada-cluster-name=spark-cluster-001")
+      .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 }
-
-
