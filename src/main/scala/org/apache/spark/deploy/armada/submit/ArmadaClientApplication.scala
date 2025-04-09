@@ -370,7 +370,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
-      .withNodeSelector(transformSelectorsToMap(DEFAULT_CLUSTER_SELECTORS))
+      .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
