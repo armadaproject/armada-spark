@@ -123,7 +123,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(executorContainer))
-      .withNodeSelector(transformSelectorsToMap(conf.get("spark.armada.clusterSelectors")))
+      .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
     val testJob = api.submit
       .JobSubmitRequestItem()
