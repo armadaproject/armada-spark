@@ -69,10 +69,15 @@ private[spark] object Config {
   }
 
   def transformSelectorsToMap(str: String): Map[String,String] = {
-    str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
+    if (str.trim.isEmpty) {
+      Map()
+    }
+    else {
+      str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
+    }
   }
 
-  val DEFAULT_CLUSTER_SELECTORS = "armada-spark=true,armada-cluster-name=spark-cluster-001"
+  val DEFAULT_CLUSTER_SELECTORS = ""
 
   val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
     ConfigBuilder("spark.armada.clusterSelectors")
