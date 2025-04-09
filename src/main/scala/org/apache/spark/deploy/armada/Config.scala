@@ -19,6 +19,9 @@ package org.apache.spark.deploy.armada
 import java.util.concurrent.TimeUnit
 import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
+import scala.util.matching.Regex
+
+
 private[spark] object Config {
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
@@ -51,4 +54,36 @@ private[spark] object Config {
       .timeConf(TimeUnit.SECONDS)
       .checkValue(interval => interval > 0, s"Timeout must be a positive time value.")
       .createWithDefaultString("5")
+
+  // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+  // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
+  private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
+  private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
+
+  private[armada] val selectorsValidator: CharSequence => Boolean = selectors => {
+    val selectorsMaybe = labelSelectors.findPrefixMatchOf(selectors)
+    selectorsMaybe match {
+      case Some(selectors) => true
+      case None => false
+    }
+  }
+
+  def transformSelectorsToMap(str: String): Map[String,String] = {
+    if (str.trim.isEmpty) {
+      Map()
+    }
+    else {
+      str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
+    }
+  }
+
+  val DEFAULT_CLUSTER_SELECTORS = ""
+
+  val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.clusterSelectors")
+      .doc("A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
+           "the spark driver and its executors are deployed to the same cluster.")
+      .stringConf
+      .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
+      .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 }

@@ -36,7 +36,8 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.Config.{ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL}
+import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
+  ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL, DEFAULT_CLUSTER_SELECTORS, transformSelectorsToMap}
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -347,7 +348,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "spark.driver.port=7078",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
-
         ) ++ confSeq ++ primaryResource ++ clientArguments.driverArgs
       )
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
@@ -370,6 +370,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
+      .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
     val driverJob = api.submit
       .JobSubmitRequestItem()
