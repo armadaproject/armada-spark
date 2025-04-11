@@ -80,7 +80,10 @@ runs:
       ./armada-spark/scripts/createImage.sh
       echo "::endgroup::"
     shell: bash
-
+  - name: Patch armada-operator to configure for spark-armada e2e tests
+    run: |
+      # Patch armada-operator
+      patch -p1 -d ./armada-operator/ < ./armada-spark/e2e/armada-operator.patch
   - name: Start Armada Kind cluster
     id: kind
     working-directory: armada-operator
