@@ -84,6 +84,7 @@ runs:
     run: |
       # Patch armada-operator
       patch -p1 -d ./armada-operator/ < ./armada-spark/e2e/armada-operator.patch
+    shell: bash
   - name: Start Armada Kind cluster
     id: kind
     working-directory: armada-operator
