@@ -1,0 +1,26 @@
+diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
+index d76880c..3f0a159 100644
+--- a/dev/quickstart/armada-crs.yaml
++++ b/dev/quickstart/armada-crs.yaml
+@@ -70,6 +70,10 @@ spec:
+     executorApiConnection:
+       armadaUrl: armada-scheduler.armada.svc.cluster.local:50051
+       forceNoTls: true
++    kubernetes:
++      trackedNodeLabels:
++        - kubernetes.io/hostname
++        - armada-spark
+ ---
+ apiVersion: install.armadaproject.io/v1alpha1
+ kind: Lookout
+diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
+index a8d45c3..4a72570 100644
+--- a/hack/kind-config.yaml
++++ b/hack/kind-config.yaml
+@@ -16,3 +16,6 @@ nodes:
+     hostPort: 30002
+     protocol: TCP
+ - role: worker
++- role: worker
++  labels:
++    armada-spark: true

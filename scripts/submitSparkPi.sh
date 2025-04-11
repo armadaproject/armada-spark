@@ -25,4 +25,5 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.executor.instances=1 \
     --conf spark.kubernetes.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
+    --conf spark.armada.clusterSelectors="armada-spark=true" \
     local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar 100
