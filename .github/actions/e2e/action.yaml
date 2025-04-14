@@ -147,6 +147,7 @@ runs:
       kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
       do
         echo "::group::$pod"
+        kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$pod.json"
         kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$pod.log"
         echo "::endgroup::"
       done
@@ -159,12 +160,14 @@ runs:
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
       echo "::endgroup::"
     shell: bash
-  - name: Upload logs
+  - name: Upload k8s insights
     if: always()
     uses: actions/upload-artifact@v4
     with:
-      name: logs-${{ inputs.spark_version }}-${{ inputs.scala_version }}
-      path: "*.log"
+      name: k8s-${{ inputs.spark_version }}-${{ inputs.scala_version }}
+      path: |
+        *.log
+        *.json
   - name: Confirm # of executors
     if: always()
     run: |
