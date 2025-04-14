@@ -13,6 +13,59 @@ index d76880c..3f0a159 100644
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: Lookout
+diff --git a/dev/quickstart/pulsar.values.yaml b/dev/quickstart/pulsar.values.yaml
+index 1853646..2aee22a 100644
+--- a/dev/quickstart/pulsar.values.yaml
++++ b/dev/quickstart/pulsar.values.yaml
+@@ -9,14 +9,48 @@ kube-prometheus-stack:
+   alertmanager:
+     enabled: false
+ 
++
++# minimal pulsar broker config inspired by
++# https://github.com/apache/pulsar-helm-chart/blob/master/examples/values-minikube.yaml
++
++# deployed withh emptyDir
++volumes:
++  persistence: false
++
++# disabled AntiAffinity
++affinity:
++  anti_affinity: false
++
++# disable auto recovery
++components:
++  autorecovery: false
++  pulsar_manager: true
++
+ broker:
+   replicaCount: 1
++  configData:
++    ## Enable `autoSkipNonRecoverableData` since bookkeeper is running
++    ## without persistence
++    autoSkipNonRecoverableData: "true"
++    # storage settings
++    managedLedgerDefaultEnsembleSize: "1"
++    managedLedgerDefaultWriteQuorum: "1"
++    managedLedgerDefaultAckQuorum: "1"
+ 
+ zookeeper:
+   replicaCount: 1
+ 
+ bookkeeper:
+   replicaCount: 1
++  configData:
++    # minimal memory use for bookkeeper
++    # https://bookkeeper.apache.org/docs/reference/config#db-ledger-storage-settings
++    dbStorage_writeCacheMaxSizeMb: "32"
++    dbStorage_readAheadCacheMaxSizeMb: "32"
++    dbStorage_rocksDB_writeBufferSizeMB: "8"
++    dbStorage_rocksDB_blockCacheSize: "8388608"
++    # make bookie work with large disks having little percentage disk space left
++    diskUsageThreshold: "0.999"
+ 
+ proxy:
+   replicaCount: 1
 diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
 index a8d45c3..4a72570 100644
 --- a/hack/kind-config.yaml
@@ -24,3 +77,15 @@ index a8d45c3..4a72570 100644
 +- role: worker
 +  labels:
 +    armada-spark: true
+diff --git a/hack/wait-for-deps.sh b/hack/wait-for-deps.sh
+index 9567caa..01de453 100755
+--- a/hack/wait-for-deps.sh
++++ b/hack/wait-for-deps.sh
+@@ -5,7 +5,6 @@ STATEFULSETS=(
+     "pulsar-bookie"
+     "pulsar-broker"
+     "pulsar-proxy"
+-    "pulsar-recovery"
+     "pulsar-toolset"
+     "pulsar-zookeeper"
+     "redis-ha-server"
