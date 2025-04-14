@@ -101,7 +101,7 @@ runs:
     run: |
       # Create Armada queue
       echo "::group::armadactl create queue test"
-      until armadactl create queue test
+      until armadactl create queue test 2>&1
       do
         echo "::endgroup::"
         sleep 1
@@ -147,7 +147,8 @@ runs:
       kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
       do
         echo "::group::$pod"
-        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$pod.log"
+        kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
+        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log"
         echo "::endgroup::"
       done
     shell: bash
@@ -155,23 +156,17 @@ runs:
     if: always() && steps.submit.outcome == 'success'
     run: |
       # Inspect k8s pods
-      echo "::group::jobSpec"
+      echo "::group::Inspect k8s pods"
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
       echo "::endgroup::"
     shell: bash
-  - name: Upload logs
-    if: always()
-    uses: actions/upload-artifact@v4
-    with:
-      name: logs-${{ inputs.spark_version }}-${{ inputs.scala_version }}
-      path: "*.log"
   - name: Confirm # of executors
     if: always()
     run: |
       # Confirm # of executors
-      echo "::group::confirmExecutors"
+      echo "::group::Confirm # of executors"
       expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitSparkPi.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
-      actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
+      actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" default.armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
       echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount
       if [ $expectedExecutorCount -eq $actualExecutorCount ]; then
         echo "got expected executor count"
@@ -180,3 +175,46 @@ runs:
       fi
       echo "::endgroup::"
     shell: bash
+  - name: Confirm node selection
+    if: always()
+    run: |
+      # Confirm node selection
+      echo "::group::Confirm node selection"
+      success=true
+      expectedNode="armada-worker2"
+
+      for pod in default.armada-*-0.json
+      do
+        echo "pod ${pod/%.json/}"
+        nodeSelector=$(jq -r '.spec.nodeSelector."armada-spark"' "$pod")
+        actualNode=$(jq -r .spec.nodeName "$pod")
+
+        if [[ "$nodeSelector" == "true" ]]
+        then
+          echo "- Node selector exists"
+        else
+          echo "- Node selector is missing"
+          success=false
+        fi
+
+        if [[ "$actualNode" == "$expectedNode" ]]
+        then
+          echo "- Pod assigned to expected node"
+        else
+          echo "- Pod assigned to unexpected node: $actualNode"
+          success=false
+        fi
+        jq '.spec | { "nodeName": .nodeName, nodeSelector: .nodeSelector }' "$pod"
+        echo
+      done
+      "$success"
+      echo "::endgroup::"
+    shell: bash
+  - name: Upload k8s insights
+    if: always()
+    uses: actions/upload-artifact@v4
+    with:
+      name: k8s-${{ inputs.spark_version }}-${{ inputs.scala_version }}
+      path: |
+        *.log
+        *.json
