@@ -22,7 +22,7 @@ docker run --rm --network host $IMAGE_NAME \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name spark-pi \
     --class org.apache.spark.examples.SparkPi \
-    --conf spark.executor.instances=1 \
+    --conf spark.executor.instances=4 \
     --conf spark.kubernetes.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
     --conf spark.armada.clusterSelectors="armada-spark=true" \
