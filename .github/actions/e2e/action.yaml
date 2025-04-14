@@ -101,7 +101,7 @@ runs:
     run: |
       # Create Armada queue
       echo "::group::armadactl create queue test"
-      until armadactl create queue test
+      until armadactl create queue test 2>&1
       do
         echo "::endgroup::"
         sleep 1
