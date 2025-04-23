@@ -1,8 +1,17 @@
 diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
-index d76880c..3f0a159 100644
+index d76880c..043071f 100644
 --- a/dev/quickstart/armada-crs.yaml
 +++ b/dev/quickstart/armada-crs.yaml
-@@ -70,6 +70,10 @@ spec:
+@@ -56,6 +56,8 @@ spec:
+     redis:
+       addrs:
+         - redis-ha.data.svc.cluster.local:6379
++    submission:
++      allowCustomServiceNames: true
+ ---
+ apiVersion: install.armadaproject.io/v1alpha1
+ kind: Executor
+@@ -70,6 +72,10 @@ spec:
      executorApiConnection:
        armadaUrl: armada-scheduler.armada.svc.cluster.local:50051
        forceNoTls: true
