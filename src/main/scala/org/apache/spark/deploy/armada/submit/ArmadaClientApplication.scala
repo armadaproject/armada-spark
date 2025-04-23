@@ -37,7 +37,13 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
-  ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL, DEFAULT_CLUSTER_SELECTORS, transformSelectorsToMap}
+  ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL, DEFAULT_CLUSTER_SELECTORS,
+  DRIVER_SERVICE_NAME_PREFIX, transformSelectorsToMap,
+  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
+import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
+import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
+
+import java.util.UUID
 
 /* import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.Config._
@@ -306,14 +312,84 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ()
   }
 
-  private def submitDriverJob(armadaClient: ArmadaClient, clientArguments: ClientArguments,
-    conf: SparkConf): String = {
+  private def getExecutorContainers(numExecutors: Int, driverServiceName: String, conf: SparkConf): Seq[Container] = {
+    return (for (i <- 0 until numExecutors)
+      yield getExecutorContainer(i, driverServiceName, conf))
+  }
+
+  // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh
+  private def javaOptEnvVars(conf: SparkConf) = {
+    // The executor's java opts are handled as env vars in the docker entrypoint.sh here:
+    // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L44-L46
+
+    // entrypoint.sh then adds those to the jvm command line here:
+    // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
+
+    val javaOpts = conf.get("spark.executor.defaultJavaOptions").split(" ").toList :+
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+    javaOpts.zipWithIndex.map {
+      case(value: String, index) =>
+        EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
+    }
+  }
+
+  private def getExecutorContainer(executorID: Int, driverServiceName: String, conf: SparkConf): Container = {
+    val driverURL = s"spark://CoarseGrainedScheduler@$driverServiceName:7078"
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val envVars = Seq(
+      EnvVar().withName("SPARK_EXECUTOR_ID").withValue(executorID.toString),
+      EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
+      EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValue("test-pod-name"),
+      EnvVar().withName("SPARK_APPLICATION_ID").withValue("test_spark_app_id"),
+      EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
+      EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
+      EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
+      EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source),
+      EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL")
+        .withValue(conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
+    )
+    Container()
+      .withName(s"spark-executor-$executorID")
+      .withImagePullPolicy("IfNotPresent")
+      .withImage(conf.get("spark.kubernetes.container.image"))
+      // FIXME: Do we need these java options? They don't seem to be present
+      // in the configuration at this point.
+      .withEnv(envVars /* ++ javaOptEnvVars(conf)*/)
+      .withCommand(Seq("/opt/entrypoint.sh"))
+      .withArgs(
+        Seq(
+          "executor"
+        )
+      )
+      .withResources(
+        ResourceRequirements(
+          limits = Map(
+            "memory" -> Quantity(Option("512Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
+            "cpu" -> Quantity(Option("100m"))
+          ),
+          requests = Map(
+            "memory" -> Quantity(Option("512Mi")),
+            "ephemeral-storage" -> Quantity(Option("512Mi")),
+            "cpu" -> Quantity(Option("100m"))
+          )
+        )
+      )
+  }
+
+  private def submitDriverJob(armadaClient: ArmadaClient, clientArguments: ClientArguments,
+    conf: SparkConf): String = {
+    // FIXME: Validate against RFC 1035 label names.
+    val driverServiceName = conf.get(DRIVER_SERVICE_NAME_PREFIX) + UUID.randomUUID.toString
+    val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
+      .withApiVersion("v1").withFieldPath("status.podIP"))
+    val numExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+    val envVars = Seq(
       new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
       new EnvVar().withName(ConfigGenerator.ENV_SPARK_CONF_DIR).withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
-      new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true")
+      new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true"),
+      new EnvVar().withName("ARMADA_SPARK_DRIVER_SERVICE_NAME").withValue(driverServiceName)
     )
 
     val configGenerator =
@@ -329,6 +405,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val confSeq = conf.getAll.flatMap {
       case(k, v) => Seq("--conf", s"$k=$v")
     }
+    val sparkDriverPort = 7078
     val driverContainer = Container()
       .withName("spark-driver")
       .withImagePullPolicy("IfNotPresent")
@@ -336,6 +413,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withEnv(envVars)
       .withCommand(Seq("/opt/entrypoint.sh"))
       .withVolumeMounts(configGenerator.getVolumeMounts)
+      .withPorts(Seq(ContainerPort(Option("as-driver-port"), Option(0), Option(sparkDriverPort))))
       .withArgs(
         Seq(
           "driver",
@@ -345,7 +423,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--master",
           "local://armada://armada-server.armada.svc.cluster.local:50051",
           "--conf",
-          "spark.driver.port=7078",
+          s"spark.driver.port=$sparkDriverPort",
           "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ confSeq ++ primaryResource ++ clientArguments.driverArgs
@@ -353,22 +431,24 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
         ResourceRequirements(
           limits = Map(
-            "memory" -> Quantity(Option("450Mi")),
+            "memory" -> Quantity(Option("1Gi")),
             "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("200m"))
           ),
           requests = Map(
-            "memory" -> Quantity(Option("450Mi")),
+            "memory" -> Quantity(Option("1Gi")),
             "ephemeral-storage" -> Quantity(Option("512Mi")),
             "cpu" -> Quantity(Option("200m"))
           )
         )
       )
 
+    val executorContainers = getExecutorContainers(numExecutors, driverServiceName, conf)
+
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
-      .withContainers(Seq(driverContainer))
+      .withContainers(Seq(driverContainer) ++ executorContainers)
       .withVolumes(configGenerator.getVolumes)
       .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
@@ -377,7 +457,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
-      .withAnnotations(configGenerator.getAnnotations)
+      .withAnnotations(configGenerator.getAnnotations ++
+        GetGangAnnotations("", 1, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL)))
+      .withServices(Seq(
+        api.submit.ServiceConfig(
+          api.submit.ServiceType.NodePort,
+          Seq(sparkDriverPort),
+          driverServiceName)))
 
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))

@@ -20,8 +20,10 @@ import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS, 
-  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT, transformSelectorsToMap}
+import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
+  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
+  transformSelectorsToMap, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
+import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -45,7 +47,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
-
+  private val gangAnnotations = GetGangAnnotations("", initialExecutors, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(appId)
@@ -76,7 +78,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
     val host = if (urlArray(1).startsWith("/")) urlArray(1).substring(2) else urlArray(1)
     val port = urlArray(2).toInt
 
-    val driverAddr = sys.env("SPARK_DRIVER_BIND_ADDRESS")
+    val driverAddr = sys.env("ARMADA_SPARK_DRIVER_SERVICE_NAME")
 
 
     val driverURL = s"spark://CoarseGrainedScheduler@$driverAddr:7078"
@@ -90,7 +92,9 @@ private[spark] class ArmadaClusterSchedulerBackend(
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
-      EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
+      EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source),
+      EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL")
+        .withValue(conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
     )
     val executorContainer = Container()
       .withName("spark-executor")
@@ -118,7 +122,6 @@ private[spark] class ArmadaClusterSchedulerBackend(
         )
       )
 
-
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
@@ -130,6 +133,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
+      .withAnnotations(gangAnnotations)
 
     val client = ArmadaClient(host, port)
     val jobSubmitResponse = client.submitJobs("test", "executor", Seq(testJob))
@@ -142,7 +146,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
   }
 
   override def start(): Unit = {
-    1 to initialExecutors foreach {j: Int => submitJob(j)}
+    //1 to initialExecutors foreach {j: Int => submitJob(j)}
     executorTracker.start()
   }
 

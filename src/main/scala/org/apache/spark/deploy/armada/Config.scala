@@ -86,4 +86,38 @@ private[spark] object Config {
       .stringConf
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
+
+  private[armada] val singleSelectorOrNone: Regex = (s"^($label=$label)?$$").r
+  private[armada] val singleSelectorsValidator: CharSequence => Boolean = selectors => {
+    val selectorsMaybe = singleSelectorOrNone.findPrefixMatchOf(selectors)
+    selectorsMaybe match {
+      case Some(selectors) => true
+      case None => false
+    }
+  }
+
+  val GANG_SCHEDULING_NODE_UNIFORMITY_LABEL: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.NodeUniformityLabel")
+      .doc("A single kubernetes label to apply to both driver and executors")
+      .stringConf
+      //.checkValue(singleSelectorsValidator, "Label must be a valid kubernetes label/selector")
+      .createWithDefaultString("armada-spark")
+
+  private val rfc1035labelPrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
+
+  private[armada] val rfc1035labelPrefixValidator: CharSequence => Boolean = label => {
+    val labelMaybe = rfc1035labelPrefix.findPrefixMatchOf(label)
+    labelMaybe match {
+      case Some(label) => true
+      case None => false
+    }
+  }
+
+  val DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driverServiceNamePrefix")
+      .doc("Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
+        "Max length of 30 characters.")
+      .stringConf
+      .checkValue(rfc1035labelPrefixValidator, "Service name prefix must adhere to rfc 1035 label names.")
+      .createWithDefaultString("armada-spark-driver-")
 }
