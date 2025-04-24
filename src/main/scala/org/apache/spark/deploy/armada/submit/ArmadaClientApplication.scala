@@ -445,10 +445,27 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val executorContainers = getExecutorContainers(numExecutors, driverServiceName, conf)
 
+    val gangAnnotations = GetGangAnnotations("", 1 + numExecutors,
+      conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
+
+    val executorJobs = for (container <- executorContainers) yield api.submit
+      .JobSubmitRequestItem()
+      .withPriority(0)
+      .withNamespace("default")
+      .withPodSpec(
+        PodSpec()
+        .withTerminationGracePeriodSeconds(0)
+        .withRestartPolicy("Never")
+        .withContainers(Seq(container))
+        .withVolumes(configGenerator.getVolumes)
+        .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
+      )
+      .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
+
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
-      .withContainers(Seq(driverContainer) ++ executorContainers)
+      .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
       .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
@@ -457,13 +474,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPriority(0)
       .withNamespace("default")
       .withPodSpec(podSpec)
-      .withAnnotations(configGenerator.getAnnotations ++
-        GetGangAnnotations("", 1, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL)))
+      .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
       .withServices(Seq(
         api.submit.ServiceConfig(
           api.submit.ServiceType.NodePort,
           Seq(sparkDriverPort),
           driverServiceName)))
+
+    val executorJobsSubmitResponse = armadaClient.submitJobs("test", "executor", executorJobs)
+    for (respItem <- executorJobsSubmitResponse.jobResponseItems) {
+      val error = if (respItem.error == "") "None" else respItem.error
+      log(s"Executor JobID: ${respItem.jobId}  Error: $error")
+    }
 
     // FIXME: Plumb config for queue, job-set-id
     val jobSubmitResponse = armadaClient.submitJobs("test", "driver", Seq(driverJob))
