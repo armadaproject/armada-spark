@@ -87,20 +87,20 @@ private[spark] object Config {
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 
-  private[armada] val singleSelectorOrNone: Regex = (s"^($label=$label)?$$").r
-  private[armada] val singleSelectorsValidator: CharSequence => Boolean = selectors => {
-    val selectorsMaybe = singleSelectorOrNone.findPrefixMatchOf(selectors)
-    selectorsMaybe match {
-      case Some(selectors) => true
+  private[armada] val singleLabelOrNone: Regex = (s"^($label)?$$").r
+  private[armada] val singleLabelValidator: CharSequence => Boolean = l => {
+    val labelMaybe = singleLabelOrNone.findPrefixMatchOf(l)
+    labelMaybe match {
+      case Some(l) => true
       case None => false
     }
   }
 
   val GANG_SCHEDULING_NODE_UNIFORMITY_LABEL: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.scheduling.NodeUniformityLabel")
+    ConfigBuilder("spark.armada.scheduling.nodeUniformityLabel")
       .doc("A single kubernetes label to apply to both driver and executors")
       .stringConf
-      //.checkValue(singleSelectorsValidator, "Label must be a valid kubernetes label/selector")
+      .checkValue(singleLabelValidator, "Label must be a valid kubernetes label, just the label!")
       .createWithDefaultString("armada-spark")
 
   private val rfc1035labelPrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
