@@ -25,9 +25,10 @@ print_usage () {
     exit 1
 }
 
-while getopts "hs:i:l:m:q" opt; do
+while getopts "hpi:l:m:q" opt; do
   case "$opt" in
     h) print_usage ;;
+    p) INCLUDE_PYTHON=true ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
     q) ARMADA_QUEUE=$OPTARG ;;
@@ -35,6 +36,7 @@ while getopts "hs:i:l:m:q" opt; do
   esac
 done
 
+export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
