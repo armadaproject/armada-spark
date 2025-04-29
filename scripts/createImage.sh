@@ -9,6 +9,10 @@ source "$scripts/init.sh"
 
 image_prefix=apache/spark
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}-ubuntu"
+
+# uncomment this line for python build
+#INCLUDE_PYTHON=true
+
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
 if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
   image_prefix=spark
@@ -41,5 +45,6 @@ docker build \
   --build-arg spark_base_image_prefix=$image_prefix \
   --build-arg spark_base_image_tag=$image_tag \
   --build-arg scala_binary_version=$SCALA_BIN_VERSION \
+  --build-arg include_python=$INCLUDE_PYTHON \
   -f "$root/docker/Dockerfile" \
   "$root"

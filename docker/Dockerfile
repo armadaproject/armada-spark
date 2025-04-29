@@ -29,11 +29,12 @@ WORKDIR /
 # Reset to root to run installation tasks
 USER 0
 
-RUN apt-get update && \
+ARG include_python=true
+RUN if [ "$include_python" = "true" ]; then \
+    apt-get update && \
     apt install -y python3 python3-pip && \
-    pip3 install --upgrade pip setuptools && \
-    # Removed the .cache to save space
-    rm -rf /root/.cache && rm -rf /var/cache/apt/* && rm -rf /var/lib/apt/lists/*
+    pip3 install --upgrade pip setuptools; \
+  fi
 
 WORKDIR /opt/spark/work-dir
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
