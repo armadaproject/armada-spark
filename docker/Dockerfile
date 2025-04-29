@@ -23,7 +23,6 @@ ARG scala_binary_version=2.13
 
 COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/jars/
 
-
 WORKDIR /
 
 # Reset to root to run installation tasks

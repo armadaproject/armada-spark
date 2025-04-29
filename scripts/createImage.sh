@@ -43,7 +43,6 @@ if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || 
   fi
 fi
 
-
 docker build \
   --tag $IMAGE_NAME \
   --build-arg spark_base_image_prefix=$image_prefix \
