@@ -326,8 +326,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // TODO: this configuration option appears to not be set... is that a problem?
     val javaOpts =
       if (conf.contains("spark.executor.extraJavaOptions")) {
-        conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
-          "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+        conf.get("spark.executor.extraJavaOptions").split(" ").toList
       } else {
         Seq()
       } :+ "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
