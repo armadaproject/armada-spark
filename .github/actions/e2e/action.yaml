@@ -120,7 +120,7 @@ runs:
       echo "::endgroup::"
 
       while read line; do
-        if [[ "$line" == "Got job ID:"* ]]; then
+        if [[ "$line" == "Driver JobID:"* ]]; then
           read got job id jobid <<< "$line"
           echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
         fi
