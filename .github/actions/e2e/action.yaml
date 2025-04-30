@@ -121,7 +121,7 @@ runs:
 
       while read line; do
         if [[ "$line" == "Driver JobID:"* ]]; then
-          read driver job jobid <<< "$line"
+          read driver job jobid error none <<< "$line"
           echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
         fi
       done < submitSparkPi.log
