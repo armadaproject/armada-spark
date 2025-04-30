@@ -61,8 +61,7 @@ private[spark] class ArmadaClusterSchedulerBackend(
     // entrypoint.sh then adds those to the jvm command line here:
     // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
 
-    val javaOpts = conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
-      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+    val javaOpts = conf.get("spark.executor.extraJavaOptions").split(" ").toList :+ "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
     javaOpts.zipWithIndex.map {
       case(value: String, index) =>
         EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
@@ -146,7 +145,8 @@ private[spark] class ArmadaClusterSchedulerBackend(
   }
 
   override def start(): Unit = {
-    //1 to initialExecutors foreach {j: Int => submitJob(j)}
+    // NOTE: armada-spark driver submits executors alongside driver.
+    // No need to start them here.
     executorTracker.start()
   }
 

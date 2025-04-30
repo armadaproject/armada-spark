@@ -269,7 +269,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // # FIXME: Need to check how this is launched whether to submit a job or
     // to turn into driver / cluster manager mode.
     val jobId = submitDriverJob(armadaClient, clientArguments, sparkConf)
-    log(s"Got job ID: $jobId")
 
     val lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
     val lookoutURL = s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
@@ -324,12 +323,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // entrypoint.sh then adds those to the jvm command line here:
     // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
-
-    val javaOpts = conf.get("spark.executor.defaultJavaOptions").split(" ").toList :+
-      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
-    javaOpts.zipWithIndex.map {
-      case(value: String, index) =>
-        EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
+    // TODO: this configuration option appears to not be set... is that a problem?
+    if (conf.contains("spark.executor.extraJavaOptions")) {
+      val javaOpts = conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+      javaOpts.zipWithIndex.map {
+        case(value: String, index) =>
+          EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
+      }
+    } else {
+      Seq()
     }
   }
 
@@ -353,9 +356,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withName(s"spark-executor-$executorID")
       .withImagePullPolicy("IfNotPresent")
       .withImage(conf.get("spark.kubernetes.container.image"))
-      // FIXME: Do we need these java options? They don't seem to be present
-      // in the configuration at this point.
-      .withEnv(envVars /* ++ javaOptEnvVars(conf)*/)
+      .withEnv(envVars ++ javaOptEnvVars(conf))
       .withCommand(Seq("/opt/entrypoint.sh"))
       .withArgs(
         Seq(
@@ -380,7 +381,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private def submitDriverJob(armadaClient: ArmadaClient, clientArguments: ClientArguments,
     conf: SparkConf): String = {
-    // FIXME: Validate against RFC 1035 label names.
     val driverServiceName = conf.get(DRIVER_SERVICE_NAME_PREFIX) + UUID.randomUUID.toString
     val source = EnvVarSource().withFieldRef(ObjectFieldSelector()
       .withApiVersion("v1").withFieldPath("status.podIP"))
@@ -492,7 +492,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     for (respItem <- jobSubmitResponse.jobResponseItems) {
       val error = if (respItem.error == "") "None" else respItem.error
-      log(s"JobID: ${respItem.jobId}  Error: $error")
+      log(s"Driver JobID: ${respItem.jobId}  Error: $error")
     }
     jobSubmitResponse.jobResponseItems.head.jobId
   }
