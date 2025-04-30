@@ -324,15 +324,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // entrypoint.sh then adds those to the jvm command line here:
     // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
     // TODO: this configuration option appears to not be set... is that a problem?
-    if (conf.contains("spark.executor.extraJavaOptions")) {
-      val javaOpts = conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
-        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
-      javaOpts.zipWithIndex.map {
-        case(value: String, index) =>
-          EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
-      }
-    } else {
-      Seq()
+    val javaOpts =
+      if (conf.contains("spark.executor.extraJavaOptions")) {
+        conf.get("spark.executor.extraJavaOptions").split(" ").toList :+
+          "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+      } else {
+        Seq()
+      } :+ "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+
+    javaOpts.zipWithIndex.map {
+      case(value: String, index) =>
+        EnvVar().withName("SPARK_JAVA_OPT_" + index).withValue(value)
     }
   }
 
