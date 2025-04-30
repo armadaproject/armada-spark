@@ -1,5 +1,5 @@
 diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
-index d76880c..043071f 100644
+index d76880c..97feab2 100644
 --- a/dev/quickstart/armada-crs.yaml
 +++ b/dev/quickstart/armada-crs.yaml
 @@ -56,6 +56,8 @@ spec:
@@ -22,6 +22,16 @@ index d76880c..043071f 100644
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: Lookout
+@@ -178,6 +184,9 @@ spec:
+         sslmode: disable
+     pulsar:
+       URL: pulsar://pulsar-broker.data.svc.cluster.local:6650
++    scheduling:
++      indexedNodeLabels:
++        - armada-spark
+ ---
+ apiVersion: install.armadaproject.io/v1alpha1
+ kind: EventIngester
 diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
 index a8d45c3..4a72570 100644
 --- a/hack/kind-config.yaml
