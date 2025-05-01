@@ -312,8 +312,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   private def getExecutorContainers(numExecutors: Int, driverServiceName: String, conf: SparkConf): Seq[Container] = {
-    return (for (i <- 0 until numExecutors)
-      yield getExecutorContainer(i, driverServiceName, conf))
+    (0 until numExecutors).map
+      {getExecutorContainer(_, driverServiceName, conf)}
   }
 
   // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh
