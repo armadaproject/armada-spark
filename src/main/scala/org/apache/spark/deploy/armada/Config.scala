@@ -60,10 +60,10 @@ private[spark] object Config {
   private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
   private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
-  private[armada] val selectorsValidator: CharSequence => Boolean = selectors => {
+  private[armada] def selectorsValidator(selectors: CharSequence): Boolean = {
     val selectorsMaybe = labelSelectors.findPrefixMatchOf(selectors)
     selectorsMaybe match {
-      case Some(selectors) => true
+      case Some(_) => true
       case None => false
     }
   }
@@ -86,4 +86,38 @@ private[spark] object Config {
       .stringConf
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
+
+  private[armada] val singleLabelOrNone: Regex = (s"^($label)?$$").r
+  private[armada] def singleLabelValidator(l: CharSequence): Boolean = {
+    val labelMaybe = singleLabelOrNone.findPrefixMatchOf(l)
+    labelMaybe match {
+      case Some(_) => true
+      case None => false
+    }
+  }
+
+  val GANG_SCHEDULING_NODE_UNIFORMITY_LABEL: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.nodeUniformityLabel")
+      .doc("A single kubernetes label to apply to both driver and executors")
+      .stringConf
+      .checkValue(singleLabelValidator, "Label must be a valid kubernetes label, just the label!")
+      .createWithDefaultString("armada-spark")
+
+  private val validServiceNamePrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
+
+  private[armada] def serviceNamePrefixValidator(name: CharSequence): Boolean = {
+    val serviceNameMaybe = validServiceNamePrefix.findPrefixMatchOf(label)
+    serviceNameMaybe match {
+      case Some(_) => true
+      case None => false
+    }
+  }
+
+  val DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driverServiceNamePrefix")
+      .doc("Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
+        "Max length of 30 characters.")
+      .stringConf
+      .checkValue(serviceNamePrefixValidator, "Service name prefix must adhere to rfc 1035 label names.")
+      .createWithDefaultString("armada-spark-driver-")
 }

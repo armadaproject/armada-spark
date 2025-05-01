@@ -120,8 +120,8 @@ runs:
       echo "::endgroup::"
 
       while read line; do
-        if [[ "$line" == "Got job ID:"* ]]; then
-          read got job id jobid <<< "$line"
+        if [[ "$line" == "Driver JobID:"* ]]; then
+          read driver job jobid error none <<< "$line"
           echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
         fi
       done < submitSparkPi.log
