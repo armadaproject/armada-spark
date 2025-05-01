@@ -14,7 +14,7 @@ private[spark] object GangSchedulingAnnotations {
       idStr = UUID.randomUUID.toString
     }
 
-    return Map(
+    Map(
         GangSchedulingAnnotations.GANG_ID -> idStr,
         GangSchedulingAnnotations.GANG_CARDINALITY -> cardinality.toString,
         GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL -> label
