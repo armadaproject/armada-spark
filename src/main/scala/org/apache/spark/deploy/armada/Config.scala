@@ -103,12 +103,12 @@ private[spark] object Config {
       .checkValue(singleLabelValidator, "Label must be a valid kubernetes label, just the label!")
       .createWithDefaultString("armada-spark")
 
-  private val rfc1035labelPrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
+  private val validServiceNamePrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
 
-  private[armada] val rfc1035labelPrefixValidator: CharSequence => Boolean = label => {
-    val labelMaybe = rfc1035labelPrefix.findPrefixMatchOf(label)
-    labelMaybe match {
-      case Some(label) => true
+  private[armada] val serviceNamePrefixValidator: CharSequence => Boolean = name => {
+    val serviceNameMaybe = validServiceNamePrefix.findPrefixMatchOf(label)
+    serviceNameMaybe match {
+      case Some(name) => true
       case None => false
     }
   }
@@ -118,6 +118,6 @@ private[spark] object Config {
       .doc("Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
         "Max length of 30 characters.")
       .stringConf
-      .checkValue(rfc1035labelPrefixValidator, "Service name prefix must adhere to rfc 1035 label names.")
+      .checkValue(serviceNamePrefixValidator, "Service name prefix must adhere to rfc 1035 label names.")
       .createWithDefaultString("armada-spark-driver-")
 }
