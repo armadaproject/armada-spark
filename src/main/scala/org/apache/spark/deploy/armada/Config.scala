@@ -60,10 +60,10 @@ private[spark] object Config {
   private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
   private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
-  private[armada] val selectorsValidator: CharSequence => Boolean = selectors => {
+  private[armada] def selectorsValidator(selectors: CharSequence): Boolean = {
     val selectorsMaybe = labelSelectors.findPrefixMatchOf(selectors)
     selectorsMaybe match {
-      case Some(selectors) => true
+      case Some(_) => true
       case None => false
     }
   }
@@ -88,10 +88,10 @@ private[spark] object Config {
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 
   private[armada] val singleLabelOrNone: Regex = (s"^($label)?$$").r
-  private[armada] val singleLabelValidator: CharSequence => Boolean = l => {
+  private[armada] def singleLabelValidator(l: CharSequence): Boolean = {
     val labelMaybe = singleLabelOrNone.findPrefixMatchOf(l)
     labelMaybe match {
-      case Some(l) => true
+      case Some(_) => true
       case None => false
     }
   }
@@ -105,10 +105,10 @@ private[spark] object Config {
 
   private val validServiceNamePrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
 
-  private[armada] val serviceNamePrefixValidator: CharSequence => Boolean = name => {
+  private[armada] def serviceNamePrefixValidator(name: CharSequence): Boolean = {
     val serviceNameMaybe = validServiceNamePrefix.findPrefixMatchOf(label)
     serviceNameMaybe match {
-      case Some(name) => true
+      case Some(_) => true
       case None => false
     }
   }
