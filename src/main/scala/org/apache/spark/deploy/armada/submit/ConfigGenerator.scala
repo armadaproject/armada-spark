@@ -46,9 +46,12 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
   def getAnnotations: Map[String, String] = {
     confFiles
       .map(f => prefix + "/" + f.getName -> f).toMap
-      .view.mapValues(f =>
-        Using(Source.fromFile(f.toString)) { source => source.mkString }.get
+      // needed by Scala 2.12, deprecated but available in Scala 2.13
+      // for Scala 2.13 on, use .view.mapValues instead
+      .mapValues(f =>
+        Using(Source.fromFile(f.toString)) { _.mkString }.get
       )
+      // needed by Scala 2.13
       .toMap
   }
 
