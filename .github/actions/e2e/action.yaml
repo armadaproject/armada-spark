@@ -77,7 +77,7 @@ runs:
     run: |
       # Build image
       echo "::group::createImage.sh"
-      ./armada-spark/scripts/createImage.sh -p
+      ./armada-spark/scripts/createImage.sh
       echo "::endgroup::"
     shell: bash
   - name: Patch armada-operator to configure for spark-armada e2e tests
@@ -116,7 +116,7 @@ runs:
     run: |
       # Submit SparkPi
       echo "::group::submitSparkPi.sh"
-      ./armada-spark/scripts/submitSparkPi.sh -p 2>&1 | tee submitSparkPi.log
+      ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
       echo "::endgroup::"
 
       while read line; do
