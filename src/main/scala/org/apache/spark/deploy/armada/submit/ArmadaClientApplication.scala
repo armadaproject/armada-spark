@@ -326,11 +326,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
     // TODO: this configuration option appears to not be set... is that a problem?
     val javaOpts =
-      if (conf.contains("spark.executor.extraJavaOptions")) {
-        conf.get("spark.executor.extraJavaOptions").split(" ").toList
-      } else {
-        Seq()
-      } :+ "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+      conf.getOption("spark.executor.extraJavaOptions").map(_.split(" ").toSeq)
+        .getOrElse(Seq()) :+ "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
 
     javaOpts.zipWithIndex.map {
       case(value: String, index) =>
@@ -388,10 +385,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withApiVersion("v1").withFieldPath("status.podIP"))
     val numExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
     val envVars = Seq(
-      new EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
-      new EnvVar().withName(ConfigGenerator.ENV_SPARK_CONF_DIR).withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
-      new EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true"),
-      new EnvVar().withName("ARMADA_SPARK_DRIVER_SERVICE_NAME").withValue(driverServiceName)
+      EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
+      EnvVar().withName(ConfigGenerator.ENV_SPARK_CONF_DIR).withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
+      EnvVar().withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED").withValue("true"),
+      EnvVar().withName("ARMADA_SPARK_DRIVER_SERVICE_NAME").withValue(driverServiceName)
     )
 
     val configGenerator =
@@ -446,7 +443,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val executorContainers = getExecutorContainers(numExecutors, driverServiceName, conf)
 
-    val gangAnnotations = GetGangAnnotations("", 1 + numExecutors,
+    val gangAnnotations = GangSchedulingAnnotations(None, 1 + numExecutors,
       conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
 
     val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_GLOBAL_LABELS))

@@ -44,7 +44,7 @@ private[spark] object Config {
     ConfigBuilder("spark.armada.lookouturl")
       .doc("URL base for the Armada Lookout UI.")
       .stringConf
-      .checkValue(urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
+      .checkValue(urlPrefix => urlPrefix.nonEmpty && urlPrefix.startsWith("http", 0),
         s"Value must be a valid URL, like http://host:8080 or https://host:443")
       .createWithDefaultString("http://localhost:30000")
 
@@ -58,14 +58,10 @@ private[spark] object Config {
   // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
   // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
   private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
-  private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
+  private val labelSelectors: Regex = s"^($label=$label(,$label=$label)*)?$$".r
 
   private[armada] def selectorsValidator(selectors: CharSequence): Boolean = {
-    val selectorsMaybe = labelSelectors.findPrefixMatchOf(selectors)
-    selectorsMaybe match {
-      case Some(_) => true
-      case None => false
-    }
+    labelSelectors.findPrefixMatchOf(selectors).isDefined
   }
 
   /**
@@ -100,13 +96,9 @@ private[spark] object Config {
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 
-  private[armada] val singleLabelOrNone: Regex = (s"^($label)?$$").r
+  private[armada] val singleLabelOrNone: Regex = s"^($label)?$$".r
   private[armada] def singleLabelValidator(l: CharSequence): Boolean = {
-    val labelMaybe = singleLabelOrNone.findPrefixMatchOf(l)
-    labelMaybe match {
-      case Some(_) => true
-      case None => false
-    }
+    singleLabelOrNone.findPrefixMatchOf(l).isDefined
   }
 
   val GANG_SCHEDULING_NODE_UNIFORMITY_LABEL: ConfigEntry[String] =
@@ -119,11 +111,7 @@ private[spark] object Config {
   private val validServiceNamePrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
 
   private[armada] def serviceNamePrefixValidator(name: CharSequence): Boolean = {
-    val serviceNameMaybe = validServiceNamePrefix.findPrefixMatchOf(label)
-    serviceNameMaybe match {
-      case Some(_) => true
-      case None => false
-    }
+    validServiceNamePrefix.findPrefixMatchOf(name).isDefined
   }
 
   val DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =

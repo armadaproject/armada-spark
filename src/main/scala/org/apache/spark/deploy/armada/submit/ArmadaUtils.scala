@@ -16,6 +16,8 @@
  */
 package org.apache.spark.deploy.armada.submit
 
+import scala.util.Try
+
 object ArmadaUtilsExceptions {
   class MasterUrlParsingException extends RuntimeException
 }
@@ -24,19 +26,11 @@ object ArmadaUtils {
   import ArmadaUtilsExceptions._
 
   def parseMasterUrl(masterUrl: String): (String, Int) = {
-    val tokens = masterUrl.substring("armada://".length).split(":")
-    if (tokens.length != 2) {
-      throw new MasterUrlParsingException
-    }
-    val host: String = tokens(0)
-    val port: Int = try {
-      tokens(1).toInt
-    } catch {
-      case e: NumberFormatException => -1
-    }
-    if (port < 0) {
-      throw new MasterUrlParsingException
-    }
-    (host, port)
+    Some(masterUrl)
+      .map(_.substring("armada://".length).split(":").toSeq)
+      .filter(_.length == 2)
+      .map { case Seq(host: String, portString: String) => (host, Try(portString.toInt).getOrElse(-1))}
+      .filter(_._2 >= 0)
+      .getOrElse(throw new MasterUrlParsingException)
   }
 }

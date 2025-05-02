@@ -18,10 +18,11 @@ package org.apache.spark.deploy.armada.submit
 
 import k8s.io.api.core.v1.generated._
 import org.apache.spark.SparkConf
-import org.apache.spark.deploy.armada.submit.ConfigGenerator.{REMOTE_CONF_DIR_NAME, ENV_SPARK_CONF_DIR}
+import org.apache.spark.deploy.armada.submit.ConfigGenerator.{ENV_SPARK_CONF_DIR, REMOTE_CONF_DIR_NAME}
 
 import java.io.File
 import scala.io.Source
+import scala.util.Using
 
 private[submit] object ConfigGenerator {
   val REMOTE_CONF_DIR_NAME = "/opt/spark/conf"
@@ -43,8 +44,12 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {
-    confFiles.map(f =>
-      (prefix + "/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
+    confFiles
+      .map(f => prefix + "/" + f.getName -> f).toMap
+      .view.mapValues(f =>
+        Using(Source.fromFile(f.toString)) { source => source.mkString }.get
+      )
+      .toMap
   }
 
   private def volumeName = prefix + "-volume"

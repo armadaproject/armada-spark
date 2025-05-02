@@ -100,13 +100,13 @@ private[spark] class ArmadaSparkSubmitOperation extends SparkSubmitOperation
 
   override def kill(submissionId: String, conf: SparkConf): Unit = {
     printMessage(s"TODO!! IMPLEMENT!! Armada: Submitting a request to kill submission " +
-      s"${submissionId} in ${conf.get("spark.master")}. ")
+      s"$submissionId in ${conf.get("spark.master")}. ")
     execute(submissionId, conf, new KillApplication)
   }
 
   override def printSubmissionStatus(submissionId: String, conf: SparkConf): Unit = {
     printMessage(s"TODO!! IMPLEMENT!! Armada: Submitting a request for the status of submission" +
-      s" ${submissionId} in ${conf.get("spark.master")}.")
+      s" $submissionId in ${conf.get("spark.master")}.")
     execute(submissionId, conf, new ListStatus)
   }
 
