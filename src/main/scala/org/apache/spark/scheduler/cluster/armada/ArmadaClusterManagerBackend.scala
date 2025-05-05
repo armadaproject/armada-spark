@@ -22,7 +22,7 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
   ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
-  transformSelectorsToMap, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
+  commaSeparatedLabelsToMap, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
