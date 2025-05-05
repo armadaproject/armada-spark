@@ -17,18 +17,17 @@
 
 package org.apache.spark.deploy.armada.submit
 
-
 import org.scalatest.funsuite.AnyFunSuite
 import ArmadaUtilsExceptions._
 
-class ArmadaUtilSuite
- extends AnyFunSuite {
+class ArmadaUtilSuite extends AnyFunSuite {
   test("parseMasterUrl") {
     case class TestCase(
-      testUrl: String,
-      expectedHost: String,
-      expectedPort: Int,
-      expectException: Boolean)
+        testUrl: String,
+        expectedHost: String,
+        expectedPort: Int,
+        expectException: Boolean
+    )
 
     val testCases = List[TestCase](
       TestCase("armada://localhost:50051", "localhost", 50051, false),
@@ -39,12 +38,13 @@ class ArmadaUtilSuite
 
     for (tc <- testCases) {
       if (tc.expectException) {
-        var caughtException = try {
-          ArmadaUtils.parseMasterUrl(tc.testUrl)
-          false
-        } catch {
-          case e: MasterUrlParsingException => true
-        } 
+        var caughtException =
+          try {
+            ArmadaUtils.parseMasterUrl(tc.testUrl)
+            false
+          } catch {
+            case e: MasterUrlParsingException => true
+          }
         assert(caughtException)
       } else { // no exception expected.
         val (host, port) = ArmadaUtils.parseMasterUrl(tc.testUrl)

@@ -29,11 +29,12 @@ object ArmadaUtils {
       throw new MasterUrlParsingException
     }
     val host: String = tokens(0)
-    val port: Int = try {
-      tokens(1).toInt
-    } catch {
-      case e: NumberFormatException => -1
-    }
+    val port: Int =
+      try {
+        tokens(1).toInt
+      } catch {
+        case e: NumberFormatException => -1
+      }
     if (port < 0) {
       throw new MasterUrlParsingException
     }

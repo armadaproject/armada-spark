@@ -36,6 +36,8 @@
         <spark.patch.version>4</spark.patch.version>
         <spark.binary.version>${spark.major.version}.${spark.minor.version}</spark.binary.version>
         <spark.version>${spark.binary.version}.${spark.patch.version}</spark.version>
+        <spotless.version>2.44.4</spotless.version>
+        <scalafmt.version>3.9.5</scalafmt.version>
 
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
         <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
@@ -186,6 +188,20 @@
     <!-- Build Plugins -->
     <build>
         <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <scala>
+                        <scalafmt>
+                            <version>${scalafmt.version}</version>
+                            <file>${project.basedir}/.scalafmt.conf</file>
+                            <scalaMajorVersion>${scala.binary.version}</scalaMajorVersion>
+                        </scalafmt>
+                    </scala>
+                </configuration>
+            </plugin>
             <!-- Include Spark version specific sources -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
