@@ -17,18 +17,13 @@
 
 package org.apache.spark.deploy.armada
 
-
 import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import Config._
 
-class ConfigSuite
- extends AnyFunSuite {
+class ConfigSuite extends AnyFunSuite {
   test("testClusterSelectorsValidator") {
-    case class TestCase(
-      testSelectors: String,
-      expectedValid: Boolean,
-      name: String)
+    case class TestCase(testSelectors: String, expectedValid: Boolean, name: String)
 
     val testCases = List[TestCase](
       // Valid cases
@@ -36,10 +31,17 @@ class ConfigSuite
       TestCase("a=1", true, "One character long name and value"),
       TestCase("armada-spark=true", true, "One valid selector"),
       TestCase("armada-spark=true,spark-cluster-name=001", true, "Two valid selectors"),
-      TestCase("armada-spark=false,name=spark-cluster-001,a=1,b=2,c=3", true, "Several valid selectors"),
+      TestCase(
+        "armada-spark=false,name=spark-cluster-001,a=1,b=2,c=3",
+        true,
+        "Several valid selectors"
+      ),
       TestCase("a" * 63 + "=" + "b" * 63, true, "Selector name & value length limit of 63"),
-      TestCase("a" * 30 + "-._" + "b" * 30 + "=b", true,
-        "Selector name length limit of 63 with valid non-alphanumeric chars"),
+      TestCase(
+        "a" * 30 + "-._" + "b" * 30 + "=b",
+        true,
+        "Selector name length limit of 63 with valid non-alphanumeric chars"
+      ),
       // Invalid cases
       TestCase("a", false, "key but no value"),
       TestCase("a=", false, "key & = but no value"),
@@ -47,16 +49,27 @@ class ConfigSuite
       TestCase("=", false, "just = and no key or value"),
       TestCase("_armada=a", false, "Selector labels must start with an alphanumeric character."),
       TestCase("armada_=b", false, "Selector labels must end with an alphanumeric character."),
-      TestCase("armada=_armada", false, "Selector values must start with an alphanumeric character."),
+      TestCase(
+        "armada=_armada",
+        false,
+        "Selector values must start with an alphanumeric character."
+      ),
       TestCase("armada=armada_", false, "Selector values must end with an alphanumeric character."),
-      TestCase("#@armada-spark=true,spark-cluster-name=spark-cluster-001", false, "Illegal characters: # @"),
+      TestCase(
+        "#@armada-spark=true,spark-cluster-name=spark-cluster-001",
+        false,
+        "Illegal characters: # @"
+      ),
       TestCase("a" * 64 + "=b", false, "Selector names must be 63 characters or less"),
-      TestCase("armada=" + ("b" * 64), false, "Selector values must be 63 characters or less"),
+      TestCase("armada=" + ("b" * 64), false, "Selector values must be 63 characters or less")
     )
 
     for (tc <- testCases) {
-        val result = Config.selectorsValidator(tc.testSelectors)
-        assert(result == tc.expectedValid, s"test name: '${tc.name}', test value: '${tc.testSelectors}'")
+      val result = Config.selectorsValidator(tc.testSelectors)
+      assert(
+        result == tc.expectedValid,
+        s"test name: '${tc.name}', test value: '${tc.testSelectors}'"
+      )
     }
   }
 

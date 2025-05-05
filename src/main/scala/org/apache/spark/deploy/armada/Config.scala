@@ -21,31 +21,40 @@ import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
 import scala.util.matching.Regex
 
-
 private[spark] object Config {
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
-      .doc("Interval between polls to check the " +
-        "state of executors.")
+      .doc(
+        "Interval between polls to check the " +
+          "state of executors."
+      )
       .timeConf(TimeUnit.MILLISECONDS)
-      .checkValue(interval => interval > 0, s"Polling interval must be a" +
-        " positive time value.")
+      .checkValue(
+        interval => interval > 0,
+        s"Polling interval must be a" +
+          " positive time value."
+      )
       .createWithDefaultString("60s")
 
   val ARMADA_EXECUTOR_TRACKER_TIMEOUT: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerTimeout")
       .doc("Time to wait for the minimum number of executors.")
       .timeConf(TimeUnit.MILLISECONDS)
-      .checkValue(interval => interval > 0, s"Timeout must be a" +
-        " positive time value.")
+      .checkValue(
+        interval => interval > 0,
+        s"Timeout must be a" +
+          " positive time value."
+      )
       .createWithDefaultString("600s")
 
   val ARMADA_LOOKOUTURL: ConfigEntry[String] =
     ConfigBuilder("spark.armada.lookouturl")
       .doc("URL base for the Armada Lookout UI.")
       .stringConf
-      .checkValue(urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
-        s"Value must be a valid URL, like http://host:8080 or https://host:443")
+      .checkValue(
+        urlPrefix => (urlPrefix.length > 0) && urlPrefix.startsWith("http", 0),
+        s"Value must be a valid URL, like http://host:8080 or https://host:443"
+      )
       .createWithDefaultString("http://localhost:30000")
 
   val ARMADA_HEALTH_CHECK_TIMEOUT: ConfigEntry[Long] =
@@ -57,22 +66,21 @@ private[spark] object Config {
 
   // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
   // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
-  private val label = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
+  private val label                 = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
   private val labelSelectors: Regex = (s"^($label=$label(,$label=$label)*)?$$").r
 
   private[armada] def selectorsValidator(selectors: CharSequence): Boolean = {
     val selectorsMaybe = labelSelectors.findPrefixMatchOf(selectors)
     selectorsMaybe match {
       case Some(_) => true
-      case None => false
+      case None    => false
     }
   }
 
-  def transformSelectorsToMap(str: String): Map[String,String] = {
+  def transformSelectorsToMap(str: String): Map[String, String] = {
     if (str.trim.isEmpty) {
       Map()
-    }
-    else {
+    } else {
       str.split(",").map(a => a.split("=")(0) -> a.split("=")(1)).toMap
     }
   }
@@ -81,8 +89,10 @@ private[spark] object Config {
 
   val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
     ConfigBuilder("spark.armada.clusterSelectors")
-      .doc("A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
-           "the spark driver and its executors are deployed to the same cluster.")
+      .doc(
+        "A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
+          "the spark driver and its executors are deployed to the same cluster."
+      )
       .stringConf
       .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
@@ -92,7 +102,7 @@ private[spark] object Config {
     val labelMaybe = singleLabelOrNone.findPrefixMatchOf(l)
     labelMaybe match {
       case Some(_) => true
-      case None => false
+      case None    => false
     }
   }
 
@@ -109,15 +119,20 @@ private[spark] object Config {
     val serviceNameMaybe = validServiceNamePrefix.findPrefixMatchOf(label)
     serviceNameMaybe match {
       case Some(_) => true
-      case None => false
+      case None    => false
     }
   }
 
   val DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driverServiceNamePrefix")
-      .doc("Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
-        "Max length of 30 characters.")
+      .doc(
+        "Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
+          "Max length of 30 characters."
+      )
       .stringConf
-      .checkValue(serviceNamePrefixValidator, "Service name prefix must adhere to rfc 1035 label names.")
+      .checkValue(
+        serviceNamePrefixValidator,
+        "Service name prefix must adhere to rfc 1035 label names."
+      )
       .createWithDefaultString("armada-spark-driver-")
 }
