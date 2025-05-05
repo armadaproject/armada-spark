@@ -1,57 +1,93 @@
-# armada-spark  - Running Spark Jobs on Armada
+# armada-spark
 
-## Introduction
+**Run Apache Spark workloads seamlessly on [Armada](https://github.com/armadaproject/armada), a multi-cluster Kubernetes batch scheduler**
 
-This repo allows you build docker images with spark and armada support and to load those images as armada jobs.  It requires you specify a spark repo which is used as the baseline config for those docker images.
+---
 
-## Building the project
+## Overview
 
-First, set the Spark and Scala version that you want to build for (unless the default works for you), e.g.:
+**armada-spark** is an open-source integration designed to streamline deployment and management of Apache Spark workloads on Armada.
+It provides preconfigured Docker images, tooling for efficient image management, and example workflows to simplify local and production deployments.
+
+## Getting Started
+
+### Prerequisites
+
+- **Java** 8/11/17
+- **Scala** 2.12/2.13
+- **Apache Maven** 3.9.6+
+- _(Optional)_ [kind](https://kind.sigs.k8s.io/) for local clusters
+- An accessible Armada Server and Lookout endpoint (check [Armada Operator](https://github.com/armadaproject/armada-operator) for the Quickstart guide)
+
+### Versions
+
+By default, the project targets `Spark 3.5.3` and `Scala 2.13.15`. To change versions:
+
+```bash
+./scripts/set-version.sh <spark-version> <scala-version>
+```
+
+Example:
 ```bash
 ./scripts/set-version.sh 3.5.3 2.13.15
 ```
 
-Then you can build the project:
+### Building Armada Spark
+
+After setting your desired Spark and Scala versions, build the Armada Spark project with Maven by running the following command:
+
 ```bash
-mvn package
+mvn clean package
 ```
 
-## Building Docker Images
+### Building Docker Images
 
-To build the image, first build the project as described above.
+Once your project is built, create the Docker image using:
 
-Then, build the image with:
 ```bash
-./scripts/createImage.sh
+./scripts/createImage.sh [-i image-name] [-m armada-master-url] [-q armada-queue] [-l armada-lookout-url]
 ```
 
-This script provides options to confgure your build:
-```bash
- Usage:
-   -h  help
-   -i  <image-name>
-   -m  <armada-master-url>
-   -q  <armada-queue>
-   -l  <armada-lookout-url>
+**Options:**
 
-You also can specify those parameters in scripts/config.sh, like so:
-   IMAGE_NAME=spark:armada
-   ARMADA_MASTER=armada://localhost:30002
-   ARMADA_QUEUE=test
-   ARMADA_LOOKOUT_URL=http://localhost:30000
+| Flag | Description        | Example                    |
+|------|--------------------|----------------------------|
+| `-i` | Docker image name  | `spark:armada`             |
+| `-m` | Armada master URL  | `armada://localhost:30002` |
+| `-q` | Armada queue       | `default`                  |
+| `-l` | Armada Lookout URL | `http://localhost:30000`   |
+| `-h` | Display help       |                            |
+
+
+To simplify, you may store these values in `scripts/config.sh`:
+
+```bash
+export IMAGE_NAME="spark:armada"
+export ARMADA_MASTER="armada://localhost:30002"
+export ARMADA_QUEUE="default"
+export ARMADA_LOOKOUT_URL="http://localhost:30000"
 ```
 
-Spark versions "3.3.4" and "3.5.3" are supported.
+### Deployment
 
-## KIND Armada clusters
-If you are using "kind", you can load the image like so:
+We recommend using [kind](https://kind.sigs.k8s.io/) for local testing.
+If you are using the [Armada Operator](https://github.com/armadaproject/armada-operator) Quickstart, it is already based on `kind`.
+
+Run the following command to load the Armada Spark image into your local kind cluster:
 ```
 kind load docker-image $IMAGE_NAME --name armada
 ```
 
-## Running the sparkPi application
-It can be run like so:
+---
+
+## Running Example Workloads
+
+### SparkPi Example
+
+The project includes a ready-to-use SparkPi job to test your setup:
+
+```bash
+./scripts/submitSparkPi.sh
 ```
-scripts/submitSparkPi.sh
-```
-It uses the same config parameters as `createImage.sh`.
+
+This job leverages the same configuration parameters (`ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_LOOKOUT_URL`) as the `scripts/config.sh` script.
