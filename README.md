@@ -56,6 +56,7 @@ Once your project is built, create the Docker image using:
 | `-m` | Armada master URL  | `armada://localhost:30002` |
 | `-q` | Armada queue       | `default`                  |
 | `-l` | Armada Lookout URL | `http://localhost:30000`   |
+| `-p` | Include python     |                            |
 | `-h` | Display help       |                            |
 
 
@@ -66,6 +67,7 @@ export IMAGE_NAME="spark:armada"
 export ARMADA_MASTER="armada://localhost:30002"
 export ARMADA_QUEUE="default"
 export ARMADA_LOOKOUT_URL="http://localhost:30000"
+export INCLUDE_PYTHON=true
 ```
 
 ### Deployment
