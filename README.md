@@ -82,6 +82,38 @@ kind load docker-image $IMAGE_NAME --name armada
 
 ---
 
+## Development
+
+Before submitting a pull request, please ensure that your code adheres to the project's coding standards and passes all tests.
+
+### Testing
+
+To run the tests, use the following command:
+
+```bash
+mvn test
+```
+
+### Linting
+
+To check the code for linting issues, use the following command:
+
+```bash
+mvn spotless:check
+```
+
+To automatically apply linting fixes, use:
+
+```bash
+mvn spotless:apply
+```
+
+### E2E
+
+Make sure that the [SparkPi](#sparkpi-example) job successfully runs on your Armada cluster before submitting a pull request.
+
+---
+
 ## Running Example Workloads
 
 ### SparkPi Example

@@ -29,7 +29,9 @@ object ArmadaUtils {
     Some(masterUrl)
       .map(_.substring("armada://".length).split(":").toSeq)
       .filter(_.length == 2)
-      .map { case Seq(host: String, portString: String) => (host, Try(portString.toInt).getOrElse(-1))}
+      .map { case Seq(host: String, portString: String) =>
+        (host, Try(portString.toInt).getOrElse(-1))
+      }
       .filter(_._2 >= 0)
       .getOrElse(throw new MasterUrlParsingException)
   }

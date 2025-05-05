@@ -19,7 +19,6 @@ package org.apache.spark.deploy
 
 // Initially copied from: https://raw.githubusercontent.com/apache/spark/9cf98ed41b2de1b44c44f0b4d1273d46761459fe/core/src/main/scala/org/apache/spark/deploy/SparkSubmit.scala
 
-
 import java.io._
 import java.lang.reflect.{InvocationTargetException, UndeclaredThrowableException}
 import java.net.{URI, URL}
@@ -60,12 +59,11 @@ import org.apache.spark.internal.config.UI._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util._
 
-/**
- * Main gateway of launching a Spark application.
- *
- * This program handles setting up the classpath with relevant Spark dependencies and provides
- * a layer over the different cluster managers and deploy modes that Spark supports.
- */
+/** Main gateway of launching a Spark application.
+  *
+  * This program handles setting up the classpath with relevant Spark dependencies and provides a
+  * layer over the different cluster managers and deploy modes that Spark supports.
+  */
 private[spark] class ArmadaSparkSubmit extends Logging {
 
   import DependencyUtils._
@@ -81,10 +79,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       logInfo(appArgs.toString)
     }
     appArgs.action match {
-      case SparkSubmitAction.SUBMIT => submit(appArgs, uninitLog)
-      case SparkSubmitAction.KILL => kill(appArgs)
+      case SparkSubmitAction.SUBMIT         => submit(appArgs, uninitLog)
+      case SparkSubmitAction.KILL           => kill(appArgs)
       case SparkSubmitAction.REQUEST_STATUS => requestStatus(appArgs)
-      case SparkSubmitAction.PRINT_VERSION => printVersion()
+      case SparkSubmitAction.PRINT_VERSION  => printVersion()
     }
   }
 
@@ -92,9 +90,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     new SparkSubmitArguments(args)
   }
 
-  /**
-   * Kill an existing submission.
-   */
+  /** Kill an existing submission.
+    */
   private def kill(args: SparkSubmitArguments): Unit = {
     if (RestSubmissionClient.supportsRestClient(args.master)) {
       new RestSubmissionClient(args.master)
@@ -108,9 +105,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     }
   }
 
-  /**
-   * Request the status of an existing submission.
-   */
+  /** Request the status of an existing submission.
+    */
   private def requestStatus(args: SparkSubmitArguments): Unit = {
     if (RestSubmissionClient.supportsRestClient(args.master)) {
       new RestSubmissionClient(args.master)
@@ -133,8 +129,13 @@ private[spark] class ArmadaSparkSubmit extends Logging {
    /___/ .__/\_,_/_/ /_/\_\   version %s
       /_/
                         """.format(SPARK_VERSION))
-    logInfo("Using Scala %s, %s, %s".format(
-      Properties.versionString, Properties.javaVmName, Properties.javaVersion))
+    logInfo(
+      "Using Scala %s, %s, %s".format(
+        Properties.versionString,
+        Properties.javaVmName,
+        Properties.javaVersion
+      )
+    )
     logInfo(s"Branch $SPARK_BRANCH")
     logInfo(s"Compiled by user $SPARK_BUILD_USER on $SPARK_BUILD_DATE")
     logInfo(s"Revision $SPARK_REVISION")
@@ -142,10 +143,9 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     logInfo("Type --help for more information.")
   }
 
-  /**
-   * Submit the application using the provided parameters, ensuring to first wrap
-   * in a doAs when --proxy-user is specified.
-   */
+  /** Submit the application using the provided parameters, ensuring to first wrap in a doAs when
+    * --proxy-user is specified.
+    */
   @tailrec
   private def submit(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
 
@@ -161,8 +161,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
           logInfo("Running driver with proxy user. Cluster manager: Kubernetes")
           SparkHadoopUtil.get.runAsSparkUser(() => runMain(args, uninitLog))
         } else {
-          val proxyUser = UserGroupInformation.createProxyUser(args.proxyUser,
-            UserGroupInformation.getCurrentUser())
+          val proxyUser = UserGroupInformation.createProxyUser(
+            args.proxyUser,
+            UserGroupInformation.getCurrentUser()
+          )
           try {
             proxyUser.doAs(new PrivilegedExceptionAction[Unit]() {
               override def run(): Unit = {
@@ -198,48 +200,49 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       } catch {
         // Fail over to use the legacy submission gateway
         case e: SubmitRestConnectionException =>
-          logWarning(s"Master endpoint ${args.master} was not a REST server. " +
-            "Falling back to legacy submission gateway instead.")
+          logWarning(
+            s"Master endpoint ${args.master} was not a REST server. " +
+              "Falling back to legacy submission gateway instead."
+          )
           args.useRest = false
           submit(args, false)
       }
-    // In all other modes, just run the main class as prepared
+      // In all other modes, just run the main class as prepared
     } else {
       doRunMain()
     }
   }
 
-  /**
-   * Prepare the environment for submitting an application.
-   *
-   * @param args the parsed SparkSubmitArguments used for environment preparation.
-   * @param conf the Hadoop Configuration, this argument will only be set in unit test.
-   * @return a 4-tuple:
-   *        (1) the arguments for the child process,
-   *        (2) a list of classpath entries for the child,
-   *        (3) a map of system properties, and
-   *        (4) the main class for the child
-   *
-   * Exposed for testing.
-   */
+  /** Prepare the environment for submitting an application.
+    *
+    * @param args
+    *   the parsed SparkSubmitArguments used for environment preparation.
+    * @param conf
+    *   the Hadoop Configuration, this argument will only be set in unit test.
+    * @return
+    *   a 4-tuple: (1) the arguments for the child process, (2) a list of classpath entries for the
+    *   child, (3) a map of system properties, and (4) the main class for the child
+    *
+    * Exposed for testing.
+    */
   private[deploy] def prepareSubmitEnvironment(
       args: SparkSubmitArguments,
-      conf: Option[HadoopConfiguration] = None)
-      : (Seq[String], Seq[String], SparkConf, String) = {
+      conf: Option[HadoopConfiguration] = None
+  ): (Seq[String], Seq[String], SparkConf, String) = {
     // Return values
-    val childArgs = new ArrayBuffer[String]()
+    val childArgs      = new ArrayBuffer[String]()
     val childClasspath = new ArrayBuffer[String]()
-    val sparkConf = args.toSparkConf()
+    val sparkConf      = args.toSparkConf()
     var childMainClass = ""
 
     // Set the cluster manager
     val clusterManager: Int = args.master match {
-      case "yarn" => YARN
-      case m if m.startsWith("spark") => STANDALONE
-      case m if m.startsWith("mesos") => MESOS
-      case m if m.startsWith("k8s") => KUBERNETES
+      case "yarn"                      => YARN
+      case m if m.startsWith("spark")  => STANDALONE
+      case m if m.startsWith("mesos")  => MESOS
+      case m if m.startsWith("k8s")    => KUBERNETES
       case m if m.startsWith("armada") => ARMADA
-      case m if m.startsWith("local") => LOCAL
+      case m if m.startsWith("local")  => LOCAL
       case _ =>
         error("Master must either be yarn or start with spark, mesos, k8s, armada, or local")
         -1
@@ -248,7 +251,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     // Set the deploy mode; default is client mode
     val deployMode: Int = args.deployMode match {
       case "client" | null => CLIENT
-      case "cluster" => CLUSTER
+      case "cluster"       => CLUSTER
       case _ =>
         error("Deploy mode must be either client or cluster")
         -1
@@ -259,7 +262,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       if (!Utils.classIsLoadable(YARN_CLUSTER_SUBMIT_CLASS) && !Utils.isTesting) {
         error(
           "Could not load YARN classes. " +
-          "This copy of Spark may not have been compiled with YARN support.")
+            "This copy of Spark may not have been compiled with YARN support."
+        )
       }
     }
 
@@ -269,7 +273,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       if (!Utils.classIsLoadable(KUBERNETES_CLUSTER_SUBMIT_CLASS) && !Utils.isTesting) {
         error(
           "Could not load KUBERNETES classes. " +
-            "This copy of Spark may not have been compiled with KUBERNETES support.")
+            "This copy of Spark may not have been compiled with KUBERNETES support."
+        )
       }
     }
 
@@ -277,19 +282,24 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       printMessage(s"Armada selected as cluster manager.")
       if (!Utils.classIsLoadable(ARMADA_CLUSTER_SUBMIT_CLASS) && !Utils.isTesting) {
         error(
-          "Could not load ARMADA class " +  ARMADA_CLUSTER_SUBMIT_CLASS +". " +
-          "This copy of Spark may not have been compiled with ARMADA support.")
+          "Could not load ARMADA class " + ARMADA_CLUSTER_SUBMIT_CLASS + ". " +
+            "This copy of Spark may not have been compiled with ARMADA support."
+        )
       }
     }
 
     // Fail fast, the following modes are not supported or applicable
     (clusterManager, deployMode) match {
       case (STANDALONE, CLUSTER) if args.isPython =>
-        error("Cluster deploy mode is currently not supported for python " +
-          "applications on standalone clusters.")
+        error(
+          "Cluster deploy mode is currently not supported for python " +
+            "applications on standalone clusters."
+        )
       case (STANDALONE, CLUSTER) if args.isR =>
-        error("Cluster deploy mode is currently not supported for R " +
-          "applications on standalone clusters.")
+        error(
+          "Cluster deploy mode is currently not supported for R " +
+            "applications on standalone clusters."
+        )
       case (LOCAL, CLUSTER) =>
         error("Cluster deploy mode is not compatible with master \"local\"")
       case (_, CLUSTER) if isShell(args.primaryResource) =>
@@ -303,30 +313,35 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
     // Update args.deployMode if it is null. It will be passed down as a Spark property later.
     (args.deployMode, deployMode) match {
-      case (null, CLIENT) => args.deployMode = "client"
+      case (null, CLIENT)  => args.deployMode = "client"
       case (null, CLUSTER) => args.deployMode = "cluster"
-      case _ =>
+      case _               =>
     }
-    val isYarnCluster = clusterManager == YARN && deployMode == CLUSTER
-    val isMesosCluster = clusterManager == MESOS && deployMode == CLUSTER
+    val isYarnCluster       = clusterManager == YARN && deployMode == CLUSTER
+    val isMesosCluster      = clusterManager == MESOS && deployMode == CLUSTER
     val isStandAloneCluster = clusterManager == STANDALONE && deployMode == CLUSTER
     val isKubernetesCluster = clusterManager == KUBERNETES && deployMode == CLUSTER
-    val isKubernetesClient = clusterManager == KUBERNETES && deployMode == CLIENT
+    val isKubernetesClient  = clusterManager == KUBERNETES && deployMode == CLIENT
     val isKubernetesClusterModeDriver = isKubernetesClient &&
       sparkConf.getBoolean("spark.kubernetes.submitInDriver", false)
     val isArmadaCluster = clusterManager == ARMADA && deployMode == CLUSTER
     // TODO: Support armada & client?
     val isCustomClasspathInClusterModeDisallowed =
       !sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE) &&
-      args.proxyUser != null &&
-      (isYarnCluster || isMesosCluster || isStandAloneCluster || isKubernetesCluster)
+        args.proxyUser != null &&
+        (isYarnCluster || isMesosCluster || isStandAloneCluster || isKubernetesCluster)
 
     if (!isMesosCluster && !isStandAloneCluster) {
       // Resolve maven dependencies if there are any and add classpath to jars. Add them to py-files
       // too for packages that include Python code
       val resolvedMavenCoordinates = DependencyUtils.resolveMavenDependencies(
-        packagesTransitive = true, args.packagesExclusions, args.packages,
-        args.repositories, args.ivyRepoPath, args.ivySettingsPath)
+        packagesTransitive = true,
+        args.packagesExclusions,
+        args.packages,
+        args.repositories,
+        args.ivyRepoPath,
+        args.ivySettingsPath
+      )
 
       if (resolvedMavenCoordinates.nonEmpty) {
         // In K8s client mode, when in the driver, add resolved jars early as we might need
@@ -346,8 +361,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         } else {
           args.jars = mergeFileLists(args.jars, mergeFileLists(resolvedMavenCoordinates: _*))
           if (args.isPython || isInternal(args.primaryResource)) {
-            args.pyFiles = mergeFileLists(args.pyFiles,
-              mergeFileLists(resolvedMavenCoordinates: _*))
+            args.pyFiles =
+              mergeFileLists(args.pyFiles, mergeFileLists(resolvedMavenCoordinates: _*))
           }
         }
       }
@@ -362,14 +377,16 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     // update spark config from args
     args.toSparkConf(Option(sparkConf))
     val hadoopConf = conf.getOrElse(SparkHadoopUtil.newConfiguration(sparkConf))
-    val targetDir = Utils.createTempDir()
+    val targetDir  = Utils.createTempDir()
 
     // Kerberos is not supported in standalone mode, and keytab support is not yet available
     // in Mesos cluster mode.
-    if (clusterManager != STANDALONE
-        && !isMesosCluster
-        && args.principal != null
-        && args.keytab != null) {
+    if (
+      clusterManager != STANDALONE
+      && !isMesosCluster
+      && args.principal != null
+      && args.keytab != null
+    ) {
       // If client mode, make sure the keytab is just a local path.
       if (deployMode == CLIENT && Utils.isLocalUri(args.keytab)) {
         args.keytab = new URI(args.keytab).getPath()
@@ -387,11 +404,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     args.pyFiles = Option(args.pyFiles).map(resolveGlobPaths(_, hadoopConf)).orNull
     args.archives = Option(args.archives).map(resolveGlobPaths(_, hadoopConf)).orNull
 
-
     // In client mode, download remote files.
     var localPrimaryResource: String = null
-    var localJars: String = null
-    var localPyFiles: String = null
+    var localJars: String            = null
+    var localPyFiles: String         = null
     if (deployMode == CLIENT) {
       localPrimaryResource = Option(args.primaryResource).map {
         downloadFile(_, targetDir, sparkConf, hadoopConf)
@@ -415,29 +431,36 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         val archiveLocalFiles = Option(args.archives).map { uris =>
           val resolvedUris = Utils.stringToSeq(uris).map(Utils.resolveURI)
           val localArchives = downloadFileList(
-            resolvedUris.map(
-              UriBuilder.fromUri(_).fragment(null).build().toString).mkString(","),
-            targetDir, sparkConf, hadoopConf)
+            resolvedUris.map(UriBuilder.fromUri(_).fragment(null).build().toString).mkString(","),
+            targetDir,
+            sparkConf,
+            hadoopConf
+          )
 
           // SPARK-33748: this mimics the behaviour of Yarn cluster mode. If the driver is running
           // in cluster mode, the archives should be available in the driver's current working
           // directory too.
-          Utils.stringToSeq(localArchives).map(Utils.resolveURI).zip(resolvedUris).map {
-            case (localArchive, resolvedUri) =>
+          Utils
+            .stringToSeq(localArchives)
+            .map(Utils.resolveURI)
+            .zip(resolvedUris)
+            .map { case (localArchive, resolvedUri) =>
               val source = new File(localArchive.getPath)
               val dest = new File(
                 ".",
-                if (resolvedUri.getFragment != null) resolvedUri.getFragment else source.getName)
+                if (resolvedUri.getFragment != null) resolvedUri.getFragment else source.getName
+              )
               logInfo(
                 s"Unpacking an archive $resolvedUri " +
-                  s"from ${source.getAbsolutePath} to ${dest.getAbsolutePath}")
+                  s"from ${source.getAbsolutePath} to ${dest.getAbsolutePath}"
+              )
               Utils.deleteRecursively(dest)
               Utils.unpack(source, dest)
 
               // Keep the URIs of local files with the given fragments.
-              UriBuilder.fromUri(
-                localArchive).fragment(resolvedUri.getFragment).build().toString
-          }.mkString(",")
+              UriBuilder.fromUri(localArchive).fragment(resolvedUri.getFragment).build().toString
+            }
+            .mkString(",")
         }.orNull
         args.files = filesLocalFiles
         args.archives = archiveLocalFiles
@@ -456,7 +479,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
       def shouldDownload(scheme: String): Boolean = {
         forceDownloadSchemes.contains("*") || forceDownloadSchemes.contains(scheme) ||
-          Try { FileSystem.getFileSystemClass(scheme, hadoopConf) }.isFailure
+        Try { FileSystem.getFileSystemClass(scheme, hadoopConf) }.isFailure
       }
 
       def downloadResource(resource: String): String = {
@@ -505,7 +528,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         case e: Throwable =>
           error(
             s"Failed to get main class in JAR with error '${e.getMessage}'. " +
-            " Please specify one with --class."
+              " Please specify one with --class."
           )
       }
 
@@ -604,72 +627,159 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     // A list of rules to map each argument to system properties or command-line options in
     // each deploy mode; we iterate through these below
     val options = List[OptionAssigner](
-
       // All cluster managers
       OptionAssigner(args.master, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = "spark.master"),
-      OptionAssigner(args.deployMode, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = SUBMIT_DEPLOY_MODE.key),
+      OptionAssigner(
+        args.deployMode,
+        ALL_CLUSTER_MGRS,
+        ALL_DEPLOY_MODES,
+        confKey = SUBMIT_DEPLOY_MODE.key
+      ),
       OptionAssigner(args.name, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = "spark.app.name"),
-      OptionAssigner(args.ivyRepoPath, ALL_CLUSTER_MGRS, CLIENT,
-        confKey = JAR_IVY_REPO_PATH.key),
-      OptionAssigner(args.driverMemory, ALL_CLUSTER_MGRS, CLIENT,
-        confKey = DRIVER_MEMORY.key),
-      OptionAssigner(args.driverExtraClassPath, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = DRIVER_CLASS_PATH.key),
-      OptionAssigner(args.driverExtraJavaOptions, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = DRIVER_JAVA_OPTIONS.key),
-      OptionAssigner(args.driverExtraLibraryPath, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = DRIVER_LIBRARY_PATH.key),
-      OptionAssigner(args.principal, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = PRINCIPAL.key),
-      OptionAssigner(args.keytab, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
-        confKey = KEYTAB.key),
+      OptionAssigner(args.ivyRepoPath, ALL_CLUSTER_MGRS, CLIENT, confKey = JAR_IVY_REPO_PATH.key),
+      OptionAssigner(args.driverMemory, ALL_CLUSTER_MGRS, CLIENT, confKey = DRIVER_MEMORY.key),
+      OptionAssigner(
+        args.driverExtraClassPath,
+        ALL_CLUSTER_MGRS,
+        ALL_DEPLOY_MODES,
+        confKey = DRIVER_CLASS_PATH.key
+      ),
+      OptionAssigner(
+        args.driverExtraJavaOptions,
+        ALL_CLUSTER_MGRS,
+        ALL_DEPLOY_MODES,
+        confKey = DRIVER_JAVA_OPTIONS.key
+      ),
+      OptionAssigner(
+        args.driverExtraLibraryPath,
+        ALL_CLUSTER_MGRS,
+        ALL_DEPLOY_MODES,
+        confKey = DRIVER_LIBRARY_PATH.key
+      ),
+      OptionAssigner(args.principal, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = PRINCIPAL.key),
+      OptionAssigner(args.keytab, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = KEYTAB.key),
       OptionAssigner(args.pyFiles, ALL_CLUSTER_MGRS, CLUSTER, confKey = SUBMIT_PYTHON_FILES.key),
 
       // TODO: Add Armada where appropriate.
       // Propagate attributes for dependency resolution at the driver side
-      OptionAssigner(args.packages, STANDALONE | MESOS | KUBERNETES,
-        CLUSTER, confKey = JAR_PACKAGES.key),
-      OptionAssigner(args.repositories, STANDALONE | MESOS | KUBERNETES,
-        CLUSTER, confKey = JAR_REPOSITORIES.key),
-      OptionAssigner(args.ivyRepoPath, STANDALONE | MESOS | KUBERNETES,
-        CLUSTER, confKey = JAR_IVY_REPO_PATH.key),
-      OptionAssigner(args.packagesExclusions, STANDALONE | MESOS | KUBERNETES,
-        CLUSTER, confKey = JAR_PACKAGES_EXCLUSIONS.key),
+      OptionAssigner(
+        args.packages,
+        STANDALONE | MESOS | KUBERNETES,
+        CLUSTER,
+        confKey = JAR_PACKAGES.key
+      ),
+      OptionAssigner(
+        args.repositories,
+        STANDALONE | MESOS | KUBERNETES,
+        CLUSTER,
+        confKey = JAR_REPOSITORIES.key
+      ),
+      OptionAssigner(
+        args.ivyRepoPath,
+        STANDALONE | MESOS | KUBERNETES,
+        CLUSTER,
+        confKey = JAR_IVY_REPO_PATH.key
+      ),
+      OptionAssigner(
+        args.packagesExclusions,
+        STANDALONE | MESOS | KUBERNETES,
+        CLUSTER,
+        confKey = JAR_PACKAGES_EXCLUSIONS.key
+      ),
 
       // Yarn only
       OptionAssigner(args.queue, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.queue"),
-      OptionAssigner(args.pyFiles, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.dist.pyFiles",
-        mergeFn = Some(mergeFileLists(_, _))),
-      OptionAssigner(args.jars, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.dist.jars",
-        mergeFn = Some(mergeFileLists(_, _))),
-      OptionAssigner(args.files, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.dist.files",
-        mergeFn = Some(mergeFileLists(_, _))),
-      OptionAssigner(args.archives, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.dist.archives",
-        mergeFn = Some(mergeFileLists(_, _))),
+      OptionAssigner(
+        args.pyFiles,
+        YARN,
+        ALL_DEPLOY_MODES,
+        confKey = "spark.yarn.dist.pyFiles",
+        mergeFn = Some(mergeFileLists(_, _))
+      ),
+      OptionAssigner(
+        args.jars,
+        YARN,
+        ALL_DEPLOY_MODES,
+        confKey = "spark.yarn.dist.jars",
+        mergeFn = Some(mergeFileLists(_, _))
+      ),
+      OptionAssigner(
+        args.files,
+        YARN,
+        ALL_DEPLOY_MODES,
+        confKey = "spark.yarn.dist.files",
+        mergeFn = Some(mergeFileLists(_, _))
+      ),
+      OptionAssigner(
+        args.archives,
+        YARN,
+        ALL_DEPLOY_MODES,
+        confKey = "spark.yarn.dist.archives",
+        mergeFn = Some(mergeFileLists(_, _))
+      ),
 
       // Other options
-      OptionAssigner(args.numExecutors, YARN | KUBERNETES | ARMADA, ALL_DEPLOY_MODES,
-        confKey = EXECUTOR_INSTANCES.key),
-      OptionAssigner(args.executorCores, STANDALONE | YARN | KUBERNETES, ALL_DEPLOY_MODES,
-        confKey = EXECUTOR_CORES.key),
-      OptionAssigner(args.executorMemory, STANDALONE | MESOS | YARN | KUBERNETES, ALL_DEPLOY_MODES,
-        confKey = EXECUTOR_MEMORY.key),
-      OptionAssigner(args.totalExecutorCores, STANDALONE | MESOS, ALL_DEPLOY_MODES,
-        confKey = CORES_MAX.key),
-      OptionAssigner(args.files, LOCAL | STANDALONE | MESOS | KUBERNETES, ALL_DEPLOY_MODES,
-        confKey = FILES.key),
-      OptionAssigner(args.archives, LOCAL | STANDALONE | MESOS | KUBERNETES, ALL_DEPLOY_MODES,
-        confKey = ARCHIVES.key),
+      OptionAssigner(
+        args.numExecutors,
+        YARN | KUBERNETES | ARMADA,
+        ALL_DEPLOY_MODES,
+        confKey = EXECUTOR_INSTANCES.key
+      ),
+      OptionAssigner(
+        args.executorCores,
+        STANDALONE | YARN | KUBERNETES,
+        ALL_DEPLOY_MODES,
+        confKey = EXECUTOR_CORES.key
+      ),
+      OptionAssigner(
+        args.executorMemory,
+        STANDALONE | MESOS | YARN | KUBERNETES,
+        ALL_DEPLOY_MODES,
+        confKey = EXECUTOR_MEMORY.key
+      ),
+      OptionAssigner(
+        args.totalExecutorCores,
+        STANDALONE | MESOS,
+        ALL_DEPLOY_MODES,
+        confKey = CORES_MAX.key
+      ),
+      OptionAssigner(
+        args.files,
+        LOCAL | STANDALONE | MESOS | KUBERNETES,
+        ALL_DEPLOY_MODES,
+        confKey = FILES.key
+      ),
+      OptionAssigner(
+        args.archives,
+        LOCAL | STANDALONE | MESOS | KUBERNETES,
+        ALL_DEPLOY_MODES,
+        confKey = ARCHIVES.key
+      ),
       OptionAssigner(args.jars, LOCAL, CLIENT, confKey = JARS.key),
-      OptionAssigner(args.jars, STANDALONE | MESOS | KUBERNETES, ALL_DEPLOY_MODES,
-        confKey = JARS.key),
-      OptionAssigner(args.driverMemory, STANDALONE | MESOS | YARN | KUBERNETES, CLUSTER,
-        confKey = DRIVER_MEMORY.key),
-      OptionAssigner(args.driverCores, STANDALONE | MESOS | YARN | KUBERNETES, CLUSTER,
-        confKey = DRIVER_CORES.key),
-      OptionAssigner(args.supervise.toString, STANDALONE | MESOS, CLUSTER,
-        confKey = DRIVER_SUPERVISE.key),
+      OptionAssigner(
+        args.jars,
+        STANDALONE | MESOS | KUBERNETES,
+        ALL_DEPLOY_MODES,
+        confKey = JARS.key
+      ),
+      OptionAssigner(
+        args.driverMemory,
+        STANDALONE | MESOS | YARN | KUBERNETES,
+        CLUSTER,
+        confKey = DRIVER_MEMORY.key
+      ),
+      OptionAssigner(
+        args.driverCores,
+        STANDALONE | MESOS | YARN | KUBERNETES,
+        CLUSTER,
+        confKey = DRIVER_CORES.key
+      ),
+      OptionAssigner(
+        args.supervise.toString,
+        STANDALONE | MESOS,
+        CLUSTER,
+        confKey = DRIVER_SUPERVISE.key
+      ),
       OptionAssigner(args.ivyRepoPath, STANDALONE, CLUSTER, confKey = JAR_IVY_REPO_PATH.key),
 
       // An internal option used only for spark-shell to add user jars to repl's classloader,
@@ -705,9 +815,11 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
     // Map all arguments to command-line options or system properties for our chosen mode
     for (opt <- options) {
-      if (opt.value != null &&
-          (deployMode & opt.deployMode) != 0 &&
-          (clusterManager & opt.clusterManager) != 0) {
+      if (
+        opt.value != null &&
+        (deployMode & opt.deployMode) != 0 &&
+        (clusterManager & opt.clusterManager) != 0
+      ) {
         if (opt.clOption != null) { childArgs += (opt.clOption, opt.value) }
         if (opt.confKey != null) {
           if (opt.mergeFn.isDefined && sparkConf.contains(opt.confKey)) {
@@ -762,8 +874,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       }
     }
 
-    if ((clusterManager == MESOS || clusterManager == KUBERNETES)
-       && UserGroupInformation.isSecurityEnabled) {
+    if (
+      (clusterManager == MESOS || clusterManager == KUBERNETES)
+      && UserGroupInformation.isSecurityEnabled
+    ) {
       setRMPrincipal(sparkConf)
     }
 
@@ -817,8 +931,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         } else if (args.isR) {
           childArgs ++= Array("--primary-r-file", args.primaryResource)
           childArgs ++= Array("--main-class", "org.apache.spark.deploy.RRunner")
-        }
-        else {
+        } else {
           childArgs ++= Array("--primary-java-resource", args.primaryResource)
           childArgs ++= Array("--main-class", args.mainClass)
         }
@@ -845,8 +958,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         } else if (args.isR) {
           childArgs ++= Array("--primary-r-file", args.primaryResource)
           childArgs ++= Array("--main-class", "org.apache.spark.deploy.RRunner")
-        }
-        else {
+        } else {
           childArgs ++= Array("--primary-java-resource", args.primaryResource)
           childArgs ++= Array("--main-class", args.mainClass)
         }
@@ -877,7 +989,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       ARCHIVES.key,
       "spark.yarn.dist.files",
       "spark.yarn.dist.archives",
-      "spark.yarn.dist.jars")
+      "spark.yarn.dist.jars"
+    )
     pathConfigs.foreach { config =>
       // Replace old URIs with resolved URIs, if they exist
       sparkConf.getOption(config).foreach { oldValue =>
@@ -888,7 +1001,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     // Resolve and format python file paths properly before adding them to the PYTHONPATH.
     // The resolving part is redundant in the case of --py-files, but necessary if the user
     // explicitly sets `spark.submit.pyFiles` in his/her default properties file.
-    val pyFiles = sparkConf.get(SUBMIT_PYTHON_FILES)
+    val pyFiles         = sparkConf.get(SUBMIT_PYTHON_FILES)
     val resolvedPyFiles = Utils.resolveURIs(pyFiles.mkString(","))
     val formattedPyFiles = if (deployMode != CLUSTER) {
       PythonRunner.formatPaths(resolvedPyFiles).mkString(",")
@@ -908,9 +1021,11 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
     if (childClasspath.nonEmpty && isCustomClasspathInClusterModeDisallowed) {
       childClasspath.clear()
-      logWarning(s"Ignore classpath ${childClasspath.mkString(", ")} with proxy user specified " +
-        s"in Cluster mode when ${ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE.key} is " +
-        s"disabled")
+      logWarning(
+        s"Ignore classpath ${childClasspath.mkString(", ")} with proxy user specified " +
+          s"in Cluster mode when ${ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE.key} is " +
+          s"disabled"
+      )
     }
 
     (childArgs.toSeq, childClasspath.toSeq, sparkConf, childMainClass)
@@ -921,7 +1036,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
   // mode, we must trick it into thinking we're YARN.
   private def setRMPrincipal(sparkConf: SparkConf): Unit = {
     val shortUserName = UserGroupInformation.getCurrentUser.getShortUserName
-    val key = s"spark.hadoop.${YarnConfiguration.RM_PRINCIPAL}"
+    val key           = s"spark.hadoop.${YarnConfiguration.RM_PRINCIPAL}"
     logInfo(s"Setting ${key} to ${shortUserName}")
     sparkConf.set(key, shortUserName)
   }
@@ -929,28 +1044,24 @@ private[spark] class ArmadaSparkSubmit extends Logging {
   private def getSubmitClassLoader(sparkConf: SparkConf): MutableURLClassLoader = {
     val loader =
       if (sparkConf.get(DRIVER_USER_CLASS_PATH_FIRST)) {
-        new ChildFirstURLClassLoader(new Array[URL](0),
-          Thread.currentThread.getContextClassLoader)
+        new ChildFirstURLClassLoader(new Array[URL](0), Thread.currentThread.getContextClassLoader)
       } else {
-        new MutableURLClassLoader(new Array[URL](0),
-          Thread.currentThread.getContextClassLoader)
+        new MutableURLClassLoader(new Array[URL](0), Thread.currentThread.getContextClassLoader)
       }
     Thread.currentThread.setContextClassLoader(loader)
     loader
   }
 
-  /**
-   * Run the main method of the child class using the submit arguments.
-   *
-   * This runs in two steps. First, we prepare the launch environment by setting up
-   * the appropriate classpath, system properties, and application arguments for
-   * running the child main class based on the cluster manager and the deploy mode.
-   * Second, we use this launch environment to invoke the main method of the child
-   * main class.
-   *
-   * Note that this main class will not be the one provided by the user if we're
-   * running cluster deploy mode or python applications.
-   */
+  /** Run the main method of the child class using the submit arguments.
+    *
+    * This runs in two steps. First, we prepare the launch environment by setting up the appropriate
+    * classpath, system properties, and application arguments for running the child main class based
+    * on the cluster manager and the deploy mode. Second, we use this launch environment to invoke
+    * the main method of the child main class.
+    *
+    * Note that this main class will not be the one provided by the user if we're running cluster
+    * deploy mode or python applications.
+    */
   private def runMain(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
     val (childArgs, childClasspath, sparkConf, childMainClass) = prepareSubmitEnvironment(args)
     // Let the main class re-initialize the logging system once it starts.
@@ -966,10 +1077,12 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       logInfo(s"Classpath elements:\n${childClasspath.mkString("\n")}")
       logInfo("\n")
     }
-    assert(!(args.deployMode == "cluster" && args.proxyUser != null && childClasspath.nonEmpty) ||
-      sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE),
+    assert(
+      !(args.deployMode == "cluster" && args.proxyUser != null && childClasspath.nonEmpty) ||
+        sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE),
       s"Classpath of spark-submit should not change in cluster mode if proxy user is specified " +
-        s"when ${ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE.key} is disabled")
+        s"when ${ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE.key} is disabled"
+    )
     val loader = getSubmitClassLoader(sparkConf)
     for (jar <- childClasspath) {
       addJarToClasspath(jar, loader)
@@ -1018,8 +1131,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       case t: Throwable =>
         throw findCause(t)
     } finally {
-      if (args.master.startsWith("k8s") && !isShell(args.primaryResource) &&
-          !isSqlShell(args.mainClass) && !isThriftServer(args.mainClass)) {
+      if (
+        args.master.startsWith("k8s") && !isShell(args.primaryResource) &&
+        !isSqlShell(args.mainClass) && !isThriftServer(args.mainClass)
+      ) {
         try {
           SparkContext.getActive.foreach(_.stop())
         } catch {
@@ -1034,10 +1149,8 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
 }
 
-
-/**
- * This entry point is used by the launcher library to start in-process Spark applications.
- */
+/** This entry point is used by the launcher library to start in-process Spark applications.
+  */
 private[spark] object InProcessSparkSubmit {
 
   def main(args: Array[String]): Unit = {
@@ -1050,32 +1163,32 @@ private[spark] object InProcessSparkSubmit {
 object ArmadaSparkSubmit extends CommandLineUtils with Logging {
 
   // Cluster managers
-  private val YARN = 1
-  private val STANDALONE = 2
-  private val MESOS = 4
-  private val LOCAL = 8
-  private val KUBERNETES = 16
-  private val ARMADA = 32
+  private val YARN             = 1
+  private val STANDALONE       = 2
+  private val MESOS            = 4
+  private val LOCAL            = 8
+  private val KUBERNETES       = 16
+  private val ARMADA           = 32
   private val ALL_CLUSTER_MGRS = YARN | STANDALONE | LOCAL | KUBERNETES | ARMADA
 
   // Deploy modes
-  private val CLIENT = 1
-  private val CLUSTER = 2
+  private val CLIENT           = 1
+  private val CLUSTER          = 2
   private val ALL_DEPLOY_MODES = CLIENT | CLUSTER
 
   // Special primary resource names that represent shells rather than application jars.
-  private val SPARK_SHELL = "spark-shell"
-  private val PYSPARK_SHELL = "pyspark-shell"
-  private val SPARKR_SHELL = "sparkr-shell"
+  private val SPARK_SHELL            = "spark-shell"
+  private val PYSPARK_SHELL          = "pyspark-shell"
+  private val SPARKR_SHELL           = "sparkr-shell"
   private val SPARKR_PACKAGE_ARCHIVE = "sparkr.zip"
-  private val R_PACKAGE_ARCHIVE = "rpkg.zip"
+  private val R_PACKAGE_ARCHIVE      = "rpkg.zip"
 
   private val CLASS_NOT_FOUND_EXIT_STATUS = 101
 
   // Following constants are visible for testing.
   private[deploy] val YARN_CLUSTER_SUBMIT_CLASS =
     "org.apache.spark.deploy.yarn.YarnClusterApplication"
-  private[deploy] val REST_CLUSTER_SUBMIT_CLASS = classOf[RestSubmissionClientApp].getName()
+  private[deploy] val REST_CLUSTER_SUBMIT_CLASS       = classOf[RestSubmissionClientApp].getName()
   private[deploy] val STANDALONE_CLUSTER_SUBMIT_CLASS = classOf[ClientApp].getName()
   private[deploy] val KUBERNETES_CLUSTER_SUBMIT_CLASS =
     "org.apache.spark.deploy.k8s.submit.KubernetesClientApplication"
@@ -1085,7 +1198,6 @@ object ArmadaSparkSubmit extends CommandLineUtils with Logging {
   override def main(args: Array[String]): Unit = {
     val submit = new ArmadaSparkSubmit() {
       self =>
-
       override protected def parseArguments(args: Array[String]): SparkSubmitArguments = {
         new SparkSubmitArguments(args) {
           override protected def logInfo(msg: => String): Unit = self.logInfo(msg)
@@ -1116,44 +1228,38 @@ object ArmadaSparkSubmit extends CommandLineUtils with Logging {
     submit.doSubmit(args)
   }
 
-  /**
-   * Return whether the given primary resource represents a user jar.
-   */
+  /** Return whether the given primary resource represents a user jar.
+    */
   private[deploy] def isUserJar(res: String): Boolean = {
     !isShell(res) && !isPython(res) && !isInternal(res) && !isR(res)
   }
 
-  /**
-   * Return whether the given primary resource represents a shell.
-   */
+  /** Return whether the given primary resource represents a shell.
+    */
   private[deploy] def isShell(res: String): Boolean = {
     (res == SPARK_SHELL || res == PYSPARK_SHELL || res == SPARKR_SHELL)
   }
 
-  /**
-   * Return whether the given main class represents a sql shell.
-   */
+  /** Return whether the given main class represents a sql shell.
+    */
   private[deploy] def isSqlShell(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver"
   }
 
-  /**
-   * Return whether the given main class represents a thrift server.
-   */
+  /** Return whether the given main class represents a thrift server.
+    */
   private def isThriftServer(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.HiveThriftServer2"
   }
 
-  /**
-   * Return whether the given primary resource requires running python.
-   */
+  /** Return whether the given primary resource requires running python.
+    */
   private[deploy] def isPython(res: String): Boolean = {
     res != null && res.endsWith(".py") || res == PYSPARK_SHELL
   }
 
-  /**
-   * Return whether the given primary resource requires running R.
-   */
+  /** Return whether the given primary resource requires running R.
+    */
   private[deploy] def isR(res: String): Boolean = {
     res != null && (res.endsWith(".R") || res.endsWith(".r")) || res == SPARKR_SHELL
   }
@@ -1175,37 +1281,66 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
   // We need to specify each component explicitly, otherwise we miss
   // spark-streaming utility components. Underscore is there to differentiate between
   // spark-streaming_2.1x and spark-streaming-kafka-0-10-assembly_2.1x
-  val IVY_DEFAULT_EXCLUDES = Seq("catalyst_", "core_", "graphx_", "kvstore_", "launcher_", "mllib_",
-    "mllib-local_", "network-common_", "network-shuffle_", "repl_", "sketch_", "sql_", "streaming_",
-    "tags_", "unsafe_")
+  val IVY_DEFAULT_EXCLUDES = Seq(
+    "catalyst_",
+    "core_",
+    "graphx_",
+    "kvstore_",
+    "launcher_",
+    "mllib_",
+    "mllib-local_",
+    "network-common_",
+    "network-shuffle_",
+    "repl_",
+    "sketch_",
+    "sql_",
+    "streaming_",
+    "tags_",
+    "unsafe_"
+  )
 
-  /**
-   * Represents a Maven Coordinate
-   * @param groupId the groupId of the coordinate
-   * @param artifactId the artifactId of the coordinate
-   * @param version the version of the coordinate
-   */
+  /** Represents a Maven Coordinate
+    * @param groupId
+    *   the groupId of the coordinate
+    * @param artifactId
+    *   the artifactId of the coordinate
+    * @param version
+    *   the version of the coordinate
+    */
   private[deploy] case class MavenCoordinate(groupId: String, artifactId: String, version: String) {
     override def toString: String = s"$groupId:$artifactId:$version"
   }
 
-  /**
-   * Extracts maven coordinates from a comma-delimited string. Coordinates should be provided
-   * in the format `groupId:artifactId:version` or `groupId/artifactId:version`.
-   * @param coordinates Comma-delimited string of maven coordinates
-   * @return Sequence of Maven coordinates
-   */
+  /** Extracts maven coordinates from a comma-delimited string. Coordinates should be provided in
+    * the format `groupId:artifactId:version` or `groupId/artifactId:version`.
+    * @param coordinates
+    *   Comma-delimited string of maven coordinates
+    * @return
+    *   Sequence of Maven coordinates
+    */
   def extractMavenCoordinates(coordinates: String): Seq[MavenCoordinate] = {
     coordinates.split(",").map { p =>
       val splits = p.replace("/", ":").split(":")
-      require(splits.length == 3, s"Provided Maven Coordinates must be in the form " +
-        s"'groupId:artifactId:version'. The coordinate provided is: $p")
-      require(splits(0) != null && splits(0).trim.nonEmpty, s"The groupId cannot be null or " +
-        s"be whitespace. The groupId provided is: ${splits(0)}")
-      require(splits(1) != null && splits(1).trim.nonEmpty, s"The artifactId cannot be null or " +
-        s"be whitespace. The artifactId provided is: ${splits(1)}")
-      require(splits(2) != null && splits(2).trim.nonEmpty, s"The version cannot be null or " +
-        s"be whitespace. The version provided is: ${splits(2)}")
+      require(
+        splits.length == 3,
+        s"Provided Maven Coordinates must be in the form " +
+          s"'groupId:artifactId:version'. The coordinate provided is: $p"
+      )
+      require(
+        splits(0) != null && splits(0).trim.nonEmpty,
+        s"The groupId cannot be null or " +
+          s"be whitespace. The groupId provided is: ${splits(0)}"
+      )
+      require(
+        splits(1) != null && splits(1).trim.nonEmpty,
+        s"The artifactId cannot be null or " +
+          s"be whitespace. The artifactId provided is: ${splits(1)}"
+      )
+      require(
+        splits(2) != null && splits(2).trim.nonEmpty,
+        s"The version cannot be null or " +
+          s"be whitespace. The version provided is: ${splits(2)}"
+      )
       new MavenCoordinate(splits(0), splits(1), splits(2))
     }
   }
@@ -1220,11 +1355,12 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     }
   }
 
-  /**
-   * Extracts maven coordinates from a comma-delimited string
-   * @param defaultIvyUserDir The default user path for Ivy
-   * @return A ChainResolver used by Ivy to search for and resolve dependencies.
-   */
+  /** Extracts maven coordinates from a comma-delimited string
+    * @param defaultIvyUserDir
+    *   The default user path for Ivy
+    * @return
+    *   A ChainResolver used by Ivy to search for and resolve dependencies.
+    */
   def createRepoResolvers(defaultIvyUserDir: File): ChainResolver = {
     // We need a chain resolver if we want to check multiple repositories
     val cr = new ChainResolver
@@ -1237,15 +1373,27 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     localM2.setName("local-m2-cache")
     cr.add(localM2)
 
-    val localIvy = new FileSystemResolver
+    val localIvy     = new FileSystemResolver
     val localIvyRoot = new File(defaultIvyUserDir, "local")
     localIvy.setLocal(true)
     localIvy.setRepository(new FileRepository(localIvyRoot))
-    val ivyPattern = Seq(localIvyRoot.getAbsolutePath, "[organisation]", "[module]", "[revision]",
-      "ivys", "ivy.xml").mkString(File.separator)
+    val ivyPattern = Seq(
+      localIvyRoot.getAbsolutePath,
+      "[organisation]",
+      "[module]",
+      "[revision]",
+      "ivys",
+      "ivy.xml"
+    ).mkString(File.separator)
     localIvy.addIvyPattern(ivyPattern)
-    val artifactPattern = Seq(localIvyRoot.getAbsolutePath, "[organisation]", "[module]",
-      "[revision]", "[type]s", "[artifact](-[classifier]).[ext]").mkString(File.separator)
+    val artifactPattern = Seq(
+      localIvyRoot.getAbsolutePath,
+      "[organisation]",
+      "[module]",
+      "[revision]",
+      "[type]s",
+      "[artifact](-[classifier]).[ext]"
+    ).mkString(File.separator)
     localIvy.addArtifactPattern(artifactPattern)
     localIvy.setName("local-ivy-cache")
     cr.add(localIvy)
@@ -1254,7 +1402,7 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     val br: IBiblioResolver = new IBiblioResolver
     br.setM2compatible(true)
     br.setUsepoms(true)
-    val defaultInternalRepo : Option[String] = sys.env.get("DEFAULT_ARTIFACT_REPOSITORY")
+    val defaultInternalRepo: Option[String] = sys.env.get("DEFAULT_ARTIFACT_REPOSITORY")
     br.setRoot(defaultInternalRepo.getOrElse("https://repo1.maven.org/maven2/"))
     br.setName("central")
     cr.add(br)
@@ -1262,48 +1410,53 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     val sp: IBiblioResolver = new IBiblioResolver
     sp.setM2compatible(true)
     sp.setUsepoms(true)
-    sp.setRoot(sys.env.getOrElse(
-      "DEFAULT_ARTIFACT_REPOSITORY", "https://repos.spark-packages.org/"))
+    sp.setRoot(
+      sys.env.getOrElse("DEFAULT_ARTIFACT_REPOSITORY", "https://repos.spark-packages.org/")
+    )
     sp.setName("spark-packages")
     cr.add(sp)
     cr
   }
 
-  /**
-   * Output a list of paths for the downloaded jars to be added to the classpath
-   * (will append to jars in SparkSubmit).
-   * @param artifacts Sequence of dependencies that were resolved and retrieved
-   * @param cacheDirectory Directory where jars are cached
-   * @return List of paths for the dependencies
-   */
-  def resolveDependencyPaths(
-      artifacts: Array[AnyRef],
-      cacheDirectory: File): Seq[String] = {
-    artifacts.map(_.asInstanceOf[Artifact]).filter { artifactInfo =>
-      if (artifactInfo.getExt == "jar") {
-        true
-      } else {
-        logInfo(s"Skipping non-jar dependency ${artifactInfo.getId}")
-        false
+  /** Output a list of paths for the downloaded jars to be added to the classpath (will append to
+    * jars in SparkSubmit).
+    * @param artifacts
+    *   Sequence of dependencies that were resolved and retrieved
+    * @param cacheDirectory
+    *   Directory where jars are cached
+    * @return
+    *   List of paths for the dependencies
+    */
+  def resolveDependencyPaths(artifacts: Array[AnyRef], cacheDirectory: File): Seq[String] = {
+    artifacts
+      .map(_.asInstanceOf[Artifact])
+      .filter { artifactInfo =>
+        if (artifactInfo.getExt == "jar") {
+          true
+        } else {
+          logInfo(s"Skipping non-jar dependency ${artifactInfo.getId}")
+          false
+        }
       }
-    }.map { artifactInfo =>
-      val artifact = artifactInfo.getModuleRevisionId
-      val extraAttrs = artifactInfo.getExtraAttributes
-      val classifier = if (extraAttrs.containsKey("classifier")) {
-        "-" + extraAttrs.get("classifier")
-      } else {
-        ""
+      .map { artifactInfo =>
+        val artifact   = artifactInfo.getModuleRevisionId
+        val extraAttrs = artifactInfo.getExtraAttributes
+        val classifier = if (extraAttrs.containsKey("classifier")) {
+          "-" + extraAttrs.get("classifier")
+        } else {
+          ""
+        }
+        cacheDirectory.getAbsolutePath + File.separator +
+          s"${artifact.getOrganisation}_${artifact.getName}-${artifact.getRevision}$classifier.jar"
       }
-      cacheDirectory.getAbsolutePath + File.separator +
-        s"${artifact.getOrganisation}_${artifact.getName}-${artifact.getRevision}$classifier.jar"
-    }
   }
 
   /** Adds the given maven coordinates to Ivy's module descriptor. */
   def addDependenciesToIvy(
       md: DefaultModuleDescriptor,
       artifacts: Seq[MavenCoordinate],
-      ivyConfName: String): Unit = {
+      ivyConfName: String
+  ): Unit = {
     artifacts.foreach { mvn =>
       val ri = ModuleRevisionId.newInstance(mvn.groupId, mvn.artifactId, mvn.version)
       val dd = new DefaultDependencyDescriptor(ri, false, false)
@@ -1319,22 +1472,26 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
   def addExclusionRules(
       ivySettings: IvySettings,
       ivyConfName: String,
-      md: DefaultModuleDescriptor): Unit = {
+      md: DefaultModuleDescriptor
+  ): Unit = {
     // Add scala exclusion rule
     md.addExcludeRule(createExclusion("*:scala-library:*", ivySettings, ivyConfName))
 
     IVY_DEFAULT_EXCLUDES.foreach { comp =>
-      md.addExcludeRule(createExclusion(s"org.apache.spark:spark-$comp*:*", ivySettings,
-        ivyConfName))
+      md.addExcludeRule(
+        createExclusion(s"org.apache.spark:spark-$comp*:*", ivySettings, ivyConfName)
+      )
     }
   }
 
-  /**
-   * Build Ivy Settings using options with default resolvers
-   * @param remoteRepos Comma-delimited string of remote repositories other than maven central
-   * @param ivyPath The path to the local ivy repository
-   * @return An IvySettings object
-   */
+  /** Build Ivy Settings using options with default resolvers
+    * @param remoteRepos
+    *   Comma-delimited string of remote repositories other than maven central
+    * @param ivyPath
+    *   The path to the local ivy repository
+    * @return
+    *   An IvySettings object
+    */
   def buildIvySettings(remoteRepos: Option[String], ivyPath: Option[String]): IvySettings = {
     val ivySettings: IvySettings = new IvySettings
     processIvyPathArg(ivySettings, ivyPath)
@@ -1355,22 +1512,29 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     ivySettings
   }
 
-  /**
-   * Load Ivy settings from a given filename, using supplied resolvers
-   * @param settingsFile Path to Ivy settings file
-   * @param remoteRepos Comma-delimited string of remote repositories other than maven central
-   * @param ivyPath The path to the local ivy repository
-   * @return An IvySettings object
-   */
+  /** Load Ivy settings from a given filename, using supplied resolvers
+    * @param settingsFile
+    *   Path to Ivy settings file
+    * @param remoteRepos
+    *   Comma-delimited string of remote repositories other than maven central
+    * @param ivyPath
+    *   The path to the local ivy repository
+    * @return
+    *   An IvySettings object
+    */
   def loadIvySettings(
       settingsFile: String,
       remoteRepos: Option[String],
-      ivyPath: Option[String]): IvySettings = {
+      ivyPath: Option[String]
+  ): IvySettings = {
     val uri = new URI(settingsFile)
     val file = Option(uri.getScheme).getOrElse("file") match {
       case "file" => new File(uri.getPath)
-      case scheme => throw new IllegalArgumentException(s"Scheme $scheme not supported in " +
-        JAR_IVY_SETTING_PATH.key)
+      case scheme =>
+        throw new IllegalArgumentException(
+          s"Scheme $scheme not supported in " +
+            JAR_IVY_SETTING_PATH.key
+        )
     }
     require(file.exists(), s"Ivy settings file $file does not exist")
     require(file.isFile(), s"Ivy settings file $file is not a normal file")
@@ -1413,7 +1577,7 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
         cr.add(brr)
         // scalastyle:off println
         printStream.println(s"$repo added as a remote repository with the name: ${brr.getName}")
-        // scalastyle:on println
+      // scalastyle:on println
       }
 
       ivySettings.addResolver(cr)
@@ -1425,22 +1589,25 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
   def getModuleDescriptor: DefaultModuleDescriptor = DefaultModuleDescriptor.newDefaultInstance(
     // Include UUID in module name, so multiple clients resolving maven coordinate at the same time
     // do not modify the same resolution file concurrently.
-    ModuleRevisionId.newInstance("org.apache.spark",
+    ModuleRevisionId.newInstance(
+      "org.apache.spark",
       s"spark-submit-parent-${UUID.randomUUID.toString}",
-      "1.0"))
+      "1.0"
+    )
+  )
 
-  /**
-   * Clear ivy resolution from current launch. The resolution file is usually at
-   * ~/.ivy2/org.apache.spark-spark-submit-parent-$UUID-default.xml,
-   * ~/.ivy2/resolved-org.apache.spark-spark-submit-parent-$UUID-1.0.xml, and
-   * ~/.ivy2/resolved-org.apache.spark-spark-submit-parent-$UUID-1.0.properties.
-   * Since each launch will have its own resolution files created, delete them after
-   * each resolution to prevent accumulation of these files in the ivy cache dir.
-   */
+  /** Clear ivy resolution from current launch. The resolution file is usually at
+    * ~/.ivy2/org.apache.spark-spark-submit-parent-$UUID-default.xml,
+    * ~/.ivy2/resolved-org.apache.spark-spark-submit-parent-$UUID-1.0.xml, and
+    * ~/.ivy2/resolved-org.apache.spark-spark-submit-parent-$UUID-1.0.properties. Since each launch
+    * will have its own resolution files created, delete them after each resolution to prevent
+    * accumulation of these files in the ivy cache dir.
+    */
   private def clearIvyResolutionFiles(
       mdId: ModuleRevisionId,
       ivySettings: IvySettings,
-      ivyConfName: String): Unit = {
+      ivyConfName: String
+  ): Unit = {
     val currentResolutionFiles = Seq(
       s"${mdId.getOrganisation}-${mdId.getName}-$ivyConfName.xml",
       s"resolved-${mdId.getOrganisation}-${mdId.getName}-${mdId.getRevision}.xml",
@@ -1451,21 +1618,25 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
     }
   }
 
-  /**
-   * Resolves any dependencies that were supplied through maven coordinates
-   * @param coordinates Comma-delimited string of maven coordinates
-   * @param ivySettings An IvySettings containing resolvers to use
-   * @param transitive Whether resolving transitive dependencies, default is true
-   * @param exclusions Exclusions to apply when resolving transitive dependencies
-   * @return Seq of path to the jars of the given maven artifacts including their
-   *         transitive dependencies
-   */
+  /** Resolves any dependencies that were supplied through maven coordinates
+    * @param coordinates
+    *   Comma-delimited string of maven coordinates
+    * @param ivySettings
+    *   An IvySettings containing resolvers to use
+    * @param transitive
+    *   Whether resolving transitive dependencies, default is true
+    * @param exclusions
+    *   Exclusions to apply when resolving transitive dependencies
+    * @return
+    *   Seq of path to the jars of the given maven artifacts including their transitive dependencies
+    */
   def resolveMavenCoordinates(
       coordinates: String,
       ivySettings: IvySettings,
       transitive: Boolean,
       exclusions: Seq[String] = Nil,
-      isTest: Boolean = false): Seq[String] = {
+      isTest: Boolean = false
+  ): Seq[String] = {
     if (coordinates == null || coordinates.trim.isEmpty) {
       Nil
     } else {
@@ -1486,7 +1657,8 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
         val packagesDirectory: File = new File(ivySettings.getDefaultIvyUserDir, "jars")
         // scalastyle:off println
         printStream.println(
-          s"Ivy Default Cache set to: ${ivySettings.getDefaultCache.getAbsolutePath}")
+          s"Ivy Default Cache set to: ${ivySettings.getDefaultCache.getAbsolutePath}"
+        )
         printStream.println(s"The jars for the packages stored in: $packagesDirectory")
         // scalastyle:on println
 
@@ -1517,10 +1689,14 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
           throw new RuntimeException(rr.getAllProblemMessages.toString)
         }
         // retrieve all resolved dependencies
-        retrieveOptions.setDestArtifactPattern(packagesDirectory.getAbsolutePath + File.separator +
-          "[organization]_[artifact]-[revision](-[classifier]).[ext]")
-        ivy.retrieve(rr.getModuleDescriptor.getModuleRevisionId,
-          retrieveOptions.setConfs(Array(ivyConfName)))
+        retrieveOptions.setDestArtifactPattern(
+          packagesDirectory.getAbsolutePath + File.separator +
+            "[organization]_[artifact]-[revision](-[classifier]).[ext]"
+        )
+        ivy.retrieve(
+          rr.getModuleDescriptor.getModuleRevisionId,
+          retrieveOptions.setConfs(Array(ivyConfName))
+        )
         resolveDependencyPaths(rr.getArtifacts.toArray, packagesDirectory)
       } finally {
         System.setOut(sysOut)
@@ -1532,9 +1708,10 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
   private[deploy] def createExclusion(
       coords: String,
       ivySettings: IvySettings,
-      ivyConfName: String): ExcludeRule = {
-    val c = extractMavenCoordinates(coords)(0)
-    val id = new ArtifactId(new ModuleId(c.groupId, c.artifactId), "*", "*", "*")
+      ivyConfName: String
+  ): ExcludeRule = {
+    val c    = extractMavenCoordinates(coords)(0)
+    val id   = new ArtifactId(new ModuleId(c.groupId, c.artifactId), "*", "*", "*")
     val rule = new DefaultExcludeRule(id, ivySettings.getMatcher("glob"), null)
     rule.addConfiguration(ivyConfName)
     rule
@@ -1543,37 +1720,42 @@ private[spark] object ArmadaSparkSubmitUtils extends Logging {
   def parseSparkConfProperty(pair: String): (String, String) = {
     pair.split("=", 2).toSeq match {
       case Seq(k, v) => (k, v)
-      case _ => throw new SparkException(s"Spark config without '=': $pair")
+      case _         => throw new SparkException(s"Spark config without '=': $pair")
     }
   }
 
   private[deploy] def getSubmitOperations(master: String): SparkSubmitOperation = {
     val loader = Utils.getContextOrSparkClassLoader
     val serviceLoaders =
-      ServiceLoader.load(classOf[SparkSubmitOperation], loader)
+      ServiceLoader
+        .load(classOf[SparkSubmitOperation], loader)
         .asScala
         .filter(_.supports(master))
 
     serviceLoaders.size match {
       case x if x > 1 =>
-        throw new SparkException(s"Multiple($x) external SparkSubmitOperations " +
-          s"clients registered for master url ${master}.")
+        throw new SparkException(
+          s"Multiple($x) external SparkSubmitOperations " +
+            s"clients registered for master url ${master}."
+        )
       case 1 => serviceLoaders.headOption.get
       case _ =>
-        throw new IllegalArgumentException(s"No external SparkSubmitOperations " +
-          s"clients found for master url: '$master'")
+        throw new IllegalArgumentException(
+          s"No external SparkSubmitOperations " +
+            s"clients found for master url: '$master'"
+        )
     }
   }
 }
 
-/**
- * Provides an indirection layer for passing arguments as system properties or flags to
- * the user's driver program or to downstream launcher tools.
- */
+/** Provides an indirection layer for passing arguments as system properties or flags to the user's
+  * driver program or to downstream launcher tools.
+  */
 private case class OptionAssigner(
     value: String,
     clusterManager: Int,
     deployMode: Int,
     clOption: String = null,
     confKey: String = null,
-    mergeFn: Option[(String, String) => String] = None)
+    mergeFn: Option[(String, String) => String] = None
+)

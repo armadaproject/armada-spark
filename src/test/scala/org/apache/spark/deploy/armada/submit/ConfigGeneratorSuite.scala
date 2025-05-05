@@ -24,13 +24,13 @@ import org.scalatest.funsuite.AnyFunSuite
 import java.nio.file.{Files, Path, StandardOpenOption}
 
 class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
-  private val sparkConf = new SparkConf(false)
-  private var tempDir: Path = _
+  private val sparkConf           = new SparkConf(false)
+  private var tempDir: Path       = _
   private var sparkConfFile: Path = _
-  private var confDir: Path = _
-  private val prefix = "testPrefix"
+  private var confDir: Path       = _
+  private val prefix              = "testPrefix"
   private val configFileContents =
-      """
+    """
         |spark.app.name TestApp
         |spark.master localhost
         |""".stripMargin
@@ -50,14 +50,14 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
   }
   test("Test annotations") {
     val expectedString = s"Map($prefix/spark-defaults.conf -> $configFileContents)"
-    val cg = new ConfigGenerator(prefix, sparkConf)
-    val ann = cg.getAnnotations
+    val cg             = new ConfigGenerator(prefix, sparkConf)
+    val ann            = cg.getAnnotations
     assert(ann.toString == expectedString)
   }
 
   test("Test volumes") {
     val expectedString =
-    s"""|name: "$prefix-volume"
+      s"""|name: "$prefix-volume"
         |volumeSource {
         |  downwardAPI {
         |    items {
@@ -70,19 +70,19 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
         |}
         |""".stripMargin
 
-    val cg = new ConfigGenerator(prefix, sparkConf)
+    val cg  = new ConfigGenerator(prefix, sparkConf)
     val vol = cg.getVolumes
     assert(vol.head.toProtoString == expectedString)
   }
 
   test("Test volume mounts") {
     val expectedString =
-    s"""|name: "$prefix-volume"
+      s"""|name: "$prefix-volume"
         |readOnly: true
         |mountPath: "${ConfigGenerator.REMOTE_CONF_DIR_NAME}"
         |""".stripMargin
 
-    val cg = new ConfigGenerator(prefix, sparkConf)
+    val cg        = new ConfigGenerator(prefix, sparkConf)
     val volMounts = cg.getVolumeMounts
     assert(volMounts.head.toProtoString == expectedString)
   }
@@ -93,6 +93,5 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
     Files.deleteIfExists(confDir)
     Files.deleteIfExists(tempDir)
   }
-
 
 }
