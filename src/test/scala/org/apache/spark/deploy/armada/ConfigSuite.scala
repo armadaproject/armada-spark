@@ -21,9 +21,18 @@ package org.apache.spark.deploy.armada
 import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import Config._
+import org.apache.spark.deploy.armada.K8sLabelValidator.{isValidKey, isValidValue}
+import org.scalatest.Inspectors.forAll
+import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import org.scalatest.prop.Tables.Table
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.prop.TableDrivenPropertyChecks
+import org.scalatest.matchers.should.Matchers
 
 class ConfigSuite
- extends AnyFunSuite {
+ extends AnyFunSuite
+   with TableDrivenPropertyChecks
+   with Matchers {
   test("testClusterSelectorsValidator") {
     case class TestCase(
       testSelectors: String,
@@ -63,5 +72,66 @@ class ConfigSuite
   test("defaultClusterSelectors") {
     val conf = new SparkConf(true)
     assert(conf.get(ARMADA_CLUSTER_SELECTORS) == DEFAULT_CLUSTER_SELECTORS)
+  }
+
+  test("commaSeparatedLabelsToMap") {
+    val testCases = Table(
+      // columns
+      ("labels",      "expected"),
+      // rows
+      ("",            Map.empty[String, String]),
+      ("a=1",         Map("a" -> "1")),
+      ("a=1,b=2",     Map("a" -> "1", "b" -> "2")),
+      ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3"))
+    )
+
+    forAll(testCases) { (labels , expected) =>
+      commaSeparatedLabelsToMap(labels) shouldEqual expected
+    }
+  }
+
+  test("K8sLabelValidator.isValidKey") {
+    val cases = Table(
+      ("key",                              "valid"),
+      ("",                                 false),
+      ("app",                              true),
+      ("my-domain.io/app",                 true),
+      ("example.com/label-name",           true),
+      ("example_1.com/label-name",         true),
+      ("a.b/a.s",                          true),
+      ("a" * 254 + "/label-name",          false),
+      ("_invalid",                         false),
+      ("invalid-",                         false),
+      ("/no-prefix-name",                  false),
+      ("toolong" * 50,                     false),
+      (null.asInstanceOf[String],          false)
+    )
+
+    forAll(cases) { (key, valid) =>
+      withClue(s"isValidKey('$key'): ") {
+        isValidKey(key) shouldBe valid
+      }
+    }
+  }
+
+  test("K8sLabelValidator.isValidValue") {
+    val cases = Table(
+      ("value",                "valid"),
+      ("",                     true),
+      ("frontend",             true),
+      ("a",                    true),
+      ("invalid value",        false),
+      ("-leading",             false),
+      ("trailing-",            false),
+      ("a" * 63,               true),
+      ("a" * 64,               false),
+      (null.asInstanceOf[String], false)
+    )
+
+    forAll(cases) { (value, valid) =>
+      withClue(s"isValidValue('$value'): ") {
+        isValidValue(value) shouldBe valid
+      }
+    }
   }
 }

@@ -38,8 +38,9 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
   ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_LOOKOUTURL, DEFAULT_CLUSTER_SELECTORS,
-  DRIVER_SERVICE_NAME_PREFIX, transformSelectorsToMap,
-  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
+  DRIVER_SERVICE_NAME_PREFIX, commaSeparatedLabelsToMap,
+  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL, ARMADA_SPARK_GLOBAL_LABELS,
+  ARMADA_SPARK_DRIVER_LABELS, ARMADA_SPARK_EXECUTOR_LABELS}
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
@@ -402,7 +403,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _ => Seq()
     }
 
-
     val confSeq = conf.getAll.flatMap {
       case(k, v) => Seq("--conf", s"$k=$v")
     }
@@ -449,17 +449,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val gangAnnotations = GetGangAnnotations("", 1 + numExecutors,
       conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
 
+    val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_GLOBAL_LABELS))
+    val executorLabels = globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_EXECUTOR_LABELS))
     val executorJobs = for (container <- executorContainers) yield api.submit
       .JobSubmitRequestItem()
       .withPriority(0)
       .withNamespace("default")
+      .withLabels(executorLabels)
       .withPodSpec(
         PodSpec()
         .withTerminationGracePeriodSeconds(0)
         .withRestartPolicy("Never")
         .withContainers(Seq(container))
         .withVolumes(configGenerator.getVolumes)
-        .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
+        .withNodeSelector(commaSeparatedLabelsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
       )
       .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
 
@@ -468,12 +471,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withRestartPolicy("Never")
       .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
-      .withNodeSelector(transformSelectorsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
+      .withNodeSelector(commaSeparatedLabelsToMap(conf.get(ARMADA_CLUSTER_SELECTORS)))
 
+    val driverLabels = globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_DRIVER_LABELS))
     val driverJob = api.submit
       .JobSubmitRequestItem()
       .withPriority(0)
       .withNamespace("default")
+      .withLabels(driverLabels)
       .withPodSpec(podSpec)
       .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
       .withServices(Seq(
