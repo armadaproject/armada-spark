@@ -52,6 +52,8 @@ class ConfigSuite
       ("armada=_armada", false, "Selector values must start with an alphanumeric character."),
       ("armada=armada_", false, "Selector values must end with an alphanumeric character."),
       ("#@armada-spark=true,spark-cluster-name=spark-cluster-001", false, "Illegal characters: # @"),
+      ("armada-spark=false,a==2", false, "Double equal sign"),
+      ("armada-spark=false,a=b=2", false, "Two equal signs in label"),
       ("a" * 64 + "=b", false, "Selector names must be 63 characters or less"),
       ("armada=" + ("b" * 64), false, "Selector values must be 63 characters or less"),
     )
@@ -77,6 +79,7 @@ class ConfigSuite
       ("a=1",         Map("a" -> "1")),
       ("a=1,b=2",     Map("a" -> "1", "b" -> "2")),
       ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3")),
+      ("a=1,,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3")),
       (" a=1,b= 2, c = 3 ", Map("a" -> "1", "b" -> "2", "c" -> "3"))
     )
 
