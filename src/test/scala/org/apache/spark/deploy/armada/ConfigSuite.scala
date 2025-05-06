@@ -76,7 +76,8 @@ class ConfigSuite
       ("",            Map.empty[String, String]),
       ("a=1",         Map("a" -> "1")),
       ("a=1,b=2",     Map("a" -> "1", "b" -> "2")),
-      ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3"))
+      ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3")),
+      (" a=1,b= 2, c = 3 ", Map("a" -> "1", "b" -> "2", "c" -> "3"))
     )
 
     forAll(testCases) { (labels , expected) =>

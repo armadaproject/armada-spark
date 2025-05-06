@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
 import java.util.regex.Pattern
+import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
 private[spark] object Config {
@@ -64,26 +65,29 @@ private[spark] object Config {
     labelSelectors.findPrefixMatchOf(selectors).isDefined
   }
 
+  private def parseCommaSeparatedK8sLabels(str: String): Seq[Try[(String, String)]] = {
+    str.trim.split(",").map(_.trim)
+      .filter(_.nonEmpty)
+      .map { entry =>
+        entry.trim.split("=", 2).map(_.trim) match {
+          case Array(key, value) if K8sLabelValidator.isValidKey(key) && K8sLabelValidator.isValidValue(value) =>
+            Success(key -> value)
+          case _ =>
+            Failure(new IllegalArgumentException(
+              s"Invalid selector format: '$entry' (expected key=value)"
+            ))
+        }
+      }
+  }
+
   /**
    * Converts a comma separated list of key=value pairs into a Map.
+   *
    * @param str The string to convert.
    * @return A Map of the key=value pairs.
    */
   def commaSeparatedLabelsToMap(str: String): Map[String, String] = {
-    val s = str.trim
-    if (s.isEmpty) Map.empty
-    else {
-      s.split(",").map(_.trim).map { entry =>
-        entry.split("=", 2) match {
-          case Array(key, value) if key.nonEmpty && value.nonEmpty =>
-            key -> value
-          case _ =>
-            throw new IllegalArgumentException(
-              s"Invalid selector format: '$entry' (expected key=value)"
-            )
-        }
-      }.toMap
-    }
+    parseCommaSeparatedK8sLabels(str).map(_.get).toMap
   }
 
   val DEFAULT_CLUSTER_SELECTORS = ""
@@ -97,6 +101,7 @@ private[spark] object Config {
       .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
 
   private[armada] val singleLabelOrNone: Regex = s"^($label)?$$".r
+
   private[armada] def singleLabelValidator(l: CharSequence): Boolean = {
     singleLabelOrNone.findPrefixMatchOf(l).isDefined
   }
@@ -150,20 +155,7 @@ private[spark] object Config {
       .createWithDefaultString("")
 
   private def k8sLabelListValidator(labelList: String): Boolean = {
-    // empty is OK
-    val s = labelList.trim
-    if (s.isEmpty) true
-    else {
-      // every entry must be key=value, and both key & value pass the validator
-      s.split(",").forall { entry =>
-        entry.split("=", 2) match {
-          case Array(key, value) =>
-            K8sLabelValidator.isValidKey(key) && K8sLabelValidator.isValidValue(value)
-          case _ =>
-            false
-        }
-      }
-    }
+    parseCommaSeparatedK8sLabels(labelList).forall(_.isSuccess)
   }
 }
 
