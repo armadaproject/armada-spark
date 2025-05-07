@@ -17,7 +17,8 @@
 package org.apache.spark.deploy.armada
 
 import java.util.concurrent.TimeUnit
-import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry, DRIVER_CORES, OptionalConfigEntry}
+import org.apache.spark.network.util.ByteUnit
 
 import java.util.regex.Pattern
 import scala.util.{Failure, Success, Try}
@@ -157,6 +158,170 @@ private[spark] object Config {
   private def k8sLabelListValidator(labelList: String): Boolean = {
     parseCommaSeparatedK8sLabels(labelList).forall(_.isSuccess)
   }
+
+  val ARMADA_QUEUE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.queue")
+      .doc("The Armada queue that will be used for running the driver and executor pods.")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefault("default")
+
+  val DRIVER_JOB_SET_ID: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.job.set.id")
+      .doc("The Armada job set id that will be used for running the driver pods.")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefault("Driver-Job-Set")
+
+  val EXECUTOR_JOB_SET_ID: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.exutor.job.set.id")
+      .doc("The Armada job set id that will be used for running the executor pods.")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefault("Executor-Job-Set")
+
+  val ARMADA_NAMESPACE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.namespace")
+      .doc("The namespace that will be used for running the driver and executor pods.")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefault("default")
+
+  val ARMADA_REMOTE_MASTER: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.remote.master")
+      .doc("The URL for the remote Armada master.")
+      .version("1.0.0")
+      .stringConf
+      .createOptional
+
+  val CONTAINER_IMAGE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.container.image")
+      .doc("Container image to use for Spark containers. Individual container types " +
+        "(e.g. driver or executor) can also be configured to use different images if desired, " +
+        "by setting the container type-specific image name.")
+      .version("1.0.0")
+      .stringConf
+      .createOptional
+
+  val DRIVER_CONTAINER_IMAGE: ConfigEntry[Option[String]] =
+    ConfigBuilder("spark.armada.driver.container.image")
+      .doc("Container image to use for the driver.")
+      .version("1.0.0")
+      .fallbackConf(CONTAINER_IMAGE)
+
+  val EXECUTOR_CONTAINER_IMAGE: ConfigEntry[Option[String]] =
+    ConfigBuilder("spark.armada.executor.container.image")
+      .doc("Container image to use for the executors.")
+      .version("1.0.0")
+      .fallbackConf(CONTAINER_IMAGE)
+
+  val CONTAINER_IMAGE_PULL_POLICY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.container.image.pullPolicy")
+      .doc("Armada image pull policy. Valid values are Always, Never, and IfNotPresent.")
+      .version("1.0.0")
+      .stringConf
+      .checkValues(Set("Always", "Never", "IfNotPresent"))
+      .createWithDefault("IfNotPresent")
+
+  val ARMADA_DRIVER_POD_NAME: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.pod.name")
+      .doc("Name of the driver pod.")
+      .version("1.0.0")
+      .stringConf
+      .createOptional
+
+  val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
+  val DEFAULT_SPARK_EXECUTOR_CORES = "1"
+  val DEFAULT_CORES = "100m"
+  val ARMADA_DRIVER_LIMIT_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.limit.cores")
+      .doc("Specify the hard cpu limit for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+  val ARMADA_DRIVER_REQUEST_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.request.cores")
+      .doc("Specify the cpu request for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+
+  val ARMADA_EXECUTOR_LIMIT_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.limit.cores")
+      .doc("Specify the hard cpu limit for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+
+  val ARMADA_EXECUTOR_REQUEST_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.request.cores")
+      .doc("Specify the cpu request for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+
+  val DEFAULT_MEM = "1Gi"
+  val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
+  val ARMADA_DRIVER_LIMIT_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.limit.memory")
+      .doc("Specify the hard memory limit for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_DRIVER_REQUEST_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.request.memory")
+      .doc("Specify the memory request for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_EXECUTOR_LIMIT_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.limit.memory")
+      .doc("Specify the hard memory limit for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_EXECUTOR_REQUEST_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.request.memory")
+      .doc("Specify the memory request for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val DEFAULT_STORAGE = "512Mi"
+  val ARMADA_DRIVER_LIMIT_EPHEMERAL_STORAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.limit.ephemeral.storage")
+      .doc("Specify the hard ephemeral storage limit for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_STORAGE)
+
+  val ARMADA_DRIVER_REQUEST_EPHEMERAL_STORAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.request.ephemeral.storage")
+      .doc("Specify the ephemeral storage request for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_STORAGE)
+
+  val ARMADA_EXECUTOR_LIMIT_EPHEMERAL_STORAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.limit.ephemeral.storage")
+      .doc("Specify the hard ephemeral storage limit for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_STORAGE)
+
+  val ARMADA_EXECUTOR_REQUEST_EPHEMERAL_STORAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.request.ephemeral.storage")
+      .doc("Specify the ephemeral storage request for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_STORAGE)
 }
 
 object K8sLabelValidator {
