@@ -109,7 +109,7 @@ private[spark] class ArmadaClusterManager extends ExternalClusterManager with Lo
       sc.conf, kubernetesClient, snapshotsStore, eventsPollingExecutor)
     */
 
-    new ArmadaClusterSchedulerBackend(
+    new ArmadaClusterManagerBackend(
       scheduler.asInstanceOf[TaskSchedulerImpl],
       sc,
       schedulerExecutorService,

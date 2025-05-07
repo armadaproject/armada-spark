@@ -27,7 +27,7 @@ import org.mockito.{Mock, MockitoAnnotations}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
-class ArmadaClusterSchedulerBackendSuite
+class ArmadaClusterManagerBackendSuite
 
     extends AnyFunSuite with BeforeAndAfter {
 
@@ -57,7 +57,7 @@ class ArmadaClusterSchedulerBackendSuite
   }
   def runTrackerTest(): Unit = {
     val clock = new ManualClock()
-    val backend = new ArmadaClusterSchedulerBackend(
+    val backend = new ArmadaClusterManagerBackend(
       taskSchedulerImpl, sc, null, "master"
     )
     val executorTracker = new backend.ExecutorTracker(clock, 2)

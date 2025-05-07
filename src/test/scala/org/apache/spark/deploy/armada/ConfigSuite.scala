@@ -22,10 +22,6 @@ import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import Config._
 import org.apache.spark.deploy.armada.K8sLabelValidator.{isValidKey, isValidValue}
-import org.scalatest.Inspectors.forAll
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import org.scalatest.prop.Tables.Table
-import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.matchers.should.Matchers
 
@@ -34,38 +30,38 @@ class ConfigSuite
    with TableDrivenPropertyChecks
    with Matchers {
   test("testClusterSelectorsValidator") {
-    case class TestCase(
-      testSelectors: String,
-      expectedValid: Boolean,
-      name: String)
-
-    val testCases = List[TestCase](
+    val testCases = Table(
+      // columns
+      ("testSelectors", "expectedValid", "name"),
+      // rows
       // Valid cases
-      TestCase("", true, "empty case"),
-      TestCase("a=1", true, "One character long name and value"),
-      TestCase("armada-spark=true", true, "One valid selector"),
-      TestCase("armada-spark=true,spark-cluster-name=001", true, "Two valid selectors"),
-      TestCase("armada-spark=false,name=spark-cluster-001,a=1,b=2,c=3", true, "Several valid selectors"),
-      TestCase("a" * 63 + "=" + "b" * 63, true, "Selector name & value length limit of 63"),
-      TestCase("a" * 30 + "-._" + "b" * 30 + "=b", true,
-        "Selector name length limit of 63 with valid non-alphanumeric chars"),
+      ("", true, "empty case"),
+      ("a=1", true, "One character long name and value"),
+      ("armada-spark=true", true, "One valid selector"),
+      ("armada-spark=true,spark-cluster-name=001", true, "Two valid selectors"),
+      ("armada-spark=false,name=spark-cluster-001,a=1,b=2,c=3", true, "Several valid selectors"),
+      ("a" * 63 + "=" + "b" * 63, true, "Selector name & value length limit of 63"),
+      ("a" * 30 + "-._" + "b" * 30 + "=b", true, "Selector name length limit of 63 with valid non-alphanumeric chars"),
       // Invalid cases
-      TestCase("a", false, "key but no value"),
-      TestCase("a=", false, "key & = but no value"),
-      TestCase("=b", false, "value & = but no key"),
-      TestCase("=", false, "just = and no key or value"),
-      TestCase("_armada=a", false, "Selector labels must start with an alphanumeric character."),
-      TestCase("armada_=b", false, "Selector labels must end with an alphanumeric character."),
-      TestCase("armada=_armada", false, "Selector values must start with an alphanumeric character."),
-      TestCase("armada=armada_", false, "Selector values must end with an alphanumeric character."),
-      TestCase("#@armada-spark=true,spark-cluster-name=spark-cluster-001", false, "Illegal characters: # @"),
-      TestCase("a" * 64 + "=b", false, "Selector names must be 63 characters or less"),
-      TestCase("armada=" + ("b" * 64), false, "Selector values must be 63 characters or less"),
+      ("a", false, "key but no value"),
+      ("a=", false, "key & = but no value"),
+      ("=b", false, "value & = but no key"),
+      ("=", false, "just = and no key or value"),
+      ("_armada=a", false, "Selector labels must start with an alphanumeric character."),
+      ("armada_=b", false, "Selector labels must end with an alphanumeric character."),
+      ("armada=_armada", false, "Selector values must start with an alphanumeric character."),
+      ("armada=armada_", false, "Selector values must end with an alphanumeric character."),
+      ("#@armada-spark=true,spark-cluster-name=spark-cluster-001", false, "Illegal characters: # @"),
+      ("armada-spark=false,a==2", false, "Double equal sign"),
+      ("armada-spark=false,a=b=2", false, "Two equal signs in label"),
+      ("a" * 64 + "=b", false, "Selector names must be 63 characters or less"),
+      ("armada=" + ("b" * 64), false, "Selector values must be 63 characters or less"),
     )
 
-    for (tc <- testCases) {
-        val result = Config.selectorsValidator(tc.testSelectors)
-        assert(result == tc.expectedValid, s"test name: '${tc.name}', test value: '${tc.testSelectors}'")
+    forAll(testCases) { (testSelectors, expectedValid, name) =>
+      withClue(name) {
+        assert(Config.selectorsValidator(testSelectors) == expectedValid)
+      }
     }
   }
 
@@ -82,7 +78,9 @@ class ConfigSuite
       ("",            Map.empty[String, String]),
       ("a=1",         Map("a" -> "1")),
       ("a=1,b=2",     Map("a" -> "1", "b" -> "2")),
-      ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3"))
+      ("a=1,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3")),
+      ("a=1,,b=2,c=3", Map("a" -> "1", "b" -> "2", "c" -> "3")),
+      (" a=1,b= 2, c = 3 ", Map("a" -> "1", "b" -> "2", "c" -> "3"))
     )
 
     forAll(testCases) { (labels , expected) =>

@@ -15,37 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.spark.deploy.armada.submit
+package org.apache.spark.scheduler.cluster.armada
 
-
+import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.scalatest.funsuite.AnyFunSuite
-import ArmadaUtilsExceptions._
+import org.apache.spark.deploy.armada.submit.ArmadaUtilsExceptions._
 
-class ArmadaUtilSuite
+class ArmadaUtilsSuite
  extends AnyFunSuite {
-  test("parseMasterUrl") {
-    case class TestCase(
-      testUrl: String,
-      expectedHost: String,
-      expectedPort: Int,
-      expectException: Boolean)
+  case class ParseUrlTestCase(
+    testUrl: String,
+    expectedHost: String,
+    expectedPort: Int,
+    expectException: Boolean)
 
-    val testCases = List[TestCase](
-      TestCase("armada://localhost:50051", "localhost", 50051, false),
-      TestCase("armada://malformed:url:ohno", "", 0, true),
-      TestCase("armada://badurl", "", 0, true),
-      TestCase("armada://localhost:badport", "", 0, true)
-    )
+  private val testCases = Seq(
+    ParseUrlTestCase("armada://localhost:50051", "localhost", 50051, false),
+    ParseUrlTestCase("armada://malformed:url:ohno", "", 0, true),
+    ParseUrlTestCase("armada://badurl", "", 0, true),
+    ParseUrlTestCase("armada://localhost:badport", "", 0, true)
+  )
 
-    for (tc <- testCases) {
+  for (tc <- testCases) {
+    test(s"parseMasterUrl ${tc.testUrl}") {
       if (tc.expectException) {
-        var caughtException = try {
-          ArmadaUtils.parseMasterUrl(tc.testUrl)
-          false
-        } catch {
-          case e: MasterUrlParsingException => true
-        } 
-        assert(caughtException)
+        assertThrows[MasterUrlParsingException](ArmadaUtils.parseMasterUrl(tc.testUrl))
       } else { // no exception expected.
         val (host, port) = ArmadaUtils.parseMasterUrl(tc.testUrl)
         assert(tc.expectedHost == host)
