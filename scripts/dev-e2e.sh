@@ -112,6 +112,17 @@ main() {
     fetch-armadactl
   fi
 
+  log "Checking if image $IMAGE_NAME is available ..."
+  img_name=$(echo "$IMAGE_NAME" | awk -F: '{print $1}')
+  img_tag=$(echo "$IMAGE_NAME" | awk -F: '{print $2}')
+  img_match=$(docker images | grep -P "^${img_name}\s*${img_tag}\s+")
+
+  if [ -z "$img_match" ] ; then
+    log "Image $IMAGE_NAME not found in local Docker instance."
+    log "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this"
+    exit 1
+  fi
+
   log "Checking to see if Armada cluster is available ..."
 
   if ! armadactl get queues > $STATUSFILE 2>&1 ; then
@@ -136,7 +147,7 @@ main() {
   log "Creating $TEST_QUEUE queue..."
   armadactl-retry create queue "$TEST_QUEUE"
 
-  log "Loading Docker image spark:$IMAGE_NAME into Armada cluster"
+  log "Loading Docker image $IMAGE_NAME into Armada cluster"
   $AOHOME/bin/tooling/kind load docker-image "$IMAGE_NAME" --name armada
 
   log "Submitting SparkPI job"
@@ -153,7 +164,7 @@ main() {
 
     log "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
-      --json "{\"jobId\":\"$$DRIVER_JOBID\"}" | jq
+      --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq
     for exec_jobid in $EXECUTOR_JOBIDS ; do
       log "Executor Job Spec  $exec_jobid"
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
