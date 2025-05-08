@@ -17,13 +17,9 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import io.armadaproject.armada.ArmadaClient
-import k8s.io.api.core.v1.generated._
-import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
-  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
-  commaSeparatedLabelsToMap, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
-import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
+import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
+  DEFAULT_ARMADA_APP_ID}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -31,7 +27,6 @@ import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import scala.collection.mutable
-import scala.collection.mutable.HashMap
 
 
 
@@ -43,15 +38,12 @@ private[spark] class ArmadaClusterManagerBackend(
     masterURL: String)
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
 
-  // FIXME
-  private val appId = "fake_app_id_FIXME"
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
-  private val gangAnnotations = GangSchedulingAnnotations(None, initialExecutors, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
 
   override def applicationId(): String = {
-    conf.getOption("spark.app.id").getOrElse(appId)
+    conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)
   }
 
   override def start(): Unit = {

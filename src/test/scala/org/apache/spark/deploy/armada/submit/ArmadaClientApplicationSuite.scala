@@ -1,0 +1,302 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.deploy.armada.submit
+
+import k8s.io.api.core.v1.generated.VolumeMount
+import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.Config._
+import org.scalatest.BeforeAndAfter
+import org.scalatest.funsuite.AnyFunSuite
+
+class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
+  var sparkConf = new SparkConf(false)
+  val imageName = "imageName"
+  val sparkMaster = "localhost"
+  val className = "testClass"
+  val driverServiceName = "driverService"
+  val bindAddress = "$(SPARK_DRIVER_BIND_ADDRESS)"
+  val executorID = 0
+  before {
+    sparkConf = new SparkConf(false)
+    sparkConf.set(CONTAINER_IMAGE, imageName)
+  }
+
+  test("Test driver container default values") {
+
+    // Set expected values to defaults
+    val mem = DEFAULT_MEM
+    val storage = DEFAULT_STORAGE
+    val cpu = DEFAULT_CORES
+    sparkConf.set("spark.master", sparkMaster)
+    val defaultValues = Map[String, String](
+      "sparkMaster" -> sparkMaster,
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu)
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getDriverContainer(driverServiceName,
+      ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
+
+    assert(container.getImage == imageName)
+    val driverArgsString = container.args.mkString("\n")
+    assert(driverArgsString == getDriverArgs(defaultValues))
+
+    val driverPortString = container.ports.head.toProtoString
+    assert(driverPortString == getDriverPort)
+
+    val driverEnvString = container.env.map(_.toProtoString).mkString
+    assert(driverEnvString == getDriverEnv)
+
+    val driverResourcesString = container.resources.get.toProtoString
+    assert(driverResourcesString == getResources(defaultValues))
+  }
+
+  test("Test driver container non-default values") {
+
+    // Change expected values from defaults
+    val remoteMaster = "remoteMaster"
+    val mem = "20Gi"
+    val storage = "20Gi"
+    val cpu = "2"
+    val nonDefaultImage = "nonDefaultImage"
+    sparkConf.set(DRIVER_CONTAINER_IMAGE, Some(nonDefaultImage))
+    sparkConf.set(ARMADA_REMOTE_MASTER, remoteMaster)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_MEMORY, mem)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_CORES, cpu)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_MEMORY, mem)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_CORES, cpu)
+    val nonDefaultValues = Map[String, String](
+      "sparkMaster" -> remoteMaster,
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu)
+
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getDriverContainer(driverServiceName,
+      ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
+
+    assert(container.getImage == nonDefaultImage)
+    val driverResourcesString = container.resources.get.toProtoString
+    assert(driverResourcesString == getResources(nonDefaultValues))
+  }
+
+  private def getDriverArgs(valueMap: Map[String, String]) = {
+    s"""|driver
+        |--verbose
+        |--class
+        |$className
+        |--master
+        |${valueMap("sparkMaster")}
+        |--conf
+        |spark.driver.port=7078
+        |--conf
+        |spark.driver.host=$bindAddress
+        |--conf
+        |spark.master=${valueMap("sparkMaster")}
+        |--conf
+        |spark.armada.container.image=$imageName""".stripMargin
+  }
+
+  private def getDriverPort = {
+    s"""|name: "armada-spark"
+        |hostPort: 0
+        |containerPort: 7078
+        |""".stripMargin
+  }
+
+  private def getDriverEnv = {
+    s"""|name: "SPARK_DRIVER_BIND_ADDRESS"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "status.podIP"
+        |  }
+        |}
+        |name: "SPARK_CONF_DIR"
+        |value: "/opt/spark/conf"
+        |name: "EXTERNAL_CLUSTER_SUPPORT_ENABLED"
+        |value: "true"
+        |name: "ARMADA_SPARK_DRIVER_SERVICE_NAME"
+        |value: "$driverServiceName"
+        |""".stripMargin
+
+  }
+  private def getResources(valueMap: Map[String, String]) = {
+    s"""|limits {
+        |  key: "memory"
+        |  value {
+        |    string: "${valueMap("limitMem")}"
+        |  }
+        |}
+        |limits {
+        |  key: "ephemeral-storage"
+        |  value {
+        |    string: "${valueMap("limitStorage")}"
+        |  }
+        |}
+        |limits {
+        |  key: "cpu"
+        |  value {
+        |    string: "${valueMap("limitCPU")}"
+        |  }
+        |}
+        |requests {
+        |  key: "memory"
+        |  value {
+        |    string: "${valueMap("requestMem")}"
+        |  }
+        |}
+        |requests {
+        |  key: "ephemeral-storage"
+        |  value {
+        |    string: "${valueMap("requestStorage")}"
+        |  }
+        |}
+        |requests {
+        |  key: "cpu"
+        |  value {
+        |    string: "${valueMap("requestCPU")}"
+        |  }
+        |}
+        |""".stripMargin
+  }
+
+  test("Test default executor container") {
+
+    // Set expected values to defaults
+    val mem = DEFAULT_MEM
+    val storage = DEFAULT_STORAGE
+    val cpu = DEFAULT_CORES
+    val appId = DEFAULT_ARMADA_APP_ID
+    val envMem = DEFAULT_SPARK_EXECUTOR_MEMORY
+    val envCores = DEFAULT_SPARK_EXECUTOR_CORES
+    val nodeUniformityLabel = "armada-spark"
+    val defaultValues = Map[String, String](
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu,
+      "appId" -> appId,
+      "envMem" -> envMem,
+      "envCores" -> envCores,
+      "nodeUniformityLabel" -> nodeUniformityLabel)
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+
+    assert(container.getImage == imageName)
+    val executorEnvString = container.env.map(_.toProtoString).mkString
+    assert(executorEnvString == getExecutorEnv(defaultValues))
+
+    val executorResourcesString = container.resources.get.toProtoString
+    assert(executorResourcesString == getResources(defaultValues))
+  }
+
+  test("Test executor container non-default values") {
+
+    // Change expected values from defaults
+    val mem = "10Gi"
+    val storage = "1Gi"
+    val cpu = "10"
+    val appId = "nonDefault"
+    val envMem = "10g"
+    val nodeUniformityLabel = "nonDefault"
+    val nonDefaultImage = "nonDefaultImage"
+    sparkConf.set(EXECUTOR_CONTAINER_IMAGE, Some(nonDefaultImage))
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_MEMORY, mem)
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_CORES, cpu)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_MEMORY, mem)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_CORES, cpu)
+    sparkConf.set("spark.app.id", appId)
+    sparkConf.set("spark.executor.memory", envMem)
+    sparkConf.set("spark.executor.cores", cpu)
+    sparkConf.set(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL, nodeUniformityLabel)
+
+    val nonDefaultValues = Map[String, String](
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu,
+      "appId" -> appId,
+      "envMem" -> envMem,
+      "envCores" -> cpu,
+      "nodeUniformityLabel" -> nodeUniformityLabel,
+      "requestCPU" -> cpu)
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+
+    assert(container.getImage == nonDefaultImage)
+    val executorEnvString = container.env.map(_.toProtoString).mkString
+    assert(executorEnvString == getExecutorEnv(nonDefaultValues))
+
+    val executorResourcesString = container.resources.get.toProtoString
+    assert(executorResourcesString == getResources(nonDefaultValues))
+  }
+
+  private def getExecutorEnv(valueMap: Map[String, String]) = {
+    s"""|name: "SPARK_EXECUTOR_ID"
+        |value: "0"
+        |name: "SPARK_RESOURCE_PROFILE_ID"
+        |value: "0"
+        |name: "SPARK_EXECUTOR_POD_NAME"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "metadata.name"
+        |  }
+        |}
+        |name: "SPARK_APPLICATION_ID"
+        |value: "${valueMap("appId")}"
+        |name: "SPARK_EXECUTOR_CORES"
+        |value: "${valueMap("envCores")}"
+        |name: "SPARK_EXECUTOR_MEMORY"
+        |value: "${valueMap("envMem")}"
+        |name: "SPARK_DRIVER_URL"
+        |value: "spark://CoarseGrainedScheduler@driverService:7078"
+        |name: "SPARK_EXECUTOR_POD_IP"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "status.podIP"
+        |  }
+        |}
+        |name: "ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL"
+        |value: "${valueMap("nodeUniformityLabel")}"
+        |name: "SPARK_JAVA_OPT_0"
+        |value: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+        |""".stripMargin
+    }
+
+}
