@@ -37,8 +37,212 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     sparkConf.set(CONTAINER_IMAGE, imageName)
     sparkConf.set("spark.master", sparkMaster)
   }
+
   test("Test get driver container default values") {
-    assert(executorID == 0)
+    val mem = DEFAULT_MEM
+    val storage = DEFAULT_STORAGE
+    val cpu = DEFAULT_CORES
+    val defaultValues = Map[String, String](
+      "sparkMaster" -> sparkMaster,
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu)
+
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getDriverContainer(driverServiceName,
+      ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
+
+    val driverArgsString = container.args.mkString("\n")
+    assert(driverArgsString == getDriverArgs(defaultValues))
+
+    val driverPortString = container.ports.head.toProtoString
+    assert(driverPortString == getDriverPort(defaultValues))
+
+    val driverEnvString = container.env.map(_.toProtoString).mkString
+    assert(driverEnvString == getDriverEnv(defaultValues))
+
+    val driverResourcesString = container.resources.get.toProtoString
+    assert(driverResourcesString == getResources(defaultValues))
   }
+
+  test("Test get driver container non-default values") {
+    val remoteMaster = "remoteMaster"
+    val mem = "2Gi"
+    val storage = "1Gi"
+    val cpu = "2"
+    sparkConf.set(ARMADA_REMOTE_MASTER, remoteMaster)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_MEMORY, mem)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_DRIVER_LIMIT_CORES, cpu)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_MEMORY, mem)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_DRIVER_REQUEST_CORES, cpu)
+    val nonDefaultValues = Map[String, String](
+      "sparkMaster" -> remoteMaster,
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu)
+
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getDriverContainer(driverServiceName,
+      ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
+
+    val driverResourcesString = container.resources.get.toProtoString
+    assert(driverResourcesString == getResources(nonDefaultValues))
+  }
+
+  private def getDriverArgs(valueMap: Map[String, String]) = {
+    s"""|driver
+        |--verbose
+        |--class
+        |$className
+        |--master
+        |${valueMap("sparkMaster")}
+        |--conf
+        |spark.driver.port=7078
+        |--conf
+        |spark.driver.host=$bindAddress
+        |--conf
+        |spark.master=${valueMap("sparkMaster")}
+        |--conf
+        |spark.armada.container.image=$imageName""".stripMargin
+  }
+
+  private def getDriverPort(valueMap: Map[String, String]) = {
+    s"""|name: "armada-spark"
+        |hostPort: 0
+        |containerPort: 7078
+        |""".stripMargin
+  }
+
+  private def getDriverEnv(valueMap: Map[String, String]) = {
+    s"""|name: "SPARK_DRIVER_BIND_ADDRESS"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "status.podIP"
+        |  }
+        |}
+        |name: "SPARK_CONF_DIR"
+        |value: "/opt/spark/conf"
+        |name: "EXTERNAL_CLUSTER_SUPPORT_ENABLED"
+        |value: "true"
+        |name: "ARMADA_SPARK_DRIVER_SERVICE_NAME"
+        |value: "$driverServiceName"
+        |""".stripMargin
+
+  }
+  private def getResources(valueMap: Map[String, String]) = {
+    s"""|limits {
+        |  key: "memory"
+        |  value {
+        |    string: "${valueMap("limitMem")}"
+        |  }
+        |}
+        |limits {
+        |  key: "ephemeral-storage"
+        |  value {
+        |    string: "${valueMap("limitStorage")}"
+        |  }
+        |}
+        |limits {
+        |  key: "cpu"
+        |  value {
+        |    string: "${valueMap("limitCPU")}"
+        |  }
+        |}
+        |requests {
+        |  key: "memory"
+        |  value {
+        |    string: "${valueMap("requestMem")}"
+        |  }
+        |}
+        |requests {
+        |  key: "ephemeral-storage"
+        |  value {
+        |    string: "${valueMap("requestStorage")}"
+        |  }
+        |}
+        |requests {
+        |  key: "cpu"
+        |  value {
+        |    string: "${valueMap("requestCPU")}"
+        |  }
+        |}
+        |""".stripMargin
+  }
+
+  test("Test default executor container") {
+    val mem = DEFAULT_MEM
+    val storage = DEFAULT_STORAGE
+    val cpu = DEFAULT_CORES
+    val appId = DEFAULT_ARMADA_APP_ID
+    val envMem = DEFAULT_SPARK_EXECUTOR_MEMORY
+    val envCores = DEFAULT_SPARK_EXECUTOR_CORES
+    val nodeUniformityLabel = "armada-spark"
+    val defaultValues = Map[String, String](
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu,
+      "appId" -> appId,
+      "envMem" -> envMem,
+      "envCores" -> envCores,
+      "nodeUniformityLabel" -> nodeUniformityLabel)
+
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+
+    val driverEnvString = container.env.map(_.toProtoString).mkString
+    assert(driverEnvString == getExecutorEnv(defaultValues))
+
+    val driverResourcesString = container.resources.get.toProtoString
+    assert(driverResourcesString == getResources(defaultValues))
+  }
+
+  private def getExecutorEnv(valueMap: Map[String, String]) = {
+    s"""|name: "SPARK_EXECUTOR_ID"
+        |value: "0"
+        |name: "SPARK_RESOURCE_PROFILE_ID"
+        |value: "0"
+        |name: "SPARK_EXECUTOR_POD_NAME"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "metadata.name"
+        |  }
+        |}
+        |name: "SPARK_APPLICATION_ID"
+        |value: "${valueMap("appId")}"
+        |name: "SPARK_EXECUTOR_CORES"
+        |value: "${valueMap("envCores")}"
+        |name: "SPARK_EXECUTOR_MEMORY"
+        |value: "${valueMap("envMem")}"
+        |name: "SPARK_DRIVER_URL"
+        |value: "spark://CoarseGrainedScheduler@driverService:7078"
+        |name: "SPARK_EXECUTOR_POD_IP"
+        |valueFrom {
+        |  fieldRef {
+        |    apiVersion: "v1"
+        |    fieldPath: "status.podIP"
+        |  }
+        |}
+        |name: "ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL"
+        |value: "${valueMap("nodeUniformityLabel")}"
+        |name: "SPARK_JAVA_OPT_0"
+        |value: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+        |""".stripMargin
+    }
 
 }
