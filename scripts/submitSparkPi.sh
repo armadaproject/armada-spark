@@ -37,8 +37,8 @@ docker run --rm --network host $IMAGE_NAME \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
     --conf spark.executor.instances=4 \
-    --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
+    --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.remote.master=local://armada://armada-server.armada.svc.cluster.local:50051 \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
     --conf spark.armada.clusterSelectors="armada-spark=true" \
