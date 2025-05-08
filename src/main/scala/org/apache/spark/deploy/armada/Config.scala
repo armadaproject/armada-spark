@@ -16,13 +16,12 @@
  */
 package org.apache.spark.deploy.armada
 
-import java.util.concurrent.TimeUnit
-import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry, DRIVER_CORES, OptionalConfigEntry}
-import org.apache.spark.network.util.ByteUnit
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry, OptionalConfigEntry}
 
+import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
-import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
+import scala.util.{Failure, Success, Try}
 
 private[spark] object Config {
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =

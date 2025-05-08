@@ -34,12 +34,11 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import _root_.io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config._
 import org.apache.spark.deploy.armada.submit.ArmadaClientApplication._
-import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
+import org.apache.spark.{SparkConf, SparkException}
 
 import java.util.UUID
 
@@ -369,7 +368,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withValue(conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
     )
     Container()
-      .withName(s"${EXECUTOR_CONTAINER_NAME}-$executorID")
+      .withName(s"$EXECUTOR_CONTAINER_NAME-$executorID")
       .withImagePullPolicy("IfNotPresent")
       .withImage(executorContainerImage)
       .withEnv(envVars ++ javaOptEnvVars(conf))
