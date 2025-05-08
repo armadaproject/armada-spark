@@ -204,11 +204,53 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
 
-    val driverEnvString = container.env.map(_.toProtoString).mkString
-    assert(driverEnvString == getExecutorEnv(defaultValues))
+    val executorEnvString = container.env.map(_.toProtoString).mkString
+    assert(executorEnvString == getExecutorEnv(defaultValues))
 
-    val driverResourcesString = container.resources.get.toProtoString
-    assert(driverResourcesString == getResources(defaultValues))
+    val executorResourcesString = container.resources.get.toProtoString
+    assert(executorResourcesString == getResources(defaultValues))
+  }
+
+
+  test("Test get executor container non-default values") {
+    val mem = "10Gi"
+    val storage = "1Gi"
+    val cpu = "10"
+    val appId = "nonDefault"
+    val envMem = "10g"
+    val nodeUniformityLabel = "nonDefault"
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_MEMORY, mem)
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_EXECUTOR_LIMIT_CORES, cpu)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_MEMORY, mem)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_EPHEMERAL_STORAGE, storage)
+    sparkConf.set(ARMADA_EXECUTOR_REQUEST_CORES, cpu)
+    sparkConf.set("spark.app.id", appId)
+    sparkConf.set("spark.executor.memory", envMem)
+    sparkConf.set("spark.executor.cores", cpu)
+    sparkConf.set(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL, nodeUniformityLabel)
+
+    val nonDefaultValues = Map[String, String](
+      "limitMem" -> mem,
+      "limitStorage" -> storage,
+      "limitCPU" -> cpu,
+      "requestMem" -> mem,
+      "requestStorage" -> storage,
+      "requestCPU" -> cpu,
+      "appId" -> appId,
+      "envMem" -> envMem,
+      "envCores" -> cpu,
+      "nodeUniformityLabel" -> nodeUniformityLabel,
+      "requestCPU" -> cpu)
+
+    val aca = new ArmadaClientApplication()
+    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+
+    val executorEnvString = container.env.map(_.toProtoString).mkString
+    assert(executorEnvString == getExecutorEnv(nonDefaultValues))
+
+    val executorResourcesString = container.resources.get.toProtoString
+    assert(executorResourcesString == getResources(nonDefaultValues))
   }
 
   private def getExecutorEnv(valueMap: Map[String, String]) = {
