@@ -222,13 +222,6 @@ private[spark] object Config {
       .checkValues(Set("Always", "Never", "IfNotPresent"))
       .createWithDefault("IfNotPresent")
 
-  val ARMADA_DRIVER_POD_NAME: OptionalConfigEntry[String] =
-    ConfigBuilder("spark.armada.driver.pod.name")
-      .doc("Name of the driver pod.")
-      .version("1.0.0")
-      .stringConf
-      .createOptional
-
   val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
   val DEFAULT_SPARK_EXECUTOR_CORES = "1"
   val DEFAULT_CORES = "100m"

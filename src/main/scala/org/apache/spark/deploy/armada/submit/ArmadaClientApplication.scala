@@ -369,7 +369,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
     Container()
       .withName(s"$EXECUTOR_CONTAINER_NAME-$executorID")
-      .withImagePullPolicy("IfNotPresent")
+      .withImagePullPolicy(conf.get(CONTAINER_IMAGE_PULL_POLICY))
       .withImage(executorContainerImage)
       .withEnv(envVars ++ javaOptEnvVars(conf))
       .withCommand(Seq(ENTRYPOINT))
@@ -420,7 +420,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
 
     Container().withName(DRIVER_CONTAINER_NAME)
-      .withImagePullPolicy("IfNotPresent")
+      .withImagePullPolicy(conf.get(CONTAINER_IMAGE_PULL_POLICY))
       .withImage(driverContainerImage)
       .withEnv(envVars)
       .withCommand(Seq(ENTRYPOINT))
