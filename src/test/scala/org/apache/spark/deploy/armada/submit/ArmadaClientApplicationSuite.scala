@@ -19,14 +19,14 @@ package org.apache.spark.deploy.armada.submit
 
 import k8s.io.api.core.v1.generated.VolumeMount
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.Config._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
-import org.apache.spark.deploy.armada.Config._
-import org.apache.spark.internal.config.DRIVER_CORES
+
 
 
 class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
-  val sparkConf = new SparkConf(false)
+  var sparkConf = new SparkConf(false)
   val imageName = "imageName"
   val sparkMaster = "localhost"
   val className = "testClass"
@@ -34,14 +34,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   val bindAddress = "$(SPARK_DRIVER_BIND_ADDRESS)"
   val executorID = 0
   before {
+    sparkConf = new SparkConf(false)
     sparkConf.set(CONTAINER_IMAGE, imageName)
-    sparkConf.set("spark.master", sparkMaster)
   }
 
-  test("Test get driver container default values") {
+  test("Test driver container default values") {
+
+    // Set expected values to defaults
     val mem = DEFAULT_MEM
     val storage = DEFAULT_STORAGE
     val cpu = DEFAULT_CORES
+    sparkConf.set("spark.master", sparkMaster)
     val defaultValues = Map[String, String](
       "sparkMaster" -> sparkMaster,
       "limitMem" -> mem,
@@ -51,29 +54,33 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "requestStorage" -> storage,
       "requestCPU" -> cpu)
 
-
     val aca = new ArmadaClientApplication()
     val container = aca.getDriverContainer(driverServiceName,
       ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
 
+    assert(container.getImage == imageName)
     val driverArgsString = container.args.mkString("\n")
     assert(driverArgsString == getDriverArgs(defaultValues))
 
     val driverPortString = container.ports.head.toProtoString
-    assert(driverPortString == getDriverPort(defaultValues))
+    assert(driverPortString == getDriverPort)
 
     val driverEnvString = container.env.map(_.toProtoString).mkString
-    assert(driverEnvString == getDriverEnv(defaultValues))
+    assert(driverEnvString == getDriverEnv)
 
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(defaultValues))
   }
 
-  test("Test get driver container non-default values") {
+  test("Test driver container non-default values") {
+
+    // Change expected values from defaults
     val remoteMaster = "remoteMaster"
-    val mem = "2Gi"
-    val storage = "1Gi"
+    val mem = "20Gi"
+    val storage = "20Gi"
     val cpu = "2"
+    val nonDefaultImage = "nonDefaultImage"
+    sparkConf.set(DRIVER_CONTAINER_IMAGE, Some(nonDefaultImage))
     sparkConf.set(ARMADA_REMOTE_MASTER, remoteMaster)
     sparkConf.set(ARMADA_DRIVER_LIMIT_MEMORY, mem)
     sparkConf.set(ARMADA_DRIVER_LIMIT_EPHEMERAL_STORAGE, storage)
@@ -95,6 +102,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val container = aca.getDriverContainer(driverServiceName,
       ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
 
+    assert(container.getImage == nonDefaultImage)
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(nonDefaultValues))
   }
@@ -116,14 +124,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |spark.armada.container.image=$imageName""".stripMargin
   }
 
-  private def getDriverPort(valueMap: Map[String, String]) = {
+  private def getDriverPort = {
     s"""|name: "armada-spark"
         |hostPort: 0
         |containerPort: 7078
         |""".stripMargin
   }
 
-  private def getDriverEnv(valueMap: Map[String, String]) = {
+  private def getDriverEnv = {
     s"""|name: "SPARK_DRIVER_BIND_ADDRESS"
         |valueFrom {
         |  fieldRef {
@@ -181,6 +189,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   test("Test default executor container") {
+
+    // Set expected values to defaults
     val mem = DEFAULT_MEM
     val storage = DEFAULT_STORAGE
     val cpu = DEFAULT_CORES
@@ -204,6 +214,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
 
+    assert(container.getImage == imageName)
     val executorEnvString = container.env.map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(defaultValues))
 
@@ -212,13 +223,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
 
-  test("Test get executor container non-default values") {
+  test("Test executor container non-default values") {
+
+    // Change expected values from defaults
     val mem = "10Gi"
     val storage = "1Gi"
     val cpu = "10"
     val appId = "nonDefault"
     val envMem = "10g"
     val nodeUniformityLabel = "nonDefault"
+    val nonDefaultImage = "nonDefaultImage"
+    sparkConf.set(EXECUTOR_CONTAINER_IMAGE, Some(nonDefaultImage))
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_MEMORY, mem)
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_EPHEMERAL_STORAGE, storage)
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_CORES, cpu)
@@ -246,6 +261,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
 
+    assert(container.getImage == nonDefaultImage)
     val executorEnvString = container.env.map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(nonDefaultValues))
 

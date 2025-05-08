@@ -19,8 +19,7 @@ package org.apache.spark.scheduler.cluster.armada
 import io.armadaproject.armada.ArmadaClient
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
-  DEFAULT_ARMADA_APP_ID, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
-import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
+  DEFAULT_ARMADA_APP_ID}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -42,7 +41,6 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
-  private val gangAnnotations = GangSchedulingAnnotations(None, initialExecutors, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)

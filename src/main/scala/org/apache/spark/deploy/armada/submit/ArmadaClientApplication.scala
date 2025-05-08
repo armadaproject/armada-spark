@@ -383,12 +383,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           limits = Map(
             "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_MEMORY))),
             "ephemeral-storage" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_EPHEMERAL_STORAGE))),
-            "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_CORES).toString))
+            "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_CORES)))
           ),
           requests = Map(
             "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_MEMORY))),
             "ephemeral-storage" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_EPHEMERAL_STORAGE))),
-            "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_CORES).toString))
+            "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_CORES)))
           )
         )
       )
@@ -445,12 +445,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           limits = Map(
             "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_MEMORY))),
             "ephemeral-storage" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_EPHEMERAL_STORAGE))),
-            "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES).toString))
+            "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES)))
           ),
           requests = Map(
             "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_MEMORY))),
             "ephemeral-storage" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_EPHEMERAL_STORAGE))),
-            "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES).toString))
+            "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES)))
           )
         )
       )

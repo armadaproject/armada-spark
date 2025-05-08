@@ -173,7 +173,7 @@ private[spark] object Config {
       .createWithDefault("Driver-Job-Set")
 
   val EXECUTOR_JOB_SET_ID: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.exutor.job.set.id")
+    ConfigBuilder("spark.armada.executor.job.set.id")
       .doc("The Armada job set id that will be used for running the executor pods.")
       .version("1.0.0")
       .stringConf
@@ -224,7 +224,7 @@ private[spark] object Config {
 
   val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
   val DEFAULT_SPARK_EXECUTOR_CORES = "1"
-  val DEFAULT_CORES = "100m"
+  val DEFAULT_CORES = "1"
   val ARMADA_DRIVER_LIMIT_CORES: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.cores")
       .doc("Specify the hard cpu limit for the driver pod")
