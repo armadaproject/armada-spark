@@ -418,7 +418,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverContainerImage = conf.get(DRIVER_CONTAINER_IMAGE)
       .getOrElse(throw new SparkException("Must specify the driver container image"))
 
-
     Container().withName(DRIVER_CONTAINER_NAME)
       .withImagePullPolicy(conf.get(CONTAINER_IMAGE_PULL_POLICY))
       .withImage(driverContainerImage)

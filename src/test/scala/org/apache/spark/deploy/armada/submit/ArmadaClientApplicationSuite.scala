@@ -23,8 +23,6 @@ import org.apache.spark.deploy.armada.Config._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
-
-
 class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   var sparkConf = new SparkConf(false)
   val imageName = "imageName"
@@ -210,7 +208,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "envCores" -> envCores,
       "nodeUniformityLabel" -> nodeUniformityLabel)
 
-
     val aca = new ArmadaClientApplication()
     val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
 
@@ -221,7 +218,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val executorResourcesString = container.resources.get.toProtoString
     assert(executorResourcesString == getResources(defaultValues))
   }
-
 
   test("Test executor container non-default values") {
 

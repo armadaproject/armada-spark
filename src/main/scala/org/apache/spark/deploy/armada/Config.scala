@@ -247,14 +247,12 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_CORES)
 
-
   val ARMADA_EXECUTOR_REQUEST_CORES: ConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.request.cores")
       .doc("Specify the cpu request for each executor pod")
       .version("1.0.0")
       .stringConf
       .createWithDefaultString(DEFAULT_CORES)
-
 
   val DEFAULT_MEM = "1Gi"
   val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
