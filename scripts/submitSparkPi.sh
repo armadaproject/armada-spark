@@ -40,6 +40,18 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.remote.master=local://armada://armada-server.armada.svc.cluster.local:50051 \
+    --conf spark.armada.driver.limit.cores=200m \
+    --conf spark.armada.driver.limit.memory=450Mi \
+    --conf spark.armada.driver.limit.ephemeral.storage=512Mi \
+    --conf spark.armada.driver.request.cores=200m \
+    --conf spark.armada.driver.request.memory=450Mi \
+    --conf spark.armada.driver.request.ephemeral.storage=512Mi \
+    --conf spark.armada.executor.limit.cores=100m \
+    --conf spark.armada.executor.limit.memory=510Mi \
+    --conf spark.armada.executor.limit.ephemeral.storage=512Mi \
+    --conf spark.armada.executor.request.cores=100m \
+    --conf spark.armada.executor.request.memory=510Mi \
+    --conf spark.armada.executor.request.ephemeral.storage=512Mi \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
     --conf spark.armada.clusterSelectors="armada-spark=true" \
     $FIRST_ARG 100
