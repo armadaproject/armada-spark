@@ -38,7 +38,7 @@ log() {
   echo -e "${GREEN}$1${NC}"
 }
 
-logerr() {
+err() {
   echo -e "${RED}Error: ${NC}$1"
 }
 
@@ -53,7 +53,7 @@ fetch-armadactl() {
   elif [ "$os" = "Linux" ]; then
     dl_os='linux'
   else
-    logerr "fetch-armadactl(): sorry, operating system $os not supported; exiting now"
+    err "fetch-armadactl(): sorry, operating system $os not supported; exiting now"
     exit 1
   fi
 
@@ -62,7 +62,7 @@ fetch-armadactl() {
   elif [ "$arch" = 'x86_64' ]; then
     dl_arch='amd64'
   else
-    logerr "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
+    err "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
     exit 1
   fi
 
@@ -79,7 +79,7 @@ armadactl-retry() {
     fi
     sleep 5
   done
-  logerr "Running \"armadactl $*\" failed after 10 attempts" >&2
+  err "Running \"armadactl $*\" failed after 10 attempts" >&2
   exit 1
 }
 
@@ -88,14 +88,14 @@ start-armada() {
     echo "Using existing armada-operator repo at $AOHOME"
   else
     if ! git clone $AOREPO $AOHOME; then
-      logerr "There was a problem cloning the armada-operator repo; exiting now"
+      err "There was a problem cloning the armada-operator repo; exiting now"
       exit 1
     fi
 
 
     log "Patching armada-operator"
     if ! patch -p1 -d $AOHOME/ < ./e2e/armada-operator.patch; then
-      logerr "There was an error patching the repo copy $AOHOME"
+      err "There was an error patching the repo copy $AOHOME"
       exit 1
     fi
   fi
@@ -104,7 +104,7 @@ start-armada() {
   log  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
   if ! make kind-all 2>&1 | tee armada-start.txt; then
     echo ""
-    logerr "There was a problem starting Armada; exiting now"
+    err "There was a problem starting Armada; exiting now"
     exit 1
   fi
   cd ..
@@ -112,14 +112,14 @@ start-armada() {
 
 main() {
   if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
-    logerr "IMAGE_NAME is not defined. Please set it in ./scripts/config.sh, for example:"
-    logerr "IMAGE_NAME=spark:testing"
+    err "IMAGE_NAME is not defined. Please set it in ./scripts/config.sh, for example:"
+    err "IMAGE_NAME=spark:testing"
     exit 1
   fi
 
   if [ -z "$ARMADA_QUEUE" ]; then
-    logerr "ARMADA_QUEUE is not defined. Please set it in ./scripts/config.sh, for example:"
-    logerr "ARMADA_QUEUE=spark-test"
+    err "ARMADA_QUEUE is not defined. Please set it in ./scripts/config.sh, for example:"
+    err "ARMADA_QUEUE=spark-test"
     exit 1
   fi
   echo "Checking for armadactl .."
@@ -130,8 +130,8 @@ main() {
 
   echo "Checking if image $IMAGE_NAME is available ..."
   if ! docker image inspect "$IMAGE_NAME" > /dev/null; then
-    logerr "Image $IMAGE_NAME not found in local Docker instance."
-    logerr "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
+    err "Image $IMAGE_NAME not found in local Docker instance."
+    err "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
     exit 1
   fi
 
@@ -147,7 +147,7 @@ main() {
       log "FAILED: output is "
       cat $STATUSFILE
       echo ""
-      logerr "Armada cluster appears to be running, but an unknown error has happened; exiting now"
+      err "Armada cluster appears to be running, but an unknown error has happened; exiting now"
       exit 1
     fi
   else
@@ -171,7 +171,7 @@ main() {
     sleep 5   # wait a moment for Armada to schedule & run the job
 
     timeout 1m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
-    if grep "Job failed:" armadactl.watch.log; then logerr "Job failed"; exit 1; fi
+    if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
 
     echo "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
