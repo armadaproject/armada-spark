@@ -16,6 +16,12 @@
  */
 package org.apache.spark.deploy.armada.submit
 
+import org.apache.spark.deploy.armada.Config.{
+  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
+  ARMADA_JOB_NODE_SELECTORS,
+  SPARK_DRIVER_SERVICE_NAME_PREFIX
+}
+
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -26,14 +32,10 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.Config.{
-  ARMADA_CLUSTER_SELECTORS,
   ARMADA_HEALTH_CHECK_TIMEOUT,
   ARMADA_LOOKOUTURL,
-  DEFAULT_CLUSTER_SELECTORS,
-  DRIVER_SERVICE_NAME_PREFIX,
   commaSeparatedLabelsToMap,
-  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL,
-  ARMADA_SPARK_GLOBAL_LABELS,
+  ARMADA_SPARK_POD_LABELS,
   ARMADA_SPARK_DRIVER_LABELS,
   ARMADA_SPARK_EXECUTOR_LABELS
 }
@@ -202,7 +204,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source),
       EnvVar()
         .withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL")
-        .withValue(conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
+        .withValue(conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY))
     )
     Container()
       .withName(s"spark-executor-$executorID")
@@ -237,7 +239,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): String = {
     val driverServiceName =
-      conf.get(DRIVER_SERVICE_NAME_PREFIX) + UUID.randomUUID.toString
+      conf.get(SPARK_DRIVER_SERVICE_NAME_PREFIX) + UUID.randomUUID.toString
     val source = EnvVarSource().withFieldRef(
       ObjectFieldSelector()
         .withApiVersion("v1")
@@ -322,10 +324,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val gangAnnotations = GangSchedulingAnnotations(
       None,
       1 + numExecutors,
-      conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL)
+      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
     )
+    val annotations = configGenerator.getAnnotations ++ gangAnnotations
 
-    val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_GLOBAL_LABELS))
+    val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_POD_LABELS))
     val executorLabels =
       globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_EXECUTOR_LABELS))
     val executorJobs =
@@ -335,17 +338,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           .withPriority(0)
           .withNamespace("default")
           .withLabels(executorLabels)
+          .withAnnotations(annotations)
           .withPodSpec(
             PodSpec()
               .withTerminationGracePeriodSeconds(0)
               .withRestartPolicy("Never")
               .withContainers(Seq(container))
               .withVolumes(configGenerator.getVolumes)
-              .withNodeSelector(
-                commaSeparatedLabelsToMap(conf.get(ARMADA_CLUSTER_SELECTORS))
-              )
+              .withNodeSelector(commaSeparatedLabelsToMap(conf.get(ARMADA_JOB_NODE_SELECTORS)))
           )
-          .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
 
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
@@ -353,7 +354,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(driverContainer))
       .withVolumes(configGenerator.getVolumes)
       .withNodeSelector(
-        commaSeparatedLabelsToMap(conf.get(ARMADA_CLUSTER_SELECTORS))
+        commaSeparatedLabelsToMap(conf.get(ARMADA_JOB_NODE_SELECTORS))
       )
 
     val driverLabels =
@@ -363,8 +364,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPriority(0)
       .withNamespace("default")
       .withLabels(driverLabels)
+      .withAnnotations(annotations)
       .withPodSpec(podSpec)
-      .withAnnotations(configGenerator.getAnnotations ++ gangAnnotations)
       .withServices(
         Seq(
           api.submit.ServiceConfig(

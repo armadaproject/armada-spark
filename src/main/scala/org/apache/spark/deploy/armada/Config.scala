@@ -16,14 +16,17 @@
  */
 package org.apache.spark.deploy.armada
 
+import org.apache.spark.deploy.armada.validators.K8sValidator
+
 import java.util.concurrent.TimeUnit
 import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
-import java.util.regex.Pattern
 import scala.util.{Failure, Success, Try}
-import scala.util.matching.Regex
 
 private[spark] object Config {
+  private val invalidLabelListErrorMessage =
+    "Must be a comma-separated list of valid Kubernetes labels (each as key=value)"
+
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
       .doc(
@@ -32,7 +35,7 @@ private[spark] object Config {
       )
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(
-        interval => interval > 0,
+        _ > 0,
         s"Polling interval must be a" +
           " positive time value."
       )
@@ -43,7 +46,7 @@ private[spark] object Config {
       .doc("Time to wait for the minimum number of executors.")
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(
-        interval => interval > 0,
+        _ > 0,
         s"Timeout must be a" +
           " positive time value."
       )
@@ -63,39 +66,73 @@ private[spark] object Config {
     ConfigBuilder("spark.armada.health.checkTimeout")
       .doc("Number of seconds to wait for an Armada health check result")
       .timeConf(TimeUnit.SECONDS)
-      .checkValue(interval => interval > 0, s"Timeout must be a positive time value.")
+      .checkValue(_ > 0, s"Timeout must be a positive time value.")
       .createWithDefaultString("5")
 
-  // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
-  // Clients do not use the prefix, therefore we just accept the name portion on label selector names.
-  private val label                 = "([\\w&&[^-_.]]([\\w-_.]{0,61}[\\w&&[^-_.]])?)"
-  private val labelSelectors: Regex = s"^($label=$label(,$label=$label)*)?$$".r
+  val ARMADA_JOB_NODE_SELECTORS: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.nodeSelectors")
+      .doc(
+        "A comma-separated list of kubernetes label selectors (in key=value format) to ensure " +
+          "the spark driver and its executors are deployed to the same cluster."
+      )
+      .stringConf
+      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
+      .createWithDefaultString("")
 
-  private[armada] def selectorsValidator(selectors: CharSequence): Boolean = {
-    labelSelectors.findPrefixMatchOf(selectors).isDefined
-  }
+  val ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.nodeUniformity")
+      .doc(
+        "Constrains the jobs that make up a gang to be scheduled across a uniform set of nodes. " +
+          "Specifically, if set, all gang jobs are scheduled onto nodes for which the value of the provided label is equal."
+      )
+      .stringConf
+      .checkValue(K8sValidator.Label.isValidKey, "Only a valid RFC 1123 label key is allowed!")
+      .createWithDefaultString("armada-spark")
 
-  private def parseCommaSeparatedK8sLabels(str: String): Seq[Try[(String, String)]] = {
-    str.trim
-      .split(",")
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map { entry =>
-        entry.trim.split("=", 2).map(_.trim) match {
-          case Array(key, value)
-              if K8sLabelValidator.isValidKey(key) && K8sLabelValidator.isValidValue(value) =>
-            Success(key -> value)
-          case _ =>
-            Failure(
-              new IllegalArgumentException(
-                s"Invalid selector format: '$entry' (expected key=value)"
-              )
-            )
-        }
-      }
-  }
+  val SPARK_DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.serviceNamePrefix")
+      .doc(
+        "Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
+          "Max length of 30 characters."
+      )
+      .stringConf
+      .checkValue(
+        K8sValidator.Name.isValidPrefix,
+        "Service name prefix must adhere to RFC 1035 label names."
+      )
+      .createWithDefaultString("armada-spark-driver-")
 
-  /** Converts a comma separated list of key=value pairs into a Map.
+  val ARMADA_SPARK_POD_LABELS: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.pod.labels")
+      .doc(
+        "A comma-separated list of kubernetes labels (in key=value format) to be added to " +
+          "both the driver and executor pods."
+      )
+      .stringConf
+      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
+      .createWithDefaultString("")
+
+  val ARMADA_SPARK_DRIVER_LABELS: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.labels")
+      .doc(
+        "A comma-separated list of kubernetes labels (in key=value format) to be added to the " +
+          "driver pod."
+      )
+      .stringConf
+      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
+      .createWithDefaultString("")
+
+  val ARMADA_SPARK_EXECUTOR_LABELS: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.labels")
+      .doc(
+        "A comma-separated list of kubernetes labels (in key=value format) to be added to all " +
+          "executor pods."
+      )
+      .stringConf
+      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
+      .createWithDefaultString("")
+
+  /** Converts a comma-separated list of key=value pairs into a Map.
     *
     * @param str
     *   The string to convert.
@@ -106,127 +143,26 @@ private[spark] object Config {
     parseCommaSeparatedK8sLabels(str).map(_.get).toMap
   }
 
-  val DEFAULT_CLUSTER_SELECTORS = ""
-
-  val ARMADA_CLUSTER_SELECTORS: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.clusterSelectors")
-      .doc(
-        "A comma separated list of kubernetes label selectors (in key=value format) to ensure " +
-          "the spark driver and its executors are deployed to the same cluster."
-      )
-      .stringConf
-      .checkValue(selectorsValidator, "Selectors must be valid kubernetes labels/selectors")
-      .createWithDefaultString(DEFAULT_CLUSTER_SELECTORS)
-
-  private[armada] val singleLabelOrNone: Regex = s"^($label)?$$".r
-
-  private[armada] def singleLabelValidator(l: CharSequence): Boolean = {
-    singleLabelOrNone.findPrefixMatchOf(l).isDefined
-  }
-
-  val GANG_SCHEDULING_NODE_UNIFORMITY_LABEL: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.scheduling.nodeUniformityLabel")
-      .doc("A single kubernetes label to apply to both driver and executors")
-      .stringConf
-      .checkValue(singleLabelValidator, "Label must be a valid kubernetes label, just the label!")
-      .createWithDefaultString("armada-spark")
-
-  private val validServiceNamePrefix: Regex = "([a-z][0-9a-z-]{0,29})?".r
-
-  private[armada] def serviceNamePrefixValidator(name: CharSequence): Boolean = {
-    validServiceNamePrefix.findPrefixMatchOf(name).isDefined
-  }
-
-  val DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.driverServiceNamePrefix")
-      .doc(
-        "Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
-          "Max length of 30 characters."
-      )
-      .stringConf
-      .checkValue(
-        serviceNamePrefixValidator,
-        "Service name prefix must adhere to rfc 1035 label names."
-      )
-      .createWithDefaultString("armada-spark-driver-")
-
-  private val invalidLabelListErrorMessage =
-    "Must be a comma-separated list of valid Kubernetes labels (each as key=value)"
-
-  val ARMADA_SPARK_GLOBAL_LABELS: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.global.labels")
-      .doc(
-        "A comma separated list of kubernetes labels (in key=value format) to be added to all " +
-          "both the driver and executor pods."
-      )
-      .stringConf
-      .checkValue(selectorsValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
-
-  val ARMADA_SPARK_DRIVER_LABELS: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.driver.labels")
-      .doc(
-        "A comma separated list of kubernetes labels (in key=value format) to be added to the " +
-          "driver pod."
-      )
-      .stringConf
-      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
-
-  val ARMADA_SPARK_EXECUTOR_LABELS: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.executor.labels")
-      .doc(
-        "A comma separated list of kubernetes labels (in key=value format) to be added to all " +
-          "executor pods."
-      )
-      .stringConf
-      .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
-
   private def k8sLabelListValidator(labelList: String): Boolean = {
     parseCommaSeparatedK8sLabels(labelList).forall(_.isSuccess)
   }
-}
 
-object K8sLabelValidator {
-  private val MaxLabelLength  = 63
-  private val MaxPrefixLength = 253
-
-  // DNS-1123 label: lowercase alphanumeric start/end, interior may have '-'
-  private val DNS1123_LABEL = "[a-z0-9]([a-z0-9\\-_/.]*[a-z0-9])?"
-  // DNS-1123 subdomain: series of DNS1123_LABEL separated by '.', total ≤ 253 chars
-  private val DNS1123_SUBDOMAIN = s"$DNS1123_LABEL(?:\\.$DNS1123_LABEL)*"
-
-  // full key = optional prefix "/" name
-  private val LABEL_KEY_REGEX = s"^(?:$DNS1123_SUBDOMAIN/)?$DNS1123_LABEL$$"
-  // value = empty or a DNS1123_LABEL
-  private val LABEL_VALUE_REGEX = s"^$DNS1123_LABEL$$"
-
-  private val keyPattern   = Pattern.compile(LABEL_KEY_REGEX)
-  private val valuePattern = Pattern.compile(LABEL_VALUE_REGEX)
-
-  /** true if `key` is a valid Kubernetes label key (optional DNS1123 subdomain prefix) */
-  def isValidKey(key: String): Boolean = {
-    if (key == null) return false
-
-    // enforce per-segment length limits
-    if (key.contains("/")) {
-      val Array(prefix, name) = key.split("/", 2)
-      if (prefix.length > MaxPrefixLength || name.length > MaxLabelLength) return false
-    } else if (key.length > MaxLabelLength) {
-      // un-prefixed keys are just a label
-      return false
-    }
-
-    keyPattern.matcher(key).matches()
-  }
-
-  /** true if `value` is a valid Kubernetes label value (or empty) */
-  def isValidValue(value: String): Boolean = {
-    if (value == null) return false
-    if (value.isEmpty) return true
-    if (value.length > MaxLabelLength) return false
-
-    valuePattern.matcher(value).matches()
+  private def parseCommaSeparatedK8sLabels(str: String): Seq[Try[(String, String)]] = {
+    str.trim
+      .split(",")
+      .filter(_.nonEmpty)
+      .map { entry =>
+        entry.split("=", 2).map(_.trim) match {
+          case Array(key, value)
+              if K8sValidator.Label.isValidKey(key) && K8sValidator.Label.isValidValue(value) =>
+            Success(key -> value)
+          case _ =>
+            Failure(
+              new IllegalArgumentException(
+                s"Invalid label format: '$entry' (expected key=value)"
+              )
+            )
+        }
+      }
   }
 }
