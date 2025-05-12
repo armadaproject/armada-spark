@@ -73,13 +73,13 @@ fetch-armadactl() {
 }
 
 armadactl-retry() {
-  for _ in {1..10}; do
+  for attempt in {1..10}; do
     if ./armadactl "$@" > /dev/null 2>&1; then
       return 0
     fi
     sleep 5
   done
-  err "Running \"armadactl $*\" failed after 10 attempts" >&2
+  err "Running \"armadactl $*\" failed after $attempt attempts" >&2
   return 1
 }
 
