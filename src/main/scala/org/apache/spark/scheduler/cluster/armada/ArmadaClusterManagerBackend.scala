@@ -20,9 +20,13 @@ import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{ARMADA_CLUSTER_SELECTORS,
-  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT,
-  commaSeparatedLabelsToMap, GANG_SCHEDULING_NODE_UNIFORMITY_LABEL}
+import org.apache.spark.deploy.armada.Config.{
+  ARMADA_CLUSTER_SELECTORS,
+  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
+  ARMADA_EXECUTOR_TRACKER_TIMEOUT,
+  commaSeparatedLabelsToMap,
+  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL
+}
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
@@ -33,22 +37,25 @@ import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import scala.collection.mutable
 import scala.collection.mutable.HashMap
 
-
-
 // TODO: Implement for Armada
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext,
     executorService: ScheduledExecutorService,
-    masterURL: String)
-  extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
+    masterURL: String
+) extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
 
   // FIXME
   private val appId = "fake_app_id_FIXME"
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-  private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
-  private val gangAnnotations = GangSchedulingAnnotations(None, initialExecutors, conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL))
+  private val executorTracker  = new ExecutorTracker(new SystemClock(), initialExecutors)
+  private val gangAnnotations =
+    GangSchedulingAnnotations(
+      None,
+      initialExecutors,
+      conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL)
+    )
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(appId)
@@ -61,19 +68,22 @@ private[spark] class ArmadaClusterManagerBackend(
   }
 
   // Track executors to make sure we have the expected number
-  class ExecutorTracker(val clock: Clock,
-                        val numberOfExecutors: Int) {
+  class ExecutorTracker(val clock: Clock, val numberOfExecutors: Int) {
 
-    private val daemon = ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-min-executor-daemon")
+    private val daemon =
+      ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-min-executor-daemon")
     private val pollingInterval = conf.get(ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL)
-    private val timeout = conf.get(ARMADA_EXECUTOR_TRACKER_TIMEOUT)
+    private val timeout         = conf.get(ARMADA_EXECUTOR_TRACKER_TIMEOUT)
 
     private var startTime = 0L
 
     def start(): Unit = {
       daemon.scheduleWithFixedDelay(
         () => checkMin(),
-        pollingInterval, pollingInterval, TimeUnit.MILLISECONDS)
+        pollingInterval,
+        pollingInterval,
+        TimeUnit.MILLISECONDS
+      )
     }
 
     def checkMin(): Unit = {
@@ -81,8 +91,7 @@ private[spark] class ArmadaClusterManagerBackend(
       if (getAliveCount < numberOfExecutors) {
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
-        }
-        else if (clock.getTimeMillis() - startTime > timeout ) {
+        } else if (clock.getTimeMillis() - startTime > timeout) {
           scheduler.error("Inufficient executors running.  Driver exiting.")
         }
       } else {
@@ -110,7 +119,7 @@ private[spark] class ArmadaClusterManagerBackend(
         //podAllocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)
         //Future.successful(true)
     }
-    */
+   */
 
   override def sufficientResourcesRegistered(): Boolean = {
     totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
@@ -142,7 +151,7 @@ private[spark] class ArmadaClusterManagerBackend(
             case _ =>
               // Don't do anything besides disabling the executor - allow the K8s API events to
               // drive the rest of the lifecycle decisions.
-                // If it's disconnected due to network issues eventually heartbeat will clear it up.
+              // If it's disconnected due to network issues eventually heartbeat will clear it up.
               disableExecutor(id)
           }
         case _ =>
@@ -151,8 +160,8 @@ private[spark] class ArmadaClusterManagerBackend(
             case Some(_) =>
               execIDRequester -= rpcAddress
             // Expected, executors re-establish a connection with an ID
-              case _ =>
-                logDebug(s"No executor found for $rpcAddress")
+            case _ =>
+              logDebug(s"No executor found for $rpcAddress")
           }
       }
     }
