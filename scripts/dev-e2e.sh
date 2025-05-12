@@ -128,14 +128,14 @@ main() {
     fetch-armadactl
   fi
 
-  log "Checking if image $IMAGE_NAME is available ..."
+  echo "Checking if image $IMAGE_NAME is available ..."
   if ! docker image inspect "$IMAGE_NAME" > /dev/null; then
     logerr "Image $IMAGE_NAME not found in local Docker instance."
     logerr "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
     exit 1
   fi
 
-  log "Checking to see if Armada cluster is available ..."
+  echo "Checking to see if Armada cluster is available ..."
 
   if ! armadactl get queues > $STATUSFILE 2>&1 ; then
     if grep -q 'connection refused' $STATUSFILE; then
@@ -155,13 +155,13 @@ main() {
     rm armadactl-query.txt
   fi
 
-  log "Creating $ARMADA_QUEUE queue..."
+  echo "Creating $ARMADA_QUEUE queue..."
   armadactl-retry create queue "$ARMADA_QUEUE"
 
-  log "Loading Docker image $IMAGE_NAME into Armada cluster"
+  echo "Loading Docker image $IMAGE_NAME into Armada cluster"
   $AOHOME/bin/tooling/kind load docker-image "$IMAGE_NAME" --name armada
 
-  log "Submitting SparkPI job"
+  echo "Submitting SparkPI job"
   scripts/submitSparkPi.sh  2>&1 | tee submitSparkPi.log
 
   DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
@@ -173,7 +173,7 @@ main() {
     timeout 1m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
     if grep "Job failed:" armadactl.watch.log; then logerr "Job failed"; exit 1; fi
 
-    log "Driver Job Spec  $DRIVER_JOBID"
+    echo "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
       --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq
     for exec_jobid in $EXECUTOR_JOBIDS ; do
