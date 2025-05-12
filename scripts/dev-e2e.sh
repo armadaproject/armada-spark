@@ -39,7 +39,7 @@ log() {
 }
 
 err() {
-  echo -e "${RED}Error: ${NC}$1"
+  echo -e "${RED}Error: ${NC}$1" >&2
 }
 
 
