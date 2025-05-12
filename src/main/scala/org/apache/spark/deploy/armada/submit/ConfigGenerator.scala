@@ -18,43 +18,58 @@ package org.apache.spark.deploy.armada.submit
 
 import k8s.io.api.core.v1.generated._
 import org.apache.spark.SparkConf
-import org.apache.spark.deploy.armada.submit.ConfigGenerator.{REMOTE_CONF_DIR_NAME, ENV_SPARK_CONF_DIR}
+import org.apache.spark.deploy.armada.submit.ConfigGenerator.{
+  ENV_SPARK_CONF_DIR,
+  REMOTE_CONF_DIR_NAME
+}
 
 import java.io.File
 import scala.io.Source
+import scala.util.{Try, Using}
 
 private[submit] object ConfigGenerator {
   val REMOTE_CONF_DIR_NAME = "/opt/spark/conf"
-  val ENV_SPARK_CONF_DIR = "SPARK_CONF_DIR"
+  val ENV_SPARK_CONF_DIR   = "SPARK_CONF_DIR"
 }
 
 private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
-  private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR)).orElse(
-    conf.getOption("spark.home").map(dir => s"$dir/conf"))
+  private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR))
+    .orElse(conf.getOption("spark.home").map(dir => s"$dir/conf"))
 
   private val confFiles = getConfFiles
-  private def getConfFiles : Array[File] = {
-    confDir.map(new File(_))
+  private def getConfFiles: Array[File] = {
+    confDir
+      .map(new File(_))
       .filter(_.isDirectory)
       .map(_.listFiles.filter(!_.isDirectory))
       .getOrElse(Array.empty)
   }
 
-
   // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {
-    confFiles.map(f =>
-      (prefix + "/" + f.getName, Source.fromFile(f.toString).mkString)).toMap
+    confFiles
+      .map(f => prefix + "/" + f.getName -> Source.fromFile(f.toString))
+      .toMap
+      // needed by Scala 2.12, deprecated but available in Scala 2.13
+      // for Scala 2.13 on, use .view.mapValues instead
+      .mapValues { source =>
+        try { source.mkString }
+        finally { source.close() }
+      }
+      // needed by Scala 2.13
+      .toMap
   }
 
   private def volumeName = prefix + "-volume"
 
   // Mount the config volume to the expected config directory
   def getVolumeMounts: Seq[VolumeMount] = {
-    Seq(VolumeMount()
-      .withName(volumeName)
-      .withMountPath(REMOTE_CONF_DIR_NAME)
-      .withReadOnly(true))
+    Seq(
+      VolumeMount()
+        .withName(volumeName)
+        .withMountPath(REMOTE_CONF_DIR_NAME)
+        .withReadOnly(true)
+    )
   }
 
   // Use the k8s downward api to map the config files to a volume
@@ -64,13 +79,16 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
         .withPath(f.getName)
         .withFieldRef(
           ObjectFieldSelector()
-            .withFieldPath(s"metadata.annotations['$prefix/${f.getName}']"))
+            .withFieldPath(s"metadata.annotations['$prefix/${f.getName}']")
+        )
     }
     val downwardAPIVolumeFiles = confFiles.map(getDownAPIVolumeFile)
     val volumeSource = VolumeSource()
       .withDownwardAPI(DownwardAPIVolumeSource().withItems(downwardAPIVolumeFiles))
-    Seq(Volume()
-      .withName(volumeName)
-      .withVolumeSource(volumeSource))
+    Seq(
+      Volume()
+        .withName(volumeName)
+        .withVolumeSource(volumeSource)
+    )
   }
 }

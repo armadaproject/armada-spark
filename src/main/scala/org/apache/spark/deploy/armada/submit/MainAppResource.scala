@@ -18,11 +18,10 @@ package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.annotation.{DeveloperApi, Since, Stable}
 
-/**
- * :: DeveloperApi ::
- *
- * All traits and classes in this file are used by K8s module and Spark K8s operator.
- */
+/** :: DeveloperApi ::
+  *
+  * All traits and classes in this file are used by K8s module and Spark K8s operator.
+  */
 
 @Stable
 @DeveloperApi
@@ -37,17 +36,16 @@ sealed trait NonJVMResource
 @Stable
 @DeveloperApi
 @Since("3.0.0")
-case class JavaMainAppResource(primaryResource: Option[String])
-  extends MainAppResource
+case class JavaMainAppResource(primaryResource: Option[String]) extends MainAppResource
 
 @Stable
 @DeveloperApi
 @Since("2.4.0")
 case class PythonMainAppResource(primaryResource: String)
-  extends MainAppResource with NonJVMResource
+    extends MainAppResource
+    with NonJVMResource
 
 @Stable
 @DeveloperApi
 @Since("2.4.0")
-case class RMainAppResource(primaryResource: String)
-  extends MainAppResource with NonJVMResource
+case class RMainAppResource(primaryResource: String) extends MainAppResource with NonJVMResource
