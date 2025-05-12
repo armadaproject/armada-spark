@@ -80,7 +80,7 @@ armadactl-retry() {
     sleep 5
   done
   err "Running \"armadactl $*\" failed after 10 attempts" >&2
-  exit 1
+  return 1
 }
 
 start-armada() {
