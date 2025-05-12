@@ -1,13 +1,13 @@
 #!/bin/bash
 
 GREEN='\033[0;32m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 STATUSFILE='armadactl-query.txt'
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 AOHOME=../armada-operator
 ARMADA_CTL_VERSION='0.18.3'
-TEST_QUEUE='test'
 JOB_DETAILS=1
 
 usage() {
@@ -29,11 +29,15 @@ while getopts "s" opt; do
     esac
 done
 
-scripts="$(cd "$(dirname "$0")" || exit; pwd)"
+scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
 
 log() {
-    echo -e "${GREEN}$1${NC}"
+  echo -e "${GREEN}$1${NC}"
+}
+
+logerr() {
+  echo -e "${RED}Error: ${NC}$1"
 }
 
 
@@ -46,8 +50,8 @@ fetch-armadactl() {
     dl_os='darwin'
   elif [ "$os" = "Linux" ]; then
     dl_os='linux'
- else
-    log "fetch-armadactl(): sorry, operating system $os not supported; exiting now"
+  else
+    logerr "fetch-armadactl(): sorry, operating system $os not supported; exiting now"
     exit 1
   fi
 
@@ -56,14 +60,14 @@ fetch-armadactl() {
   elif [ "$arch" = 'x86_64' ]; then
     dl_arch='amd64'
   else
-    log "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
+    logerr "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
     exit 1
   fi
 
   dl_file=armadactl_${ARMADA_CTL_VERSION}_${dl_os}_${dl_arch}.tar.gz
 
-  curl -s -LO ${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file
-  tar xzf $dl_file armadactl
+  curl --silent --location --remote-name "${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file"
+  tar xzf "$dl_file armadactl"
 }
 
 armadactl-retry() {
@@ -73,23 +77,23 @@ armadactl-retry() {
     fi
     sleep 5
   done
-  log "armadactl command failed after 10 attempts" >&2
+  logerr "Running \"armadactl $*\" failed after 10 attempts" >&2
   exit 1
 }
 
 start-armada() {
   if [ -d $AOHOME ]; then
-    log "Using existing armada-operator repo at $AOHOME"
+    echo "Using existing armada-operator repo at $AOHOME"
   else
     if ! git clone $AOREPO $AOHOME; then
-      log "There was a problem cloning the armada-operator repo; exiting now"
+      logerr "There was a problem cloning the armada-operator repo; exiting now"
       exit 1
     fi
 
 
     log "Patching armada-operator"
     if ! patch -p1 -d $AOHOME/ < ./e2e/armada-operator.patch; then
-      log "There was an error patching the repo copy $AOHOME"
+      logerr "There was an error patching the repo copy $AOHOME"
       exit 1
     fi
   fi
@@ -98,28 +102,34 @@ start-armada() {
   log  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
   if ! make kind-all 2>&1 | tee armada-start.txt; then
     echo ""
-    log "There was a problem starting Armada"
-    log "Exiting now"
+    logerr "There was a problem starting Armada; exiting now"
     exit 1
   fi
   cd ..
 }
 
 main() {
-  log "Checking for armadactl .."
+  if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
+    logerr "IMAGE_NAME is not defined. Please set it in ./scripts/config.sh, for example:"
+    logerr "IMAGE_NAME=spark:testing"
+    exit 1
+  fi
+
+  if [ -z "$ARMADA_QUEUE" ]; then
+    logerr "ARMADA_QUEUE is not defined. Please set it in ./scripts/config.sh, for example:"
+    logerr "ARMADA_QUEUE=spark-test"
+    exit 1
+  fi
+  echo "Checking for armadactl .."
   if ! test -x armadactl; then
     log "Fetching armadactl..."
     fetch-armadactl
   fi
 
   log "Checking if image $IMAGE_NAME is available ..."
-  img_name=$(echo "$IMAGE_NAME" | awk -F: '{print $1}')
-  img_tag=$(echo "$IMAGE_NAME" | awk -F: '{print $2}')
-  img_match=$(docker images | grep -P "^${img_name}\s*${img_tag}\s+")
-
-  if [ -z "$img_match" ] ; then
-    log "Image $IMAGE_NAME not found in local Docker instance."
-    log "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this"
+  if ! docker image inspect "$IMAGE_NAME" > /dev/null; then
+    logerr "Image $IMAGE_NAME not found in local Docker instance."
+    logerr "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
     exit 1
   fi
 
@@ -135,8 +145,7 @@ main() {
       log "FAILED: output is "
       cat $STATUSFILE
       echo ""
-      log "Armada cluster appears to be running, but an unknown error has happened"
-      log "Exiting now"
+      logerr "Armada cluster appears to be running, but an unknown error has happened; exiting now"
       exit 1
     fi
   else
@@ -144,8 +153,8 @@ main() {
     rm armadactl-query.txt
   fi
 
-  log "Creating $TEST_QUEUE queue..."
-  armadactl-retry create queue "$TEST_QUEUE"
+  log "Creating $ARMADA_QUEUE queue..."
+  armadactl-retry create queue "$ARMADA_QUEUE"
 
   log "Loading Docker image $IMAGE_NAME into Armada cluster"
   $AOHOME/bin/tooling/kind load docker-image "$IMAGE_NAME" --name armada
@@ -160,7 +169,7 @@ main() {
     sleep 5   # wait a moment for Armada to schedule & run the job
 
     timeout 1m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
-    if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
+    if grep "Job failed:" armadactl.watch.log; then logerr "Job failed"; exit 1; fi
 
     log "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
