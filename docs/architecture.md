@@ -1,11 +1,12 @@
-# All About armada-spark
+# All About `armada-spark`
 
 ## Running `armada-spark`
 
-`armada-spark`'s main entry point is a class called `ArmadaSparkSubmit`. It's
-designed to be a drop-in replacement for `spark-submit`. However, due to
-limitations in upstream integration, we load it via the `spark-class` helper
-program instead of using `spark-submit` directly.
+`armada-spark`'s main entry point is a class called [`ArmadaSparkSubmit`](https://github.com/ClifHouck/armada-spark/blob/master/src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
+It's designed to be a drop-in replacement/extension for `spark-submit`.
+However, due to limitations in upstream integration, we load it via the 
+[`spark-class`](https://github.com/apache/spark/blob/master/bin/spark-class)
+helper program instead of using `spark-submit` directly.
 
 Here's an example of calling `ArmadaSparkSubmit`:
 
@@ -25,13 +26,13 @@ Quite a handful, but let's break down some of the important bits:
 
 The first argument to `spark-class` is the fully-qualified java classpath to
 `ArmadaSparkSubmit`. This will load and execute `ArmadaSparkSubmit.main` which
-will be behave almost exactly like the base `spark-submit`, but
+will behave almost exactly like the base `spark-submit`, but 
 `AramdaSparkSubmit` knows how to parse and handle `armada` protocol URLs.
 
 The `--master` flag specifies the master URL for spark to use to submit work.
-If we break down the URL we have the protocol `armada` and a (hostname, port)
-tuple, in this case `localhost:50051`. So `ArmadaSparkSubmit` will try to submit
-armada jobs to `localhost` on port `50051`.
+If we break down the URL we have the protocol `armada`, and a (hostname, port)
+tuple, in this case: (`localhost`, `50051`). So `ArmadaSparkSubmit` will try to submit
+Armada jobs to `localhost` on port `50051`.
 
 The next important flag comes from `--class` which tells `ArmadaSparkSubmit` to
 load `org.apache.spark.examples.SparkPi` as the main workload program.
@@ -77,24 +78,25 @@ its Executors. If all goes well the jobs will succeed and produce a result!
 ## Configuration Options
 
 `armada-spark` has a slew of configuration options that can be set with the
-`--conf` flag:
+`--conf` flag.
 
-- `spark.armada.Executor.trackerPollingInterval` - A `String` value specifying
+Each option consists of a `String` unless otherwise noted.
+
+- `spark.armada.Executor.trackerPollingInterval` - Specifies
     the interval between polls to check the state of Executors.
-- `spark.armada.Executor.trackerTimeout` - A `String` specifying the time to
+- `spark.armada.Executor.trackerTimeout` - Specifies the time to
     wait for the minimum number of Executors.
-- `spark.armada.lookouturl` - A `String` value that gives the base URL for
-    Armada's Lookout service.
+- `spark.armada.lookouturl` - Setsthe base URL to use for Armada's Lookout
+    service.
 - `spark.armada.health.checkTimeout` - Time to wait for Armada's health check
-    to succeed. A `String` value specifying seconds to wait.
+    to succeed in seconds.
 - `spark.armada.clusterSelectors` - A comma separated list of kubernetes
     label selectors (in key=value format) to ensure the spark Driver and
-    its Executors are deployed to the same cluster. `String` value.
+    its Executors are deployed to the same cluster.
 - `spark.armada.scheduling.nodeUniformityLabel` - A single kubernetes label to
     apply to both Driver and Executors.
 - `spark.armada.DriverServiceNamePrefix` - Defines the Driver's service name
-    prefix within Armada. A `String` consistenting of lowercase a-z and
-    '-' characters only.
+    prefix within Armada. Must consist of lowercase a-z and '-' characters only.
 - `spark.armada.global.labels` - A comma separated list of kubernetes labels
     (in key=value format) to be added to all both the Driver and Executor pods.
 - `spark.armada.Driver.labels` - A comma separated list of kubernetes labels
@@ -106,14 +108,14 @@ its Executors. If all goes well the jobs will succeed and produce a result!
 
 ## Scala Source
 
-`armada-spark` can be built from source using maven. See the [README](https://github.com/armadaproject/armada-spark/blob/master/README.md) for more
-information on building `armada-spark`.
+`armada-spark` can be built from source using maven. See the [Building Armada Spark](https://github.com/armadaproject/armada-spark/blob/master/README.md#building-armada-spark)
+section of the README for more information.
 
 ## Docker image
 
 `armada-spark` uses docker to produce container images that serve as spark
-Drivers and Executors. See the [README](https://github.com/armadaproject/armada-spark/blob/master/README.md)
-for more information on how to build these images.
+Drivers and Executors. See the [Building Docker Images](https://github.com/ClifHouck/armada-spark/blob/master/README.md#building-docker-images)
+section of the README for more information.
 
 # Architecture & Design
 
@@ -134,7 +136,7 @@ The basic flow of an `armada-spark` execution is as follows:
 
 1. End-user calls `ArmadaSparkSubmit.main` via `spark-submit` or `spark-class`.
 2. `ArmadaSparkSubmit`:
-    - Constructs an `ArmadaClient`.
+    - Constructs an `ArmadaClient` to communicate with Armada Server via gRPC.
     - Verifies connectivity and service health of specified Armada URL.
     - Submits a Driver job to Armada.
     - Submits `n` Executor jobs to Armada.
@@ -159,14 +161,27 @@ manage Drivers and Executors to a compute cluster like YARN, Mesos,
 Kubernetes, and now Armada. Confusingly, cluster managers are also sometimes
 referred to as "resource-managers" within the Spark codebase.
 
+### Defining a new Cluster Manager
+
 To define a new cluster manager within Spark one would inherit the `trait`
 [`ExternalClusterManager`](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/ExternalClusterManager.scala)
 and implement the required methods. Mostly they center around the creation,
 management, and deletion of Spark Executors tied to a particular Driver program.
 
-// TODO: Talk about spark-submit and integration there.
+### Integrating with `spark-submit`
 
-## Using Armada as a "cluster"
+While Spark seems to take some care around providing a defined interface for
+individual Cluster Managers, there's still a fair bit of cluster-specific code
+within `SparkSubmit`. Absent upstream integration, `armada-spark` maintains and
+provides it's own `ArmadaSparkSubmit` implementation which serves as a drop-in
+replacement.
+
+Currently the following versions of Spark are supported:
+- 3.3
+- 3.5
+- 4.1
+
+### Using Armada as a "cluster"
 
 While Armada can be treated as a cluster for the purposes of Spark, some care
 and consideration must be taken in order to meet most, if not all, of Spark's
@@ -223,9 +238,11 @@ A unique service name is assigned to each Spark job’s driver when submitting
 a Spark job to Armada. This service name acts as a DNS name within Kubernetes 
 and allows Spark Executors to connect to their corresponding Drivers.
 
-### Driver and Executor as JVM programs
+### Armada Job Limitations
 
-// TODO: Is this section necessary?
+```
+// TODO: Fill out
+```
 
 # `armada-spark` Deployment Considerations
 
@@ -268,7 +285,7 @@ An example configuration of Armada services with all the necessary options
 configured can be found by applying this [patch](https://github.com/armadaproject/armada-spark/blob/master/e2e/armada-operator.patch)
 to the [Armada Operator Dev Quickstart Config](https://github.com/armadaproject/armada-operator/blob/main/dev/quickstart/armada-crs.yaml)
 
-# Conclusion
+# Where To Go From Here
 
 ```
 // TODO
