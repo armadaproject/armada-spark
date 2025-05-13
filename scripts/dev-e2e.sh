@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eo pipefail
+set -euo pipefail
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -8,7 +8,6 @@ NC='\033[0m'
 
 STATUSFILE='armadactl-query.txt'
 AOREPO='https://github.com/armadaproject/armada-operator.git'
-AOHOME=../armada-operator
 ARMADA_CTL_VERSION='0.18.3'
 JOB_DETAILS=1
 
@@ -33,6 +32,8 @@ done
 
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
+
+AOHOME="$scripts/../../armada-operator"
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -69,12 +70,12 @@ fetch-armadactl() {
   dl_file=armadactl_${ARMADA_CTL_VERSION}_${dl_os}_${dl_arch}.tar.gz
 
   curl --silent --location --remote-name "${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file"
-  tar xzf "$dl_file armadactl"
+  tar xzf "$dl_file" armadactl && mv armadactl "$scripts"/
 }
 
 armadactl-retry() {
   for attempt in {1..10}; do
-    if ./armadactl "$@" > /dev/null 2>&1; then
+    if "$scripts"/armadactl "$@" > /dev/null 2>&1; then
       return 0
     fi
     sleep 5
@@ -84,24 +85,24 @@ armadactl-retry() {
 }
 
 start-armada() {
-  if [ -d $AOHOME ]; then
+  if [ -d "$AOHOME" ]; then
     echo "Using existing armada-operator repo at $AOHOME"
   else
-    if ! git clone $AOREPO $AOHOME; then
+    if ! git clone "$AOREPO" "$AOHOME"; then
       err "There was a problem cloning the armada-operator repo; exiting now"
       exit 1
     fi
 
 
     log "Patching armada-operator"
-    if ! patch -p1 -d $AOHOME/ < ./e2e/armada-operator.patch; then
+    if ! patch -p1 -d "$AOHOME/" < "$scripts/../e2e/armada-operator.patch"; then
       err "There was an error patching the repo copy $AOHOME"
       exit 1
     fi
   fi
 
-  cd $AOHOME || exit 1
-  log  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
+  cd "$AOHOME" || exit 1
+  echo  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
   if ! make kind-all 2>&1 | tee armada-start.txt; then
     echo ""
     err "There was a problem starting Armada; exiting now"
@@ -123,7 +124,7 @@ main() {
     exit 1
   fi
   echo "Checking for armadactl .."
-  if ! test -x armadactl; then
+  if ! test -x "$scripts"/armadactl; then
     log "Fetching armadactl..."
     fetch-armadactl
   fi
@@ -137,37 +138,36 @@ main() {
 
   echo "Checking to see if Armada cluster is available ..."
 
-  if ! armadactl get queues > $STATUSFILE 2>&1 ; then
-    if grep -q 'connection refused' $STATUSFILE; then
-      log "Using armada-operator to start Armada cluster; this may take up to 5 minutes"
+  if ! armadactl get queues > "$STATUSFILE" 2>&1 ; then
+    if grep -q 'connection refused' "$STATUSFILE"; then
+      echo "Using armada-operator to start Armada cluster; this may take up to 5 minutes"
       start-armada
       sleep 5
       armadactl-retry get queues
     else
-      log "FAILED: output is "
-      cat $STATUSFILE
+      err "FAILED: output is "
+      cat "$STATUSFILE"
       echo ""
       err "Armada cluster appears to be running, but an unknown error has happened; exiting now"
       exit 1
     fi
   else
     log "Armada is available"
-    rm armadactl-query.txt
   fi
 
   echo "Creating $ARMADA_QUEUE queue..."
   armadactl-retry create queue "$ARMADA_QUEUE"
 
   echo "Loading Docker image $IMAGE_NAME into Armada cluster"
-  $AOHOME/bin/tooling/kind load docker-image "$IMAGE_NAME" --name armada
+  "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
 
   echo "Submitting SparkPI job"
-  scripts/submitSparkPi.sh  2>&1 | tee submitSparkPi.log
+  "$scripts/submitSparkPi.sh"  2>&1 | tee submitSparkPi.log
 
   DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
   EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
 
-  if [ $JOB_DETAILS = 1 ]; then
+  if [ "$JOB_DETAILS" = 1 ]; then
     sleep 5   # wait a moment for Armada to schedule & run the job
 
     timeout 1m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
@@ -176,7 +176,7 @@ main() {
     echo "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
       --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq
-    for exec_jobid in $EXECUTOR_JOBIDS ; do
+    for exec_jobid in $EXECUTOR_JOBIDS; do
       log "Executor Job Spec  $exec_jobid"
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
           --json "{\"jobId\":\"$exec_jobid\"}" | jq
