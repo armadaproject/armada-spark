@@ -136,7 +136,7 @@ main() {
 
   echo "Checking to see if Armada cluster is available ..."
 
-  if ! armadactl get queues > "$STATUSFILE" 2>&1 ; then
+  if ! "$scripts"/armadactl get queues > "$STATUSFILE" 2>&1 ; then
     if grep -q 'connection refused' "$STATUSFILE"; then
       echo "Using armada-operator to start Armada cluster; this may take up to 5 minutes"
       start-armada
@@ -168,7 +168,7 @@ main() {
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 5   # wait a moment for Armada to schedule & run the job
 
-    timeout 1m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
+    timeout 1m "$scripts"/armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
     if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
 
     echo "Driver Job Spec  $DRIVER_JOBID"
