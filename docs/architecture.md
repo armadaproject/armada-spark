@@ -24,10 +24,10 @@ Here's an example of calling `ArmadaSparkSubmit`:
 
 Quite a handful, but let's break down some of the important bits:
 
-The first argument to `spark-class` is the fully-qualified java classpath to
+The first argument to `spark-class` is the fully-qualified Java classpath to
 `ArmadaSparkSubmit`. This will load and execute `ArmadaSparkSubmit.main` which
 will behave almost exactly like the base `spark-submit`, but 
-`AramdaSparkSubmit` knows how to parse and handle `armada` protocol URLs.
+`ArmadaSparkSubmit` knows how to parse and handle `armada` protocol URLs.
 
 The `--master` flag specifies the master URL for spark to use to submit work.
 If we break down the URL we have the protocol `armada`, and a (hostname, port)
@@ -42,7 +42,7 @@ Then comes several configuration options specified with `--conf` flags:
   launch. `armada-spark` only supports static Executors at the moment.
 - `--conf spark.kubernetes.container.image=armada-spark` lets us know what
   container image `ArmadaSparkSubmit` should use for the Driver and Executors.
-- `--conf spark.armada.lookouturl=http://localhost:30000` gives the lookout
+- `--conf spark.armada.lookouturl=http://localhost:30000` gives the Lookout
     URL so we can easily find the results of jobs submitted to Armada.
 - `--conf spark.armada.clusterSelectors="armada-spark=true"` helps Armada pick
     a specific kubernetes cluster to use in order to shedule Executors and
@@ -55,7 +55,7 @@ will be located within the container image specified earlier.
 Once called, `armada-spark` will submit a Driver job and a job for each of the
 Executors. Through some magic we'll discuss a bit later, the Driver and
 Executors will coordinate to accomplish whatever work is laid out in the loaded
-`--class`. Here's outpout from a run of `ArmadaSparkSubmit`:
+`--class`. Here's output from a run of `ArmadaSparkSubmit`:
 
 ```
 Armada selected as cluster manager.
@@ -72,7 +72,7 @@ Lookout URL for this job is http://localhost:30000/?page=0&sort[id]=jobId&sort[d
 25/05/01 16:42:27 INFO ShutdownHookManager: Deleting directory /tmp/spark-a5c32faa-d3e4-4d5d-82a6-cdb79bac7984
 ```
 
-Note the lookout URL. This will let us easily view results for the Driver and
+Note the Lookout URL. This will let us easily view results for the Driver and
 its Executors. If all goes well the jobs will succeed and produce a result!
 
 ## Configuration Options
@@ -86,22 +86,22 @@ Each option consists of a `String` unless otherwise noted.
     the interval between polls to check the state of Executors.
 - `spark.armada.Executor.trackerTimeout` - Specifies the time to
     wait for the minimum number of Executors.
-- `spark.armada.lookouturl` - Setsthe base URL to use for Armada's Lookout
+- `spark.armada.lookouturl` - Sets the base URL to use for Armada's Lookout
     service.
 - `spark.armada.health.checkTimeout` - Time to wait for Armada's health check
     to succeed in seconds.
-- `spark.armada.clusterSelectors` - A comma separated list of kubernetes
+- `spark.armada.clusterSelectors` - A comma-separated list of kubernetes
     label selectors (in key=value format) to ensure the spark Driver and
     its Executors are deployed to the same cluster.
 - `spark.armada.scheduling.nodeUniformityLabel` - A single kubernetes label to
     apply to both Driver and Executors.
 - `spark.armada.DriverServiceNamePrefix` - Defines the Driver's service name
     prefix within Armada. Must consist of lowercase a-z and '-' characters only.
-- `spark.armada.global.labels` - A comma separated list of kubernetes labels
+- `spark.armada.global.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to all both the Driver and Executor pods.
-- `spark.armada.Driver.labels` - A comma separated list of kubernetes labels
+- `spark.armada.Driver.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to the Driver pod.
-- `spark.armada.Executor.labels` A comma separated list of kubernetes labels
+- `spark.armada.Executor.labels` A comma-separated list of kubernetes labels
     (in key=value format) to be added to all Executor pods.
 
 # Building `armada-spark`
@@ -123,7 +123,7 @@ section of the README for more information.
 
 Fundamentally, `armada-spark`'s architecture and design is closely related to
 the existing Spark Kubernetes cluster manager, but with the added layer of
-Armada and it's job system on top.
+Armada and its job system on top.
 
 A great overview of what a "cluster" is from Spark's perspective can be found
 [here](https://spark.apache.org/docs/latest/cluster-overview.html).
@@ -156,7 +156,7 @@ The basic flow of an `armada-spark` execution is as follows:
 
 ## Integrating with Spark, or "What is a Cluster Manager?"
 
-A "Cluster Manger" is a concept within Spark which allows Spark to submit and
+A "Cluster Manager" is a concept within Spark which allows Spark to submit and
 manage Drivers and Executors to a compute cluster like YARN, Mesos,
 Kubernetes, and now Armada. Confusingly, cluster managers are also sometimes
 referred to as "resource-managers" within the Spark codebase.
@@ -193,7 +193,7 @@ One major requirement that **must** be met is network communication between
 Drivers and Executors. This allows Drivers to submit tasks to the Executors
 and collate their results. `armada-spark` achieves this through the use of
 [kubernetes labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/).
-Used correctly, these labels induce the Armada scheulder to schedule Drivers
+Used correctly, these labels induce the Armada scheduler to schedule Drivers
 and their accompanying Executors to the same kubernetes cluster managed by
 Armada. Kubernetes cluster networking topology guarantees that nodes within the
 cluster will be able to communicate. Scheduling to the same cluster also has
@@ -252,7 +252,7 @@ and allows Spark Executors to connect to their corresponding Drivers.
 
 All nodes in a particular Kubernetes cluster must be labeled by a common
 `(label, value)` tuple. The `label` must be an agreed upon name which shows
-the cluster will accept `armada-spark` jobs. Something like `armada-spark`.
+the cluster will accept `armada-spark` jobs (e.g., `armada-spark`).
 The `value` must be unique per cluster to ensure individual `armada-spark` jobs
 are scheduled to the same cluster. Cross-cluster jobs are not currently supported
 by `armada-spark`. This should match an entry in the `trackedNodeLabels` and
