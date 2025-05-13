@@ -43,7 +43,7 @@ private[spark] class ArmadaClusterManagerBackend(
   private val executorTracker = new ExecutorTracker(new SystemClock(), initialExecutors)
 
   override def applicationId(): String = {
-    conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)
+    conf.getAppId
   }
 
   override def start(): Unit = {

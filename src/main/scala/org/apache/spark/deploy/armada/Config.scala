@@ -166,7 +166,7 @@ private[spark] object Config {
       .createWithDefault("default")
 
   val DRIVER_JOB_SET_ID: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.driver.job.set.id")
+    ConfigBuilder("spark.armada.driver.jobset")
       .doc("The Armada job set id that will be used for running the driver pods.")
       .version("1.0.0")
       .stringConf
