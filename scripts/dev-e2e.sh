@@ -101,14 +101,12 @@ start-armada() {
     fi
   fi
 
-  cd "$AOHOME" || exit 1
   echo  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
-  if ! make kind-all 2>&1 | tee armada-start.txt; then
+  if ! (cd "$AOHOME"; make kind-all 2>&1) | tee armada-start.txt; then
     echo ""
     err "There was a problem starting Armada; exiting now"
     exit 1
   fi
-  cd ..
 }
 
 main() {
@@ -130,7 +128,7 @@ main() {
   fi
 
   echo "Checking if image $IMAGE_NAME is available ..."
-  if ! docker image inspect "$IMAGE_NAME" > /dev/null; then
+  if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
     err "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
     exit 1
@@ -142,7 +140,7 @@ main() {
     if grep -q 'connection refused' "$STATUSFILE"; then
       echo "Using armada-operator to start Armada cluster; this may take up to 5 minutes"
       start-armada
-      sleep 5
+      sleep 10
       armadactl-retry get queues
     else
       err "FAILED: output is "
