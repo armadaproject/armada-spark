@@ -69,8 +69,8 @@ fetch-armadactl() {
 
   dl_file=armadactl_${ARMADA_CTL_VERSION}_${dl_os}_${dl_arch}.tar.gz
 
-  curl --silent --location --remote-name "${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file"
-  tar xzf "$dl_file" armadactl && mv armadactl "$scripts"/
+  curl --silent --location "${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file" > "$scripts/$dl_file"
+  (cd "$scripts" && tar xzf "$dl_file" armadactl)
 }
 
 armadactl-retry() {
