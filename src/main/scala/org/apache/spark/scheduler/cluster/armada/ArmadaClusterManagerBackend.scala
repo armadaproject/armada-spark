@@ -21,11 +21,11 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config.{
-  ARMADA_CLUSTER_SELECTORS,
+  ARMADA_JOB_NODE_SELECTORS,
   ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
   ARMADA_EXECUTOR_TRACKER_TIMEOUT,
   commaSeparatedLabelsToMap,
-  GANG_SCHEDULING_NODE_UNIFORMITY_LABEL
+  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY
 }
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
@@ -54,7 +54,7 @@ private[spark] class ArmadaClusterManagerBackend(
     GangSchedulingAnnotations(
       None,
       initialExecutors,
-      conf.get(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL)
+      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
     )
 
   override def applicationId(): String = {
