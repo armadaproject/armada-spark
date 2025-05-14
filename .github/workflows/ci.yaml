@@ -14,6 +14,9 @@ on:
 permissions: {}
 
 jobs:
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yaml
   build:
     name: Build
     uses: ./.github/workflows/build.yaml
@@ -23,3 +26,30 @@ jobs:
   e2e:
     name: E2E
     uses: ./.github/workflows/e2e.yaml
+
+  # A single job that succeeds if all jobs listed under 'needs' succeed.
+  # This allows to configure a single job as a required check.
+  # The 'needed' jobs then can be changed through pull-requests.
+  all-jobs-succeeded:
+    name: All jobs succeeded
+    if: always()
+    # the if clauses below have to reflect the number of jobs listed here
+    needs:
+      - lint
+      - build
+      - build-snapshot
+      - e2e
+    env:
+      RESULTS: ${{ join(needs.*.result, ',') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Success"
+        # we expect all required jobs to have success result
+        if: env.RESULTS == 'success,success,success,success'
+        run: true
+        shell: bash
+      - name: "Failure"
+        # we expect all required jobs to have success result, fail otherwise
+        if: env.RESULTS != 'success,success,success,success'
+        run: false
+        shell: bash
