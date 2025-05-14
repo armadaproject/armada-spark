@@ -39,5 +39,5 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.executor.instances=4 \
     --conf spark.kubernetes.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
-    --conf spark.armada.clusterSelectors="armada-spark=true" \
+    --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
     $FIRST_ARG 100
