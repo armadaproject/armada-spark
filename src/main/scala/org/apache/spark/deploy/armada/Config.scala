@@ -122,6 +122,26 @@ private[spark] object Config {
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
       .createWithDefaultString("")
 
+  val ARMADA_SPARK_JOB_NAMESPACE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.namespace")
+      .doc(
+        "The namespace to use for the job. If not set, the default namespace will be used."
+      )
+      .stringConf
+      .createWithDefaultString("default")
+
+  val ARMADA_SPARK_JOB_PRIORITY: ConfigEntry[Int] =
+    ConfigBuilder("spark.armada.scheduling.priority")
+      .doc(
+        "The priority to use for the job. If not set, the default priority will be used."
+      )
+      .intConf
+      .checkValue(
+        _ >= 0,
+        "Priority must be equal or greater than 0."
+      )
+      .createWithDefault(0)
+
   val ARMADA_SPARK_EXECUTOR_LABELS: ConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.labels")
       .doc(

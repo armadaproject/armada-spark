@@ -17,28 +17,27 @@
 package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
+  ARMADA_HEALTH_CHECK_TIMEOUT,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
-  SPARK_DRIVER_SERVICE_NAME_PREFIX
+  ARMADA_LOOKOUTURL,
+  ARMADA_SPARK_DRIVER_LABELS,
+  ARMADA_SPARK_EXECUTOR_LABELS,
+  ARMADA_SPARK_JOB_NAMESPACE,
+  ARMADA_SPARK_JOB_PRIORITY,
+  ARMADA_SPARK_POD_LABELS,
+  SPARK_DRIVER_SERVICE_NAME_PREFIX,
+  commaSeparatedLabelsToMap
 }
 
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import _root_.io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_LOOKOUTURL,
-  commaSeparatedLabelsToMap,
-  ARMADA_SPARK_POD_LABELS,
-  ARMADA_SPARK_DRIVER_LABELS,
-  ARMADA_SPARK_EXECUTOR_LABELS
-}
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations._
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
@@ -331,12 +330,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_POD_LABELS))
     val executorLabels =
       globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_EXECUTOR_LABELS))
+    val namespace = conf.get(ARMADA_SPARK_JOB_NAMESPACE)
+    val priority  = conf.get(ARMADA_SPARK_JOB_PRIORITY)
     val executorJobs =
       for (container <- executorContainers)
         yield api.submit
           .JobSubmitRequestItem()
-          .withPriority(0)
-          .withNamespace("default")
+          .withPriority(priority)
+          .withNamespace(namespace)
           .withLabels(executorLabels)
           .withAnnotations(annotations)
           .withPodSpec(
@@ -361,8 +362,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_DRIVER_LABELS))
     val driverJob = api.submit
       .JobSubmitRequestItem()
-      .withPriority(0)
-      .withNamespace("default")
+      .withPriority(priority)
+      .withNamespace(namespace)
       .withLabels(driverLabels)
       .withAnnotations(annotations)
       .withPodSpec(podSpec)
