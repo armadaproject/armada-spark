@@ -36,8 +36,11 @@ docker run --rm --network host $IMAGE_NAME \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
+    --conf spark.armada.internalUrl=armada-server.armada:50051 \
+    --conf spark.armada.queue=$ARMADA_QUEUE \
+    --conf spark.armada.jobSetId=armada-spark \
     --conf spark.executor.instances=4 \
     --conf spark.kubernetes.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
-    --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
+    --conf spark.armada.scheduling.nodeUniformity=kubernetes.io/hostname \
     $FIRST_ARG 100

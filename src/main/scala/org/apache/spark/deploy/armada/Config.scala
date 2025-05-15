@@ -27,6 +27,34 @@ private[spark] object Config {
   private val invalidLabelListErrorMessage =
     "Must be a comma-separated list of valid Kubernetes labels (each as key=value)"
 
+  val ARMADA_SERVER_INTERNAL_URL: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.internalUrl")
+      .doc(
+        "The Kubernetes DNS or IP address of the Armada Server. " +
+          "This URL is used by the Driver when running in Cluster mode. " +
+          "If not specified, 'spark.master' will be used."
+      )
+      .stringConf
+      .createWithDefaultString("")
+
+  val ARMADA_JOB_QUEUE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.queue")
+      .doc(
+        "The name of the job queue to use for the Armada job."
+      )
+      .stringConf
+      .checkValue(_.nonEmpty, "Queue name must be provided.")
+      .createWithDefault("")
+
+  val ARMADA_JOB_SET_ID: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.jobSetId")
+      .doc(
+        "The JobSet ID for which the driver and executor pods will be part of."
+      )
+      .stringConf
+      .checkValue(_.nonEmpty, "Job set ID must be provided.")
+      .createWithDefault("")
+
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
       .doc(
@@ -86,18 +114,21 @@ private[spark] object Config {
           "Specifically, if set, all gang jobs are scheduled onto nodes for which the value of the provided label is equal."
       )
       .stringConf
-      .checkValue(K8sValidator.Label.isValidKey, "Only a valid RFC 1123 label key is allowed!")
-      .createWithDefaultString("armada-spark")
+      .checkValue(
+        v => if (v.nonEmpty) K8sValidator.Label.isValidKey(v) else true,
+        "Only a valid RFC 1123 label key is allowed!"
+      )
+      .createWithDefaultString("")
 
   val SPARK_DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.serviceNamePrefix")
       .doc(
-        "Defines the driver's service name prefix within Armada. Lowercase a-z and '-' characters only. " +
-          "Max length of 30 characters."
+        "Prefix for the driver service name which should follow the RFC 1035 label names " +
+          "specification. Should not be longer than 57 characters."
       )
       .stringConf
       .checkValue(
-        K8sValidator.Name.isValidPrefix,
+        v => v.length <= 57 && K8sValidator.Name.isValidPrefix(v),
         "Service name prefix must adhere to RFC 1035 label names."
       )
       .createWithDefaultString("armada-spark-driver-")
@@ -130,12 +161,12 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString("default")
 
-  val ARMADA_SPARK_JOB_PRIORITY: ConfigEntry[Int] =
+  val ARMADA_SPARK_JOB_PRIORITY: ConfigEntry[Double] =
     ConfigBuilder("spark.armada.scheduling.priority")
       .doc(
         "The priority to use for the job. If not set, the default priority will be used."
       )
-      .intConf
+      .doubleConf
       .checkValue(
         _ >= 0,
         "Priority must be equal or greater than 0."

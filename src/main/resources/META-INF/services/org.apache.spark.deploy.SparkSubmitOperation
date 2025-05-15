@@ -15,4 +15,4 @@
 # limitations under the License.
 #
 
-io.armadaproject.spark.deploy.submit.ArmadaSubmitOperation
+org.apache.spark.deploy.armada.submit.ArmadaSparkSubmitOperation
