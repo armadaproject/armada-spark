@@ -6,7 +6,7 @@ scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
 
 AOHOME="$scripts/../../armada-operator"
-STATUSFILE='armadactl-query.txt'
+STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
 JOB_DETAILS=1
@@ -14,6 +14,8 @@ JOB_DETAILS=1
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
+
+trap 'rm -f -- "$STATUSFILE"' EXIT
 
 usage() {
   cat > /dev/stderr  <<USAGE
@@ -109,13 +111,13 @@ start-armada() {
 
 main() {
   if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
-    err "IMAGE_NAME is not defined. Please set it in ./scripts/config.sh, for example:"
+    err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
     exit 1
   fi
 
   if [ -z "$ARMADA_QUEUE" ]; then
-    err "ARMADA_QUEUE is not defined. Please set it in ./scripts/config.sh, for example:"
+    err "ARMADA_QUEUE is not defined. Please set it in $scripts/config.sh, for example:"
     err "ARMADA_QUEUE=spark-test"
     exit 1
   fi
@@ -128,7 +130,7 @@ main() {
   echo "Checking if image $IMAGE_NAME is available ..."
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
-    err "Rebuild the image (mvn clean package; ./scripts/createImage.sh), and re-run this script"
+    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh), and re-run this script"
     exit 1
   fi
 
@@ -155,10 +157,10 @@ main() {
   armadactl-retry create queue "$ARMADA_QUEUE"
 
   echo "Loading Docker image $IMAGE_NAME into Armada cluster"
-  "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
+  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
 
   echo "Submitting SparkPI job"
-  "$scripts/submitSparkPi.sh"  2>&1 | tee submitSparkPi.log
+  PATH="$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh"  2>&1 | tee submitSparkPi.log
 
   DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
   EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
