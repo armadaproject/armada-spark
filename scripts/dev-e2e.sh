@@ -2,14 +2,18 @@
 
 set -euo pipefail
 
+scripts="$(cd "$(dirname "$0")"; pwd)"
+source "$scripts"/init.sh
+
+AOHOME="$scripts/../../armada-operator"
+STATUSFILE='armadactl-query.txt'
+AOREPO='https://github.com/armadaproject/armada-operator.git'
+ARMADACTL_VERSION='0.19.1'
+JOB_DETAILS=1
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
-
-STATUSFILE='armadactl-query.txt'
-AOREPO='https://github.com/armadaproject/armada-operator.git'
-ARMADA_CTL_VERSION='0.18.3'
-JOB_DETAILS=1
 
 usage() {
   cat > /dev/stderr  <<USAGE
@@ -29,11 +33,6 @@ while getopts "s" opt; do
           usage ;;
     esac
 done
-
-scripts="$(cd "$(dirname "$0")"; pwd)"
-source "$scripts"/init.sh
-
-AOHOME="$scripts/../../armada-operator"
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -67,10 +66,9 @@ fetch-armadactl() {
     exit 1
   fi
 
-  dl_file=armadactl_${ARMADA_CTL_VERSION}_${dl_os}_${dl_arch}.tar.gz
+  dl_file=armadactl_${ARMADACTL_VERSION}_${dl_os}_${dl_arch}.tar.gz
 
-  curl --silent --location "${dl_url}/v${ARMADA_CTL_VERSION}/$dl_file" > "$scripts/$dl_file"
-  (cd "$scripts" && tar xzf "$dl_file" armadactl)
+  curl --silent --location "${dl_url}/v${ARMADACTL_VERSION}/$dl_file" | tar -C "$scripts" -xzf - armadactl
 }
 
 armadactl-retry() {
