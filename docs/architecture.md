@@ -2,9 +2,12 @@
 
 ## Running `armada-spark`
 
-`armada-spark`'s main entry point is a class called [`ArmadaSparkSubmit`](../src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
+`armada-spark`'s main entry point is a class called
+[`ArmadaSparkSubmit`](../src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
 It's designed to be a drop-in replacement/extension for `spark-submit`.
-However, due to limitations in upstream integration, we load it via the 
+However, upstream integration is not quite there yet, but we're going on getting
+it [accepted upstream](https://github.com/apache/spark/pull/50770), therefore
+we must load it via the
 [`spark-class`](https://github.com/apache/spark/blob/master/bin/spark-class)
 helper program instead of using `spark-submit` directly.
 
