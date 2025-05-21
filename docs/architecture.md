@@ -78,6 +78,28 @@ Lookout URL for this job is http://localhost:30000/?page=0&sort[id]=jobId&sort[d
 Note the Lookout URL. This will let us easily view results for the Driver and
 its Executors. If all goes well the jobs will succeed and produce a result!
 
+### Running Python Jobs
+
+`armada-spark` also supports running Python jobs instead of Java.
+
+The invocation is mostly the same:
+```bash
+ $ /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
+    --master armada://localhost:50051 --deploy-mode cluster \
+    --name python-pi \
+    --conf spark.Executor.instances=4 \
+    --conf spark.kubernetes.container.image=armada-spark \
+    --conf spark.armada.lookouturl=http://localhost:30000 \
+    --conf spark.armada.clusterSelectors="armada-spark=true" \
+    /opt/spark/examples/src/main/python/pi.py
+```
+
+With a couple of critical differences:
+- The `--class` flag is absent.
+- Instead of passing a `jar` file as the final argument, a Python script is specified.
+
+Execution will proceed similarly as in the Java case.
+
 ## Configuration Options
 
 `armada-spark` has a slew of configuration options that can be set with the
