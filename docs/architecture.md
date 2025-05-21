@@ -237,7 +237,7 @@ the first image you'll find is a diagram showing a complete, directed graph betw
 - Cluster Manager
 
 and while the diagram appears to separate the "Cluster Manager" out as a separate
-program or node, in reality it tends to "live" in the same process as the
+program or node, in reality it "lives" in the same process as the
 Driver. So by ensuring connectivity between the Driver and Executors, we also
 get connectivity with the "Cluster Manager".
 
