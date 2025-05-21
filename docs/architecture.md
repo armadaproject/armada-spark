@@ -184,7 +184,7 @@ The basic flow of an `armada-spark` execution is as follows:
 
 A "Cluster Manager" is a concept within Spark which allows Spark to submit and
 manage Drivers and Executors to a compute cluster like YARN, Mesos,
-Kubernetes, and now Armada. Confusingly, cluster managers are also sometimes
+Kubernetes, and now Armada. Something to note: cluster managers are also sometimes
 referred to as "resource-managers" within the Spark codebase.
 
 ### Defining a new Cluster Manager
