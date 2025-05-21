@@ -187,12 +187,14 @@ manage Drivers and Executors to a compute cluster like YARN, Mesos,
 Kubernetes, and now Armada. Something to note: cluster managers are also sometimes
 referred to as "resource-managers" within the Spark codebase.
 
-### Defining a new Cluster Manager
+### How Armada-Spark Becomes a Cluster Manager
 
 To define a new cluster manager within Spark one would inherit the `trait`
+The `armada-spark` cluster manager is defined by inheriting the
 [`ExternalClusterManager`](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/ExternalClusterManager.scala)
-and implement the required methods. Mostly they center around the creation,
-management, and deletion of Spark Executors tied to a particular Driver program.
+trait and implementing the required methods. Mostly those methods center around
+the creation, management, and deletion of Spark Executors tied to a particular
+Driver program.
 
 ### Integrating with `spark-submit`
 
