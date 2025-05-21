@@ -271,9 +271,9 @@ and allows Spark Executors to connect to their corresponding Drivers.
 
 ### Armada Job Limitations
 
-```
-// TODO: Fill out
-```
+One important limitation it remember is that Armada jobs may only have one Pod
+per job. This necessitates the separation drivers and executors into their own
+jobs so their corresponding Pods can be freely scheduled by Armada.
 
 # `armada-spark` Deployment Considerations
 
