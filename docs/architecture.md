@@ -2,7 +2,7 @@
 
 ## Running `armada-spark`
 
-`armada-spark`'s main entry point is a class called [`ArmadaSparkSubmit`](https://github.com/ClifHouck/armada-spark/blob/master/src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
+`armada-spark`'s main entry point is a class called [`ArmadaSparkSubmit`](../src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
 It's designed to be a drop-in replacement/extension for `spark-submit`.
 However, due to limitations in upstream integration, we load it via the 
 [`spark-class`](https://github.com/apache/spark/blob/master/bin/spark-class)
@@ -108,13 +108,13 @@ Each option consists of a `String` unless otherwise noted.
 
 ## Scala Source
 
-`armada-spark` can be built from source using maven. See the [Building Armada Spark](https://github.com/armadaproject/armada-spark/blob/master/README.md#building-armada-spark)
+`armada-spark` can be built from source using maven. See the [Building Armada Spark](../README.md#building-armada-spark)
 section of the README for more information.
 
 ## Docker image
 
 `armada-spark` uses docker to produce container images that serve as spark
-Drivers and Executors. See the [Building Docker Images](https://github.com/ClifHouck/armada-spark/blob/master/README.md#building-docker-images)
+Drivers and Executors. See the [Building Docker Images](../README.md#building-docker-images)
 section of the README for more information.
 
 # Architecture & Design
@@ -282,7 +282,7 @@ individual Driver.
 ### Example Configuration
 
 An example configuration of Armada services with all the necessary options
-configured can be found by applying this [patch](https://github.com/armadaproject/armada-spark/blob/master/e2e/armada-operator.patch)
+configured can be found by applying this [patch](../e2e/armada-operator.patch)
 to the [Armada Operator Dev Quickstart Config](https://github.com/armadaproject/armada-operator/blob/main/dev/quickstart/armada-crs.yaml)
 
 # Where To Go From Here
