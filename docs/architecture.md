@@ -200,7 +200,10 @@ Driver program.
 
 While Spark seems to take some care around providing a defined interface for
 individual Cluster Managers, there's still a fair bit of cluster-specific code
-within `SparkSubmit`. Absent upstream integration, `armada-spark` maintains and
+within `SparkSubmit`. While most of Spark supports an open "plugin" cluster
+manager architecture, SparkSubmit does not.
+
+Therefore, `armada-spark` maintains and
 provides it's own `ArmadaSparkSubmit` implementation which serves as a drop-in
 replacement.
 
