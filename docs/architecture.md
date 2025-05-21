@@ -146,9 +146,10 @@ section of the README for more information.
 
 ## Overview
 
-Fundamentally, `armada-spark`'s architecture and design is closely related to
-the existing Spark Kubernetes cluster manager, but with the added layer of
-Armada and its job system on top.
+`armada-spark` is implemented as a new
+[Spark Cluster Manager Type](https://spark.apache.org/docs/latest/cluster-overview.html#cluster-manager-types)
+It leverages much of the existing Spark Kubernetes cluster manager, but with
+the added layer of Armada and its job system on top.
 
 A great overview of what a "cluster" is from Spark's perspective can be found
 [here](https://spark.apache.org/docs/latest/cluster-overview.html).
