@@ -29,7 +29,7 @@ Quite a handful, but let's break down some of the important bits:
 
 The first argument to `spark-class` is the fully-qualified Java classpath to
 `ArmadaSparkSubmit`. This will load and execute `ArmadaSparkSubmit.main` which
-will behave almost exactly like the base `spark-submit`, but 
+will behave almost exactly like the base `spark-submit`, but
 `ArmadaSparkSubmit` knows how to parse and handle `armada` protocol URLs.
 
 The `--master` flag specifies the master URL for spark to use to submit work.
@@ -242,25 +242,25 @@ get connectivity with the "Cluster Manager".
 
 Armada, being a multi-cluster Kubernetes manager, takes on the role of
 scheduling "jobs" to the clusters it oversees. For now, it makes the most sense
-to separate each Driver and Executor into their own Armada job. There are 
+to separate each Driver and Executor into their own Armada job. There are
 several considerations that must be observed when submitting these jobs.
 
 #### Armada Gang Scheduling
 
-`armada-spark` uses gang scheduling annotations to schedule the driver and 
-its executors together. By using the gang scheduling “Node Uniformity Label” 
+`armada-spark` uses gang scheduling annotations to schedule the driver and
+its executors together. By using the gang scheduling “Node Uniformity Label”
 we can guarantee that a driver and its executors are scheduled to the same
 cluster if Kubernetes node labels are applied correctly.
 
 #### Kubernetes Node Labels
 
-Any Kubernetes worker nodes should have a common label, such as "armada-spark", 
+Any Kubernetes worker nodes should have a common label, such as "armada-spark",
 and each cluster should have a unique value assigned to that label.
 
 #### Custom Service Names
 
-A unique service name is assigned to each Spark job’s driver when submitting 
-a Spark job to Armada. This service name acts as a DNS name within Kubernetes 
+A unique service name is assigned to each Spark job’s driver when submitting
+a Spark job to Armada. This service name acts as a DNS name within Kubernetes
 and allows Spark Executors to connect to their corresponding Drivers.
 
 ### Armada Job Limitations
