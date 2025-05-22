@@ -50,12 +50,6 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker  = new ExecutorTracker(new SystemClock(), initialExecutors)
-  private val gangAnnotations =
-    GangSchedulingAnnotations(
-      None,
-      initialExecutors,
-      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
-    )
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(appId)
