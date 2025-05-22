@@ -1,5 +1,41 @@
 # All About `armada-spark`
 
+# Quickstart
+
+Make sure you have [Java](https://openjdk.org/)(8, 11, or 17),
+[Scala](https://www.scala-lang.org/)(2.12 or 2.13),
+and [Apache Maven](https://maven.apache.org/)(3.9.6+) installed.
+You also need Docker to build the `armada-spark` container image for use with
+Armada.
+
+Clone `armada-spark` to a local directory, then run:
+```bash
+./scripts/set-version.sh 3.5.3 2.13.15
+```
+This sets up `armada-spark` to be built with Spark 3.5.3 and Scala 2.13.15.
+
+Then build with:
+```bash
+mvn clean package
+```
+
+Assuming everything built, you can then create an image to be used with
+Kubernetes with `./scripts/createImage.sh`. Here's an example:
+
+```bash
+./scripts/createImage.sh -i armada-spark -m armada://localhost:30002 -q default -l http://localhost:30000
+```
+
+This builds the necessary image that runs armada-spark capable Spark Drivers
+and Executors. The image will be called `armada-spark`. The armada server URL
+will be `armada://localhost:30002`. The Armada queue used will be `default`.
+And finally, the lookout URL will be set to `http://localhost:30000`.
+
+To use the image you'll need an Armada instance along with the ability to load
+the image to whatever clusters Armada is overseeing.
+
+The [README](../README.md) covers all this in more detail.
+
 ## Running `armada-spark`
 
 `armada-spark`'s main entry point is a class called
