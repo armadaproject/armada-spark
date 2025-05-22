@@ -19,7 +19,7 @@ package org.apache.spark.deploy.armada
 import org.apache.spark.deploy.armada.validators.K8sValidator
 
 import java.util.concurrent.TimeUnit
-import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry, OptionalConfigEntry}
 
 import scala.util.{Failure, Success, Try}
 
@@ -27,7 +27,7 @@ private[spark] object Config {
   private val invalidLabelListErrorMessage =
     "Must be a comma-separated list of valid Kubernetes labels (each as key=value)"
 
-  val ARMADA_SERVER_INTERNAL_URL: ConfigEntry[String] =
+  val ARMADA_SERVER_INTERNAL_URL: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.internalUrl")
       .doc(
         "The Kubernetes DNS or IP address of the Armada Server. " +
@@ -35,25 +35,24 @@ private[spark] object Config {
           "If not specified, 'spark.master' will be used."
       )
       .stringConf
-      .createWithDefaultString("")
+      .createOptional
 
-  val ARMADA_JOB_QUEUE: ConfigEntry[String] =
+  val ARMADA_JOB_QUEUE: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.queue")
       .doc(
         "The name of the job queue to use for the Armada job."
       )
       .stringConf
-      .checkValue(_.nonEmpty, "Queue name must be provided.")
-      .createWithDefault("")
+      .createOptional
 
-  val ARMADA_JOB_SET_ID: ConfigEntry[String] =
+  val ARMADA_JOB_SET_ID: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.jobSetId")
       .doc(
-        "The JobSet ID for which the driver and executor pods will be part of."
+        "The JobSet ID for which the driver and executor pods will be part of. " +
+          "If not set, it will be derived from the Spark application name."
       )
       .stringConf
-      .checkValue(_.nonEmpty, "Job set ID must be provided.")
-      .createWithDefault("")
+      .createOptional
 
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
@@ -80,6 +79,16 @@ private[spark] object Config {
       )
       .createWithDefaultString("600s")
 
+  val ARMADA_EXECUTOR_CONNECTION_TIMEOUT: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.executor.connectionTimeout")
+      .doc("Time to wait for the executor to connect to the driver.")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(
+        _ > 0,
+        s"Connection timeout must be a positive time value."
+      )
+      .createWithDefaultString("300s")
+
   val ARMADA_LOOKOUTURL: ConfigEntry[String] =
     ConfigBuilder("spark.armada.lookouturl")
       .doc("URL base for the Armada Lookout UI.")
@@ -97,7 +106,7 @@ private[spark] object Config {
       .checkValue(_ > 0, s"Timeout must be a positive time value.")
       .createWithDefaultString("5")
 
-  val ARMADA_JOB_NODE_SELECTORS: ConfigEntry[String] =
+  val ARMADA_JOB_NODE_SELECTORS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.nodeSelectors")
       .doc(
         "A comma-separated list of kubernetes label selectors (in key=value format) to ensure " +
@@ -105,9 +114,9 @@ private[spark] object Config {
       )
       .stringConf
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
+      .createOptional
 
-  val ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY: ConfigEntry[String] =
+  val ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.nodeUniformity")
       .doc(
         "Constrains the jobs that make up a gang to be scheduled across a uniform set of nodes. " +
@@ -118,7 +127,7 @@ private[spark] object Config {
         v => if (v.nonEmpty) K8sValidator.Label.isValidKey(v) else true,
         "Only a valid RFC 1123 label key is allowed!"
       )
-      .createWithDefaultString("")
+      .createOptional
 
   val SPARK_DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.serviceNamePrefix")
@@ -133,7 +142,7 @@ private[spark] object Config {
       )
       .createWithDefaultString("armada-spark-driver-")
 
-  val ARMADA_SPARK_POD_LABELS: ConfigEntry[String] =
+  val ARMADA_SPARK_POD_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.pod.labels")
       .doc(
         "A comma-separated list of kubernetes labels (in key=value format) to be added to " +
@@ -141,9 +150,9 @@ private[spark] object Config {
       )
       .stringConf
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
+      .createOptional
 
-  val ARMADA_SPARK_DRIVER_LABELS: ConfigEntry[String] =
+  val ARMADA_SPARK_DRIVER_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.labels")
       .doc(
         "A comma-separated list of kubernetes labels (in key=value format) to be added to the " +
@@ -151,7 +160,7 @@ private[spark] object Config {
       )
       .stringConf
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
+      .createOptional
 
   val ARMADA_SPARK_JOB_NAMESPACE: ConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.namespace")
@@ -173,7 +182,7 @@ private[spark] object Config {
       )
       .createWithDefault(0)
 
-  val ARMADA_SPARK_EXECUTOR_LABELS: ConfigEntry[String] =
+  val ARMADA_SPARK_EXECUTOR_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.labels")
       .doc(
         "A comma-separated list of kubernetes labels (in key=value format) to be added to all " +
@@ -181,7 +190,13 @@ private[spark] object Config {
       )
       .stringConf
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
-      .createWithDefaultString("")
+      .createOptional
+
+  val CONTAINER_IMAGE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.container.image")
+      .doc("Container image to use for Spark containers.")
+      .stringConf
+      .createOptional
 
   /** Converts a comma-separated list of key=value pairs into a Map.
     *

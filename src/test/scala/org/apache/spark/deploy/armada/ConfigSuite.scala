@@ -17,18 +17,12 @@
 
 package org.apache.spark.deploy.armada
 
-import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import Config._
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.matchers.should.Matchers
 
 class ConfigSuite extends AnyFunSuite with TableDrivenPropertyChecks with Matchers {
-  test("defaultClusterSelectors") {
-    val conf = new SparkConf(true)
-    assert(conf.get(ARMADA_JOB_NODE_SELECTORS) == "")
-  }
-
   test("commaSeparatedLabelsToMap") {
     val testCases = Table(
       // columns

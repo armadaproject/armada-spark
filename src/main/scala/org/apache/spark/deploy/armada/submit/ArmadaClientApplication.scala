@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
+  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
   ARMADA_HEALTH_CHECK_TIMEOUT,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
@@ -29,6 +30,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
+  CONTAINER_IMAGE,
   SPARK_DRIVER_SERVICE_NAME_PREFIX,
   commaSeparatedLabelsToMap
 }
@@ -126,7 +128,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments: ClientArguments,
       sparkConf: SparkConf
   ): Unit = {
-    validateConfig(sparkConf)
+    val armadaJobConfig = validateArmadaJobConfig(sparkConf)
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
@@ -143,7 +145,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // # FIXME: Need to check how this is launched whether to submit a job or
     // to turn into driver / cluster manager mode.
-    val (driverJobId, executorJobIds) = submitArmadaJob(armadaClient, clientArguments, sparkConf)
+    val (driverJobId, _) =
+      submitArmadaJob(armadaClient, clientArguments, armadaJobConfig, sparkConf)
 
     val lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
     val lookoutURL =
@@ -154,33 +157,112 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ()
   }
 
-  private def validateConfig(conf: SparkConf): Unit = {
-    val nodeSelectors       = commaSeparatedLabelsToMap(conf.get(ARMADA_JOB_NODE_SELECTORS))
+  private def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
+    val queue = conf.get(ARMADA_JOB_QUEUE).getOrElse {
+      throw new IllegalArgumentException(
+        s"Queue name must be set via ${ARMADA_JOB_QUEUE.key}"
+      )
+    }
+
+    val nodeSelectors       = conf.get(ARMADA_JOB_NODE_SELECTORS).map(commaSeparatedLabelsToMap)
     val gangUniformityLabel = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
 
     if (nodeSelectors.isEmpty && gangUniformityLabel.isEmpty) {
       throw new IllegalArgumentException(
-        "Either node selectors or gang scheduling node uniformity label must be set."
+        s"Either ${ARMADA_JOB_NODE_SELECTORS.key} or ${ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key} must be set."
       )
     }
+
+    val jobSetId = conf.get(ARMADA_JOB_SET_ID) match {
+      case Some(id) if id.nonEmpty => id
+      case Some(_) =>
+        throw new IllegalArgumentException(
+          s"Empty jobSetId is not allowed. " +
+            s"Please set a valid jobSetId via ${ARMADA_JOB_SET_ID.key}"
+        )
+      case None => conf.getAppId
+    }
+
+    val containerImage = conf.get(CONTAINER_IMAGE) match {
+      case Some(image) if image.nonEmpty => image
+      case Some(_) =>
+        throw new IllegalArgumentException(
+          s"Empty container image is not allowed. " +
+            s"Please set a valid container image via ${CONTAINER_IMAGE.key}"
+        )
+      case None =>
+        throw new IllegalArgumentException(
+          s"Container image must be set via ${CONTAINER_IMAGE.key}"
+        )
+    }
+
+    val podLabels =
+      conf.get(ARMADA_SPARK_POD_LABELS).map(commaSeparatedLabelsToMap).getOrElse(Map.empty)
+    val driverLabels =
+      conf.get(ARMADA_SPARK_DRIVER_LABELS).map(commaSeparatedLabelsToMap).getOrElse(Map.empty)
+    val executorLabels =
+      conf.get(ARMADA_SPARK_EXECUTOR_LABELS).map(commaSeparatedLabelsToMap).getOrElse(Map.empty)
+
+    val armadaClientUrl = conf.get("spark.master")
+    val armadaClusterUrl =
+      if (conf.get(ARMADA_SERVER_INTERNAL_URL).nonEmpty)
+        s"local://armada://${conf.get(ARMADA_SERVER_INTERNAL_URL)}"
+      else {
+        armadaClientUrl
+      }
+
+    val driverServiceName = conf.get(SPARK_DRIVER_SERVICE_NAME_PREFIX) + Utils.randAlphanum()
+
+    ArmadaJobConfig(
+      queue = queue,
+      jobSetId = jobSetId,
+      namespace = conf.get(ARMADA_SPARK_JOB_NAMESPACE),
+      priority = conf.get(ARMADA_SPARK_JOB_PRIORITY),
+      containerImage = containerImage,
+      podLabels = podLabels,
+      driverLabels = driverLabels,
+      executorLabels = executorLabels,
+      nodeSelectors = nodeSelectors.getOrElse(Map.empty),
+      nodeUniformityLabel = gangUniformityLabel,
+      armadaClusterUrl = armadaClusterUrl,
+      driverServiceName = driverServiceName,
+      executorConnectionTimeout = Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)
+    )
   }
+
+  private case class ArmadaJobConfig(
+      queue: String,
+      jobSetId: String,
+      namespace: String,
+      priority: Double,
+      containerImage: String,
+      podLabels: Map[String, String],
+      driverLabels: Map[String, String],
+      executorLabels: Map[String, String],
+      armadaClusterUrl: String,
+      nodeSelectors: Map[String, String],
+      nodeUniformityLabel: Option[String],
+      driverServiceName: String,
+      executorConnectionTimeout: Duration
+  )
 
   private def submitArmadaJob(
       armadaClient: ArmadaClient,
       clientArguments: ClientArguments,
+      armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val queue               = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetId            = conf.get(ARMADA_JOB_SET_ID)
-    val (driver, executors) = newSparkJobSubmitRequestItems(clientArguments, conf)
+    val (driver, executors) = newSparkJobSubmitRequestItems(clientArguments, armadaJobConfig, conf)
 
-    val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
-    val driverJobId    = driverResponse.jobResponseItems.head.jobId
+    val driverResponse =
+      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, Seq(driver))
+    val driverJobId = driverResponse.jobResponseItems.head.jobId
     log(
       s"Submitted driver job with ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
     )
 
-    val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
+    val executorsResponse =
+      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, executors)
     val executorJobIds = executorsResponse.jobResponseItems.map(item => {
       log(
         s"Submitted executor job with ID: ${item.jobId}, Error: ${item.error}"
@@ -193,11 +275,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private def newSparkJobSubmitRequestItems(
       clientArguments: ClientArguments,
+      armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (api.submit.JobSubmitRequestItem, Seq[api.submit.JobSubmitRequestItem]) = {
-
-    val namespace = conf.get(ARMADA_SPARK_JOB_NAMESPACE)
-    val priority  = conf.get(ARMADA_SPARK_JOB_PRIORITY)
 
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
@@ -206,44 +286,37 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case _                                   => Seq()
     }
 
-    val master = conf.get("spark.master")
-    val internalMaster =
-      if (conf.get(ARMADA_SERVER_INTERNAL_URL).nonEmpty)
-        s"local://armada://${conf.get(ARMADA_SERVER_INTERNAL_URL)}"
-      else {
-        master
-      }
-
-    val image         = conf.get("spark.kubernetes.container.image")
     val executorCount = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
-    val gangAnnotations = GangSchedulingAnnotations(
-      None,
-      1 + executorCount,
-      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
-    )
-    val annotations  = configGenerator.getAnnotations ++ gangAnnotations
-    val globalLabels = commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_POD_LABELS))
+    val annotations = configGenerator.getAnnotations ++ armadaJobConfig.nodeUniformityLabel
+      .map(label =>
+        GangSchedulingAnnotations(
+          None,
+          1 + executorCount,
+          label
+        )
+      )
+      .getOrElse(Map.empty)
+    val globalLabels = armadaJobConfig.podLabels
     val driverLabels =
-      globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_DRIVER_LABELS))
-    val nodeSelectors = commaSeparatedLabelsToMap(conf.get(ARMADA_JOB_NODE_SELECTORS))
+      globalLabels ++ armadaJobConfig.driverLabels
+    val nodeSelectors = armadaJobConfig.nodeSelectors
 
-    val driverServiceName = conf.get(SPARK_DRIVER_SERVICE_NAME_PREFIX) + Utils.randAlphanum()
-    val driverPort        = 7078
+    val driverPort = 7078
 
     val confSeq = conf.getAll.flatMap { case (k, v) =>
       Seq("--conf", s"$k=$v")
     }
     val driver = newSparkDriverJobSubmitRequestItem(
-      internalMaster,
-      namespace,
-      priority,
+      armadaJobConfig.armadaClusterUrl,
+      armadaJobConfig.namespace,
+      armadaJobConfig.priority,
       annotations,
       driverLabels,
-      image,
+      armadaJobConfig.containerImage,
       driverPort,
-      driverServiceName,
+      armadaJobConfig.driverServiceName,
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -252,22 +325,22 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
 
     val executorLabels =
-      globalLabels ++ commaSeparatedLabelsToMap(conf.get(ARMADA_SPARK_EXECUTOR_LABELS))
-    val nodeUniformityLabel = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
+      globalLabels ++ armadaJobConfig.executorLabels
     val executors = (0 until executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
-        priority,
-        namespace,
+        armadaJobConfig.priority,
+        armadaJobConfig.namespace,
         annotations,
         executorLabels,
-        image,
+        armadaJobConfig.containerImage,
         javaOptEnvVars(conf),
-        nodeUniformityLabel,
-        driverServiceName,
+        armadaJobConfig.nodeUniformityLabel,
+        armadaJobConfig.driverServiceName,
         driverPort,
         configGenerator.getVolumes,
-        nodeSelectors
+        nodeSelectors,
+        armadaJobConfig.executorConnectionTimeout
       )
     }
 
@@ -417,13 +490,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       labels: Map[String, String],
       image: String,
       javaOptEnvVars: Seq[EnvVar],
-      nodeUniformityLabel: String,
+      nodeUniformityLabel: Option[String],
       driverHostname: String,
       driverPort: Int,
       volumes: Seq[Volume],
-      nodeSelectors: Map[String, String]
+      nodeSelectors: Map[String, String],
+      connectionTimeout: Duration
   ): api.submit.JobSubmitRequestItem = {
-    val initContainer = newExecutorInitContainer(driverHostname, driverPort)
+    val initContainer = newExecutorInitContainer(driverHostname, driverPort, connectionTimeout)
     val container = newExecutorContainer(
       index,
       image,
@@ -448,7 +522,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(podSpec)
   }
 
-  private def newExecutorInitContainer(driverHost: String, driverPort: Int) = {
+  private def newExecutorInitContainer(
+      driverHost: String,
+      driverPort: Int,
+      connectionTimeout: Duration
+  ) = {
     Container()
       .withName("init")
       .withImagePullPolicy("IfNotPresent")
@@ -456,14 +534,29 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withEnv(
         Seq(
           EnvVar().withName("SPARK_DRIVER_HOST").withValue(driverHost),
-          EnvVar().withName("SPARK_DRIVER_PORT").withValue(driverPort.toString)
+          EnvVar().withName("SPARK_DRIVER_PORT").withValue(driverPort.toString),
+          EnvVar()
+            .withName("SPARK_EXECUTOR_CONNECTION_TIMEOUT")
+            .withValue(connectionTimeout.toSeconds.toString)
         )
       )
       .withCommand(Seq("sh", "-c"))
       .withArgs(
         Seq(
-          "until nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do " +
-            "echo \"waiting for driver...\"; sleep 1; done"
+          """
+          start_time=$(date +%s);
+          timeout=SPARK_EXECUTOR_CONNECTION_TIMEOUT;
+          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
+            now=$(date +%s);
+            elapsed=$((now - start_time));
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout waiting for driver after ${timeout}s";
+              exit 1;
+            fi;
+            echo "waiting for driver...";
+            sleep 1;
+          done
+        """.stripMargin.trim
         )
       )
   }
@@ -473,7 +566,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       image: String,
       driverHostname: String,
       driverPort: Int,
-      nodeUniformityLabel: String,
+      nodeUniformityLabel: Option[String],
       javaOptEnvVars: Seq[EnvVar]
   ): Container = {
     val driverURL = s"spark://CoarseGrainedScheduler@$driverHostname:$driverPort"
@@ -490,9 +583,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
-      EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source),
-      EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL").withValue(nodeUniformityLabel)
-    )
+      EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
+    ) ++ nodeUniformityLabel
+      .map(label => EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL").withValue(label))
     Container()
       .withName("executor")
       .withImagePullPolicy("IfNotPresent")
