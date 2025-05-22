@@ -280,6 +280,9 @@ program or node, in reality it "lives" in the same process as the
 Driver. So by ensuring connectivity between the Driver and Executors, we also
 get connectivity with the "Cluster Manager".
 
+Drivers depend on Armada's [Custom Service Names](#custom-service-names) to
+make it easy for Executors to "find" their respective Drivers.
+
 ### Driver and Executors as Armada Jobs
 
 Armada, being a multi-cluster Kubernetes manager, takes on the role of
