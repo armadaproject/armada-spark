@@ -166,7 +166,7 @@ main() {
   test -d "$scripts/.tmp" || mkdir "$scripts/.tmp"
   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
 
-  PATH="$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh" 2>&1 | \
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh" 2>&1 | \
     tee submitSparkPi.log | log_group "Submitting SparkPI job"
 
   DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
