@@ -34,6 +34,11 @@ And finally, the lookout URL will be set to `http://localhost:30000`.
 To use the image you'll need an Armada instance along with the ability to load
 the image to whatever clusters Armada is overseeing.
 
+Armada requires certain configurations to be set. An example configuration 
+of Armada services with all the necessary options configured can be found by 
+applying this [patch](../e2e/armada-operator.patch)
+to the [Armada Operator Dev Quickstart Config](https://github.com/armadaproject/armada-operator/blob/main/dev/quickstart/armada-crs.yaml)
+
 The [README](../README.md) covers all this in more detail.
 
 ## Running `armada-spark`
