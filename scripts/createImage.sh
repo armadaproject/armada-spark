@@ -18,7 +18,8 @@ image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}-ubuntu
 
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
 if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
-  image_prefix=spark
+  echo Checking for images for spark: $SPARK_VERSION scala: $SCALA_BIN_VERSION
+  image_prefix=spark-py
   if ! docker image inspect "$image_prefix:$image_tag" >/dev/null 2>/dev/null; then
     echo "There are no Docker images released for Spark $SPARK_VERSION and Scala $SCALA_BIN_VERSION."
     echo "A Docker image has to be built from Spark sources locally."
@@ -38,11 +39,16 @@ if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || 
     ./build/mvn --batch-mode clean
     ./build/mvn --batch-mode package -pl examples
     ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
-    ./bin/docker-image-tool.sh -t "$image_tag" build
+    # including python in spark image
+    ./bin/docker-image-tool.sh -t "$image_tag" -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
+    # remove extra image created by docker-image-tool.sh
+    docker image rm spark:$image_tag
+
     cd ..
   fi
 fi
 
+# including python in the armada-spark image slows the build significantly, so don't include it by default
 docker build \
   --tag $IMAGE_NAME \
   --build-arg spark_base_image_prefix=$image_prefix \

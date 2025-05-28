@@ -34,6 +34,19 @@ runs:
       restore-keys:
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
+  - name: Move docker
+    run: |
+      # Moving docker to save space
+      echo "::group::moving Docker"
+      df -h /mnt
+      sudo systemctl stop docker
+      sudo cp -rpd /var/lib/docker /mnt
+      sudo mv /var/lib/docker /var/lib/docker.old
+      sudo ln -s /mnt/docker /var/lib
+      sudo systemctl start docker
+      df -h /mnt
+      echo "::endgroup::"
+    shell: bash
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
@@ -77,7 +90,7 @@ runs:
     run: |
       # Build image
       echo "::group::createImage.sh"
-      ./armada-spark/scripts/createImage.sh
+      ./armada-spark/scripts/createImage.sh -p
       echo "::endgroup::"
     shell: bash
   - name: Patch armada-operator to configure for spark-armada e2e tests
@@ -116,7 +129,7 @@ runs:
     run: |
       # Submit SparkPi
       echo "::group::submitSparkPi.sh"
-      ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
+      ./armada-spark/scripts/submitSparkPi.sh -p 2>&1 | tee submitSparkPi.log
       echo "::endgroup::"
 
       while read line; do
