@@ -119,21 +119,43 @@ runs:
       ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
       echo "::endgroup::"
 
-      while read line; do
-        if [[ "$line" == "Driver JobID:"* ]]; then
-          read driver job jobid error none <<< "$line"
+      while read -r line; do
+        if [[ "$line" == "Submitted driver job with ID:"* ]]; then
+          # strip the leading text…
+          jobid=${line#Submitted driver job with ID:\ }
+          # …then cut off at the first comma
+          jobid=${jobid%%,*}
           echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
         fi
       done < submitSparkPi.log
-      if [[ -z "$jobid" ]]; then echo "No job id detected"; exit 1; fi
+      
+      if [[ -z "$jobid" ]]; then
+        echo "No job id detected"
+        exit 1
+      fi
     shell: bash
   - name: Watch job
     run: |
       # Watch job
       sleep 10
-      timeout 15m armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
+      timeout 15m armadactl watch test armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log
 
       if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
+    shell: bash
+  - name: Ensure job completed
+    run: |
+      timeout 5m bash -c '
+        while kubectl get pods -l spark-job=example \
+              --field-selector=status.phase!=Succeeded,status.phase!=Failed \
+              -o name | grep -q .; do
+          echo "waiting…"; sleep 5;
+        done
+      '
+      if [[ $? -eq 124 ]]; then
+        echo "Timeout after 5m" >&2
+        exit 1
+      fi
+      echo "All pods have terminated."
     shell: bash
   - name: Inspect k8s pods
     id: k8s-pods
