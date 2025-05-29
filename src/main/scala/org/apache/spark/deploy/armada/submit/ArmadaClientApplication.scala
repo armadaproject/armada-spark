@@ -18,6 +18,10 @@ package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
+  ARMADA_DRIVER_LIMIT_CORES,
+  ARMADA_DRIVER_LIMIT_MEMORY,
+  ARMADA_DRIVER_REQUEST_CORES,
+  ARMADA_DRIVER_REQUEST_MEMORY,
   ARMADA_EXECUTOR_LIMIT_CORES,
   ARMADA_EXECUTOR_LIMIT_MEMORY,
   ARMADA_EXECUTOR_REQUEST_CORES,
@@ -327,7 +331,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
       nodeSelectors,
-      confSeq ++ primaryResource ++ clientArguments.driverArgs
+      confSeq ++ primaryResource ++ clientArguments.driverArgs,
+      conf
     )
 
     val executorLabels =
@@ -388,7 +393,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
       nodeSelectors: Map[String, String],
-      additionalDriverArgs: Seq[String]
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
     val container = newSparkDriverContainer(
       master,
@@ -397,7 +403,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass,
       serviceName,
       volumeMounts,
-      additionalDriverArgs
+      additionalDriverArgs,
+      conf
     )
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
@@ -431,7 +438,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass: String,
       serviceName: String,
       volumeMounts: Seq[VolumeMount],
-      additionalDriverArgs: Seq[String]
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): Container = {
     val source = EnvVarSource().withFieldRef(
       ObjectFieldSelector()
@@ -449,6 +457,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar()
         .withName("ARMADA_SPARK_DRIVER_SERVICE_NAME")
         .withValue(serviceName)
+    )
+
+
+    val driverLimits = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_MEMORY))),
+      "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES)))
+    )
+    val driverRequests = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_MEMORY))),
+      "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES)))
     )
     Container()
       .withName("driver")
@@ -478,16 +496,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
         ResourceRequirements(
-          requests = defaultDriverResources,
-          limits = defaultDriverResources
+          requests = driverRequests,
+          limits = driverLimits
         )
       )
   }
-
-  private val defaultDriverResources = Map(
-    "memory" -> Quantity(Option("512Mi")),
-    "cpu"    -> Quantity(Option("250m"))
-  )
 
   private def newExecutorJobSubmitItem(
       index: Int,
