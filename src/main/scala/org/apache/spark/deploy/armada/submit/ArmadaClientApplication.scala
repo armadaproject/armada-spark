@@ -167,7 +167,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ()
   }
 
-  private def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
+  private[spark] def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
     val queue = conf.get(ARMADA_JOB_QUEUE).getOrElse {
       throw new IllegalArgumentException(
         s"Queue name must be set via ${ARMADA_JOB_QUEUE.key}"
@@ -240,7 +240,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  private case class ArmadaJobConfig(
+  private[spark] case class ArmadaJobConfig(
       queue: String,
       jobSetId: String,
       namespace: String,
@@ -283,7 +283,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     (driverJobId, executorJobIds)
   }
 
-  private def newSparkJobSubmitRequestItems(
+  private[spark] def newSparkJobSubmitRequestItems(
       clientArguments: ClientArguments,
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
