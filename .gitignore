@@ -72,3 +72,5 @@ project/**/metals.sbt
 
 # don't check in your config file
 scripts/config.sh
+
+dependency-reduced-pom.xml

@@ -16,18 +16,11 @@
  */
 package org.apache.spark.scheduler.cluster.armada
 
-import io.armadaproject.armada.ArmadaClient
-import k8s.io.api.core.v1.generated._
-import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config.{
-  ARMADA_JOB_NODE_SELECTORS,
   ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
-  ARMADA_EXECUTOR_TRACKER_TIMEOUT,
-  commaSeparatedLabelsToMap,
-  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY
+  ARMADA_EXECUTOR_TRACKER_TIMEOUT
 }
-import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -35,7 +28,6 @@ import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import scala.collection.mutable
-import scala.collection.mutable.HashMap
 
 // TODO: Implement for Armada
 private[spark] class ArmadaClusterManagerBackend(
@@ -50,12 +42,6 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker  = new ExecutorTracker(new SystemClock(), initialExecutors)
-  private val gangAnnotations =
-    GangSchedulingAnnotations(
-      None,
-      initialExecutors,
-      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
-    )
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(appId)
