@@ -31,12 +31,16 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   val driverServiceName = "driverService"
   val bindAddress = "$(SPARK_DRIVER_BIND_ADDRESS)"
   val executorID = 0
+  val queue = "test"
+  val nodeUniformity = "nodeUniformity"
+  val jobSet = "job-set"
+  val clientArgs = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
   before {
     sparkConf = new SparkConf(false)
     sparkConf.set(CONTAINER_IMAGE, imageName)
-    sparkConf.set(ARMADA_JOB_QUEUE, "test")
-    sparkConf.set(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, "armada-spark")
-    sparkConf.set(ARMADA_JOB_SET_ID, "job-set")
+    sparkConf.set(ARMADA_JOB_QUEUE, queue)
+    sparkConf.set(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, nodeUniformity)
+    sparkConf.set(ARMADA_JOB_SET_ID, jobSet)
   }
 
   test("Test driver container default values") {
@@ -54,7 +58,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
 
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
-    val (driver, _) = aca.newSparkJobSubmitRequestItems(ClientArguments.fromCommandLineArgs(Array("--main-class", className)), armadaJobConfig, sparkConf)
+    val (driver, _) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
     val container = driver.getPodSpec.containers.head
     assert(container.getImage == imageName)
     val driverArgsString = container.args.mkString("\n")
@@ -113,15 +117,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |--conf
         |spark.driver.host=$bindAddress
         |--conf
-        |spark.armada.queue=test
+        |spark.armada.scheduling.nodeUniformity=$nodeUniformity
+        |--conf
+        |spark.armada.queue=$queue
         |--conf
         |spark.master=${valueMap("sparkMaster")}
         |--conf
         |spark.armada.container.image=$imageName
         |--conf
-        |spark.armada.jobSetId=job-set
-        |--conf
-        |spark.armada.scheduling.nodeUniformity=armada-spark""".stripMargin
+        |spark.armada.jobSetId=$jobSet""".stripMargin
   }
 
   private def getDriverPort = {
