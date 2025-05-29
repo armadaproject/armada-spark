@@ -60,8 +60,8 @@ docker build \
 
 
 if [ $image_prefix == "spark-py" ]; then
-    docker image rm spark:$image_tag
-    docker image rm spark-py:$image_tag
+    docker image rm -f spark:$image_tag
+    docker image rm -f spark-py:$image_tag
     rm -rf  ".spark-$SPARK_VERSION"
 fi
 docker system prune --volumes -f
