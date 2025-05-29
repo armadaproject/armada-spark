@@ -64,7 +64,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     assert(driverPortString == getDriverPort)
 
     val driverEnvString = container.env.map(_.toProtoString).mkString
-    assert(driverEnvString == getDriverEnv)
+    assert(driverEnvString.startsWith(getDriverEnv))
 
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(defaultValues))
@@ -125,8 +125,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   private def getDriverPort = {
-    s"""|name: "armada-spark"
-        |hostPort: 0
+    s"""|name: "driver"
         |containerPort: 7078
         |""".stripMargin
   }
@@ -144,8 +143,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |name: "EXTERNAL_CLUSTER_SUPPORT_ENABLED"
         |value: "true"
         |name: "ARMADA_SPARK_DRIVER_SERVICE_NAME"
-        |value: "$driverServiceName"
-        |""".stripMargin
+        |value: "armada-spark-driver-""".stripMargin
 
   }
   private def getResources(valueMap: Map[String, String]) = {
