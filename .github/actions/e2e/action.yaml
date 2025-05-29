@@ -34,19 +34,6 @@ runs:
       restore-keys:
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
-  - name: Move docker
-    run: |
-      # Moving docker to save space
-      echo "::group::moving Docker"
-      df -h /mnt
-      sudo systemctl stop docker
-      sudo cp -rpd /var/lib/docker /mnt
-      sudo mv /var/lib/docker /var/lib/docker.old
-      sudo ln -s /mnt/docker /var/lib
-      sudo systemctl start docker
-      df -h /mnt
-      echo "::endgroup::"
-    shell: bash
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:

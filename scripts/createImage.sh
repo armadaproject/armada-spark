@@ -57,3 +57,11 @@ docker build \
   --build-arg include_python=$INCLUDE_PYTHON \
   -f "$root/docker/Dockerfile" \
   "$root"
+
+
+if [ $image_prefix == "spark-py" ]; then
+    docker image rm spark:$image_tag
+    docker image rm spark-py:$image_tag
+    rm -rf  ".spark-$SPARK_VERSION"
+fi
+docker system prune --volumes -f -a
