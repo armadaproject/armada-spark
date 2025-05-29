@@ -64,4 +64,4 @@ if [ $image_prefix == "spark-py" ]; then
     docker image rm -f spark-py:$image_tag
     rm -rf  ".spark-$SPARK_VERSION"
 fi
-docker system prune --volumes -f
+docker system prune --volumes -f -a
