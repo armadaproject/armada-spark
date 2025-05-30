@@ -17,7 +17,6 @@
 
 package org.apache.spark.deploy.armada.submit
 
-import k8s.io.api.core.v1.generated.VolumeMount
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
 import org.scalatest.BeforeAndAfter
@@ -28,13 +27,12 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   val imageName = "imageName"
   val sparkMaster = "localhost"
   val className = "testClass"
-  val driverServiceName = "driverService"
+  val clientArgs: ClientArguments = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
   val bindAddress = "$(SPARK_DRIVER_BIND_ADDRESS)"
-  val executorID = 0
   val queue = "test"
   val nodeUniformityLabel = "nodeUniformity"
   val jobSet = "job-set"
-  val clientArgs: ClientArguments = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
+
   before {
     sparkConf = new SparkConf(false)
     sparkConf.set(CONTAINER_IMAGE, imageName)
@@ -70,8 +68,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val driverPortString = container.ports.head.toProtoString
     assert(driverPortString == getDriverPort)
 
-    val driverEnvString = container.env.map(_.toProtoString).mkString
-    assert(driverEnvString.startsWith(getDriverEnv))
+
+    val driverEnvString = container.env.filter(_.getName != "ARMADA_SPARK_DRIVER_SERVICE_NAME").map(_.toProtoString).mkString
+    assert(driverEnvString == getDriverEnv)
+
+    val driverServicePrefix = container.env.filter(_.getName == "ARMADA_SPARK_DRIVER_SERVICE_NAME" ).head.getValue
+    val validPrefix = "armada-spark-driver-.....".r
+    assert(driverServicePrefix.matches(validPrefix.regex))
 
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(defaultValues))
@@ -149,8 +152,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |value: "/opt/spark/conf"
         |name: "EXTERNAL_CLUSTER_SUPPORT_ENABLED"
         |value: "true"
-        |name: "ARMADA_SPARK_DRIVER_SERVICE_NAME"
-        |value: "armada-spark-driver-""".stripMargin
+        |""".stripMargin
 
   }
   private def getResources(valueMap: Map[String, String]) = {
@@ -271,7 +273,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     assert(executorEnvString == getExecutorEnv(nonDefaultValues))
 
     val driverUrl = container.env.filter(_.getName == "SPARK_DRIVER_URL" ).head.getValue
-    val validUrl = "spark://CoarseGrainedScheduler@driverPrefix-.....:7078".r
+    val validUrl = s"spark://CoarseGrainedScheduler@$driverPrefix.....:7078".r
     assert(driverUrl.matches(validUrl.regex))
 
     val executorResourcesString = container.resources.get.toProtoString
