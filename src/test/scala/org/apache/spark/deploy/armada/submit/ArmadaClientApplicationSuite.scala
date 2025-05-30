@@ -201,20 +201,25 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
     val (_, executors) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
+
+    assert(executors.size == 2)
+
     val executor = executors.head
     assert(executor.namespace == "default")
     assert(executor.priority == 0)
 
-    val container = executor.getPodSpec.containers.head
+    val container = executor.getPodSpec.containers.filter(_.getName == "executor").head
 
     assert(container.getImage == imageName)
-    val executorEnvString = container.env.filter(e => e.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
+    val executorEnvString = container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(defaultValues))
 
+    val driverUrl = container.env.filter(_.getName == "SPARK_DRIVER_URL" ).head.getValue
+    val validUrl = "spark://CoarseGrainedScheduler@armada-spark-driver-.....:7078".r
+    assert(driverUrl.matches(validUrl.regex))
     val executorResourcesString = container.resources.get.toProtoString
     assert(executorResourcesString == getResources(defaultValues))
   }
-  /*
 
   test("Test executor container non-default values") {
 
@@ -223,15 +228,22 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val cpu = "10"
     val appId = "nonDefault"
     val envMem = "10g"
-    val nonDefaultImage = "nonDefaultImage"
-    sparkConf.set(EXECUTOR_CONTAINER_IMAGE, Some(nonDefaultImage))
+    val instanceCount = 4
+    val namespace = "namespace"
+    val priority = 10.0
+    val driverPrefix = "driverPrefix-"
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_MEMORY, mem)
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_CORES, cpu)
     sparkConf.set(ARMADA_EXECUTOR_REQUEST_MEMORY, mem)
     sparkConf.set(ARMADA_EXECUTOR_REQUEST_CORES, cpu)
+    sparkConf.set(ARMADA_SPARK_JOB_NAMESPACE, namespace)
+    sparkConf.set(ARMADA_SPARK_JOB_PRIORITY, priority)
+    sparkConf.set(SPARK_DRIVER_SERVICE_NAME_PREFIX, driverPrefix)
+
     sparkConf.set("spark.app.id", appId)
     sparkConf.set("spark.executor.memory", envMem)
     sparkConf.set("spark.executor.cores", cpu)
+    sparkConf.set("spark.executor.instances", instanceCount.toString)
 
     val nonDefaultValues = Map[String, String](
       "limitMem" -> mem,
@@ -240,20 +252,32 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "requestCPU" -> cpu,
       "appId" -> appId,
       "envMem" -> envMem,
-      "envCores" -> cpu,
-      "requestCPU" -> cpu)
+      "envCores" -> cpu)
 
     val aca = new ArmadaClientApplication()
-    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+    val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
+    val (_, executors) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
 
-    assert(container.getImage == nonDefaultImage)
-    val executorEnvString = container.env.map(_.toProtoString).mkString
+    assert(executors.size == instanceCount)
+
+    val executor = executors.head
+    assert(executor.namespace == namespace)
+    assert(executor.priority == priority)
+
+    val container = executor.getPodSpec.containers.filter(_.getName == "executor").head
+
+
+    val executorEnvString = container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(nonDefaultValues))
+
+    val driverUrl = container.env.filter(_.getName == "SPARK_DRIVER_URL" ).head.getValue
+    val validUrl = "spark://CoarseGrainedScheduler@driverPrefix-.....:7078".r
+    assert(driverUrl.matches(validUrl.regex))
 
     val executorResourcesString = container.resources.get.toProtoString
     assert(executorResourcesString == getResources(nonDefaultValues))
   }
-   */
+
   private def getExecutorEnv(valueMap: Map[String, String]) = {
     s"""|name: "SPARK_EXECUTOR_ID"
         |value: "0"
