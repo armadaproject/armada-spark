@@ -564,22 +564,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withCommand(Seq("sh", "-c"))
       .withArgs(
-        Seq(
-          """
-          start_time=$(date +%s);
-          timeout=SPARK_EXECUTOR_CONNECTION_TIMEOUT;
-          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
-            now=$(date +%s);
-            elapsed=$((now - start_time));
-            if [ $elapsed -ge $timeout ]; then
-              echo "Timeout waiting for driver after ${timeout}s";
-              exit 1;
-            fi;
-            echo "waiting for driver...";
-            sleep 1;
-          done
-        """.stripMargin.trim
-        )
+        Seq(Utils.initContainerCommand)
       )
   }
 
@@ -662,4 +647,21 @@ object Utils {
     (1 to length)
       .map(_ => suffixChars(Random.nextInt(suffixChars.length)))
       .mkString
+
+
+  val initContainerCommand =
+        """
+          start_time=$(date +%s);
+          timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
+          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
+            now=$(date +%s);
+            elapsed=$((now - start_time));
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout waiting for driver after ${timeout}s";
+              exit 1;
+            fi;
+            echo "waiting for driver...";
+            sleep 1;
+          done
+        """.stripMargin.trim
 }

@@ -21,6 +21,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
+import scala.sys.process._
 
 class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   var sparkConf = new SparkConf(false)
@@ -183,7 +184,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |""".stripMargin
   }
 
-  test("Test default executor container") {
+  test("Test executor container default values") {
 
     // Set expected values to defaults
     val mem = DEFAULT_MEM
@@ -312,4 +313,20 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |""".stripMargin
     }
 
+  test("Confirm initContainer sh command succeeds with server") {
+    val serverPort = "54525"
+    val serverCommand = Seq("nc", "-l", serverPort)
+    val server = Process.apply(serverCommand).run
+    val containerCommand = Seq("sh", "-c", Utils.initContainerCommand);
+    
+    try {
+      val client = Process.apply(containerCommand, None,
+        ("SPARK_EXECUTOR_CONNECTION_TIMEOUT", "5"),
+        ("SPARK_DRIVER_HOST","localhost"),
+        ("SPARK_DRIVER_PORT", serverPort)).run
+      assert(client.exitValue == 0)
+    } finally {
+      server.destroy()
+    }
+  }
 }
