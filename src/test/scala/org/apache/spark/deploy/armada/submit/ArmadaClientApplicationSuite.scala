@@ -34,13 +34,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   val queue = "test"
   val nodeUniformity = "nodeUniformity"
   val jobSet = "job-set"
-  val clientArgs = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
+  val clientArgs: ClientArguments = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
   before {
     sparkConf = new SparkConf(false)
     sparkConf.set(CONTAINER_IMAGE, imageName)
     sparkConf.set(ARMADA_JOB_QUEUE, queue)
     sparkConf.set(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, nodeUniformity)
     sparkConf.set(ARMADA_JOB_SET_ID, jobSet)
+    sparkConf.set("spark.master", sparkMaster)
   }
 
   test("Test driver container default values") {
@@ -48,7 +49,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     // Set expected values to defaults
     val mem = DEFAULT_MEM
     val cpu = DEFAULT_CORES
-    sparkConf.set("spark.master", sparkMaster)
     val defaultValues = Map[String, String](
       "sparkMaster" -> sparkMaster,
       "limitMem" -> mem,
@@ -59,6 +59,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
     val (driver, _) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
+    assert(driver.namespace == "default")
+    assert(driver.priority == 0)
+
     val container = driver.getPodSpec.containers.head
     assert(container.getImage == imageName)
     val driverArgsString = container.args.mkString("\n")
@@ -74,22 +77,20 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     assert(driverResourcesString == getResources(defaultValues))
   }
 
-  /*
   test("Test driver container non-default values") {
 
     // Change expected values from defaults
-    val remoteMaster = "remoteMaster"
     val mem = "20Gi"
     val cpu = "2"
-    val nonDefaultImage = "nonDefaultImage"
-    sparkConf.set(DRIVER_CONTAINER_IMAGE, Some(nonDefaultImage))
-    sparkConf.set(ARMADA_REMOTE_MASTER, remoteMaster)
+    val namespace = "namespace"
+    val priority = 10.0
     sparkConf.set(ARMADA_DRIVER_LIMIT_MEMORY, mem)
     sparkConf.set(ARMADA_DRIVER_LIMIT_CORES, cpu)
     sparkConf.set(ARMADA_DRIVER_REQUEST_MEMORY, mem)
     sparkConf.set(ARMADA_DRIVER_REQUEST_CORES, cpu)
+    sparkConf.set(ARMADA_SPARK_JOB_NAMESPACE, namespace)
+    sparkConf.set(ARMADA_SPARK_JOB_PRIORITY, priority)
     val nonDefaultValues = Map[String, String](
-      "sparkMaster" -> remoteMaster,
       "limitMem" -> mem,
       "limitCPU" -> cpu,
       "requestMem" -> mem,
@@ -97,14 +98,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
 
 
     val aca = new ArmadaClientApplication()
-    val container = aca.getDriverContainer(driverServiceName,
-      ClientArguments.fromCommandLineArgs(Array("--main-class", className)), sparkConf, Seq(new VolumeMount))
+    val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
+    val (driver, _) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
+    assert(driver.namespace == namespace)
+    assert(driver.priority == priority)
 
-    assert(container.getImage == nonDefaultImage)
+    val container = driver.getPodSpec.containers.head
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(nonDefaultValues))
   }
-   */
   private def getDriverArgs(valueMap: Map[String, String]) = {
     s"""|driver
         |--verbose
