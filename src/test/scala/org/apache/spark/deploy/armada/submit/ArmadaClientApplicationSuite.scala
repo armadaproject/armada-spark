@@ -22,7 +22,6 @@ import org.apache.spark.deploy.armada.Config._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
-import java.util
 import scala.collection.mutable.ListBuffer
 import scala.sys.process._
 
@@ -317,11 +316,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     }
 
   test("Confirm initContainer sh command succeeds with server") {
+    // start server
     val serverPort = "54525"
     val serverCommand = Seq("nc", "-l", serverPort)
     val server = Process.apply(serverCommand).run
+
+    // start client
     val containerCommand = Seq("sh", "-c", Utils.initContainerCommand)
-    
     try {
       val client = Process.apply(containerCommand, None,
         ("SPARK_EXECUTOR_CONNECTION_TIMEOUT", "5"),
@@ -335,15 +336,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
 
   test("Confirm initContainer sh command fails with no server") {
     val serverPort = "54526"
+    val timeout = "5"
     val containerCommand = Seq("sh", "-c", Utils.initContainerCommand)
-
     val client = Process.apply(containerCommand, None,
-      ("SPARK_EXECUTOR_CONNECTION_TIMEOUT", "5"),
+      ("SPARK_EXECUTOR_CONNECTION_TIMEOUT", timeout),
       ("SPARK_DRIVER_HOST","localhost"),
       ("SPARK_DRIVER_PORT", serverPort))
     val stringBuffer = ListBuffer.empty[String]
     assertThrows[RuntimeException](client.lineStream.foreach(stringBuffer += _))
     val finalList = stringBuffer.toList
-    assert(finalList.exists(_ == "Timeout waiting for driver after 5s"))
+    assert(finalList.contains(s"Timeout waiting for driver after ${timeout}s"))
   }
 }
