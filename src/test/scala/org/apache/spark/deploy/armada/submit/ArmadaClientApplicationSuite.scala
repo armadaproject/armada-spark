@@ -32,14 +32,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   val bindAddress = "$(SPARK_DRIVER_BIND_ADDRESS)"
   val executorID = 0
   val queue = "test"
-  val nodeUniformity = "nodeUniformity"
+  val nodeUniformityLabel = "nodeUniformity"
   val jobSet = "job-set"
   val clientArgs: ClientArguments = ClientArguments.fromCommandLineArgs(Array("--main-class", className))
   before {
     sparkConf = new SparkConf(false)
     sparkConf.set(CONTAINER_IMAGE, imageName)
     sparkConf.set(ARMADA_JOB_QUEUE, queue)
-    sparkConf.set(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, nodeUniformity)
+    sparkConf.set(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, nodeUniformityLabel)
     sparkConf.set(ARMADA_JOB_SET_ID, jobSet)
     sparkConf.set("spark.master", sparkMaster)
   }
@@ -107,6 +107,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val driverResourcesString = container.resources.get.toProtoString
     assert(driverResourcesString == getResources(nonDefaultValues))
   }
+
   private def getDriverArgs(valueMap: Map[String, String]) = {
     s"""|driver
         |--verbose
@@ -119,7 +120,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |--conf
         |spark.driver.host=$bindAddress
         |--conf
-        |spark.armada.scheduling.nodeUniformity=$nodeUniformity
+        |spark.armada.scheduling.nodeUniformity=$nodeUniformityLabel
         |--conf
         |spark.armada.queue=$queue
         |--conf
@@ -180,16 +181,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |""".stripMargin
   }
 
-  /*
   test("Test default executor container") {
 
     // Set expected values to defaults
     val mem = DEFAULT_MEM
     val cpu = DEFAULT_CORES
-    val appId = DEFAULT_ARMADA_APP_ID
+    val appId = "armada-spark-app-id"
     val envMem = DEFAULT_SPARK_EXECUTOR_MEMORY
     val envCores = DEFAULT_SPARK_EXECUTOR_CORES
-    val nodeUniformityLabel = "armada-spark"
     val defaultValues = Map[String, String](
       "limitMem" -> mem,
       "limitCPU" -> cpu,
@@ -197,19 +196,25 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "requestCPU" -> cpu,
       "appId" -> appId,
       "envMem" -> envMem,
-      "envCores" -> envCores,
-      "nodeUniformityLabel" -> nodeUniformityLabel)
+      "envCores" -> envCores)
 
     val aca = new ArmadaClientApplication()
-    val container = aca.getExecutorContainer(executorID, driverServiceName, sparkConf)
+    val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
+    val (_, executors) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
+    val executor = executors.head
+    assert(executor.namespace == "default")
+    assert(executor.priority == 0)
+
+    val container = executor.getPodSpec.containers.head
 
     assert(container.getImage == imageName)
-    val executorEnvString = container.env.map(_.toProtoString).mkString
+    val executorEnvString = container.env.filter(e => e.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(defaultValues))
 
     val executorResourcesString = container.resources.get.toProtoString
     assert(executorResourcesString == getResources(defaultValues))
   }
+  /*
 
   test("Test executor container non-default values") {
 
@@ -218,7 +223,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val cpu = "10"
     val appId = "nonDefault"
     val envMem = "10g"
-    val nodeUniformityLabel = "nonDefault"
     val nonDefaultImage = "nonDefaultImage"
     sparkConf.set(EXECUTOR_CONTAINER_IMAGE, Some(nonDefaultImage))
     sparkConf.set(ARMADA_EXECUTOR_LIMIT_MEMORY, mem)
@@ -228,7 +232,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     sparkConf.set("spark.app.id", appId)
     sparkConf.set("spark.executor.memory", envMem)
     sparkConf.set("spark.executor.cores", cpu)
-    sparkConf.set(GANG_SCHEDULING_NODE_UNIFORMITY_LABEL, nodeUniformityLabel)
 
     val nonDefaultValues = Map[String, String](
       "limitMem" -> mem,
@@ -238,7 +241,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "appId" -> appId,
       "envMem" -> envMem,
       "envCores" -> cpu,
-      "nodeUniformityLabel" -> nodeUniformityLabel,
       "requestCPU" -> cpu)
 
     val aca = new ArmadaClientApplication()
@@ -270,8 +272,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |value: "${valueMap("envCores")}"
         |name: "SPARK_EXECUTOR_MEMORY"
         |value: "${valueMap("envMem")}"
-        |name: "SPARK_DRIVER_URL"
-        |value: "spark://CoarseGrainedScheduler@driverService:7078"
         |name: "SPARK_EXECUTOR_POD_IP"
         |valueFrom {
         |  fieldRef {
@@ -280,7 +280,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |  }
         |}
         |name: "ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL"
-        |value: "${valueMap("nodeUniformityLabel")}"
+        |value: "$nodeUniformityLabel"
         |name: "SPARK_JAVA_OPT_0"
         |value: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
         |""".stripMargin
