@@ -65,9 +65,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val container = driver.getPodSpec.containers.head
     assert(container.getImage == imageName)
 
-    val argSize = getDriverArgs(defaultValues).split("\n").length
+    val driverArgs = getDriverArgs(defaultValues)
+    val argSize = driverArgs.split("\n").length
     val driverArgsString = container.args.take(argSize).mkString("\n")
-    assert(driverArgsString == getDriverArgs(defaultValues))
+    assert(driverArgsString == driverArgs)
 
     val driverConfList = container.args.drop(argSize).filter(_ != "--conf").sorted.toList
     val driverConfExpectedList = getDriverConf(defaultValues).split("\n").sorted.toList
