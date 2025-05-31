@@ -18,6 +18,14 @@ package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
+  ARMADA_DRIVER_LIMIT_CORES,
+  ARMADA_DRIVER_LIMIT_MEMORY,
+  ARMADA_DRIVER_REQUEST_CORES,
+  ARMADA_DRIVER_REQUEST_MEMORY,
+  ARMADA_EXECUTOR_LIMIT_CORES,
+  ARMADA_EXECUTOR_LIMIT_MEMORY,
+  ARMADA_EXECUTOR_REQUEST_CORES,
+  ARMADA_EXECUTOR_REQUEST_MEMORY,
   ARMADA_HEALTH_CHECK_TIMEOUT,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
@@ -30,6 +38,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
+  DEFAULT_SPARK_EXECUTOR_CORES,
+  DEFAULT_SPARK_EXECUTOR_MEMORY,
   CONTAINER_IMAGE,
   SPARK_DRIVER_SERVICE_NAME_PREFIX,
   commaSeparatedLabelsToMap
@@ -157,7 +167,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ()
   }
 
-  private def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
+  private[spark] def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
     val queue = conf.get(ARMADA_JOB_QUEUE).getOrElse {
       throw new IllegalArgumentException(
         s"Queue name must be set via ${ARMADA_JOB_QUEUE.key}"
@@ -230,7 +240,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  private case class ArmadaJobConfig(
+  private[spark] case class ArmadaJobConfig(
       queue: String,
       jobSetId: String,
       namespace: String,
@@ -273,7 +283,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     (driverJobId, executorJobIds)
   }
 
-  private def newSparkJobSubmitRequestItems(
+  private[spark] def newSparkJobSubmitRequestItems(
       clientArguments: ClientArguments,
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
@@ -321,7 +331,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
       nodeSelectors,
-      confSeq ++ primaryResource ++ clientArguments.driverArgs
+      confSeq ++ primaryResource ++ clientArguments.driverArgs,
+      conf
     )
 
     val executorLabels =
@@ -340,7 +351,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         driverPort,
         configGenerator.getVolumes,
         nodeSelectors,
-        armadaJobConfig.executorConnectionTimeout
+        armadaJobConfig.executorConnectionTimeout,
+        conf
       )
     }
 
@@ -381,7 +393,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
       nodeSelectors: Map[String, String],
-      additionalDriverArgs: Seq[String]
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
     val container = newSparkDriverContainer(
       master,
@@ -390,7 +403,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass,
       serviceName,
       volumeMounts,
-      additionalDriverArgs
+      additionalDriverArgs,
+      conf
     )
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
@@ -424,7 +438,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass: String,
       serviceName: String,
       volumeMounts: Seq[VolumeMount],
-      additionalDriverArgs: Seq[String]
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): Container = {
     val source = EnvVarSource().withFieldRef(
       ObjectFieldSelector()
@@ -442,6 +457,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar()
         .withName("ARMADA_SPARK_DRIVER_SERVICE_NAME")
         .withValue(serviceName)
+    )
+
+    val driverLimits = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_MEMORY))),
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES)))
+    )
+    val driverRequests = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_MEMORY))),
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES)))
     )
     Container()
       .withName("driver")
@@ -471,16 +495,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withResources( // FIXME: What are reasonable requests/limits for spark drivers?
         ResourceRequirements(
-          requests = defaultDriverResources,
-          limits = defaultDriverResources
+          requests = driverRequests,
+          limits = driverLimits
         )
       )
   }
-
-  private val defaultDriverResources = Map(
-    "memory" -> Quantity(Option("512Mi")),
-    "cpu"    -> Quantity(Option("250m"))
-  )
 
   private def newExecutorJobSubmitItem(
       index: Int,
@@ -495,7 +514,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverPort: Int,
       volumes: Seq[Volume],
       nodeSelectors: Map[String, String],
-      connectionTimeout: Duration
+      connectionTimeout: Duration,
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
     val initContainer = newExecutorInitContainer(driverHostname, driverPort, connectionTimeout)
     val container = newExecutorContainer(
@@ -504,7 +524,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverHostname,
       driverPort,
       nodeUniformityLabel,
-      javaOptEnvVars
+      javaOptEnvVars,
+      conf
     )
     val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
@@ -542,22 +563,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withCommand(Seq("sh", "-c"))
       .withArgs(
-        Seq(
-          """
-          start_time=$(date +%s);
-          timeout=SPARK_EXECUTOR_CONNECTION_TIMEOUT;
-          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
-            now=$(date +%s);
-            elapsed=$((now - start_time));
-            if [ $elapsed -ge $timeout ]; then
-              echo "Timeout waiting for driver after ${timeout}s";
-              exit 1;
-            fi;
-            echo "waiting for driver...";
-            sleep 1;
-          done
-        """.stripMargin.trim
-        )
+        Seq(Utils.initContainerCommand)
       )
   }
 
@@ -567,7 +573,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverHostname: String,
       driverPort: Int,
       nodeUniformityLabel: Option[String],
-      javaOptEnvVars: Seq[EnvVar]
+      javaOptEnvVars: Seq[EnvVar],
+      conf: SparkConf
   ): Container = {
     val driverURL = s"spark://CoarseGrainedScheduler@$driverHostname:$driverPort"
     val source = EnvVarSource().withFieldRef(
@@ -575,13 +582,34 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withApiVersion("v1")
         .withFieldPath("status.podIP")
     )
+    val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
+    val podName = EnvVarSource().withFieldRef(
+      ObjectFieldSelector()
+        .withApiVersion("v1")
+        .withFieldPath("metadata.name")
+    )
+    val sparkExecutorMemory =
+      conf.getOption("spark.executor.memory").getOrElse(DEFAULT_SPARK_EXECUTOR_MEMORY)
+    val sparkExecutorCores =
+      conf.getOption("spark.executor.cores").getOrElse(DEFAULT_SPARK_EXECUTOR_CORES)
+
+    val executorLimits = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_MEMORY))),
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_CORES)))
+    )
+    val executorRequests = Map(
+      "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_MEMORY))),
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_CORES)))
+    )
     val envVars = Seq(
       EnvVar().withName("SPARK_EXECUTOR_ID").withValue(index.toString),
       EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
-      EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValue("test-pod-name"),
-      EnvVar().withName("SPARK_APPLICATION_ID").withValue("test_spark_app_id"),
-      EnvVar().withName("SPARK_EXECUTOR_CORES").withValue("1"),
-      EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue("512m"),
+      EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(podName),
+      EnvVar()
+        .withName("SPARK_APPLICATION_ID")
+        .withValue(conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)),
+      EnvVar().withName("SPARK_EXECUTOR_CORES").withValue(sparkExecutorCores),
+      EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue(sparkExecutorMemory),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     ) ++ nodeUniformityLabel
@@ -599,16 +627,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withResources(
         ResourceRequirements(
-          requests = defaultExecutorResources,
-          limits = defaultExecutorResources
+          requests = executorRequests,
+          limits = executorLimits
         )
       )
   }
-
-  private val defaultExecutorResources = Map(
-    "memory" -> Quantity(Option("512Mi")),
-    "cpu"    -> Quantity(Option("250m"))
-  )
 }
 
 object Utils {
@@ -630,4 +653,20 @@ object Utils {
     (1 to length)
       .map(_ => suffixChars(Random.nextInt(suffixChars.length)))
       .mkString
+
+  val initContainerCommand =
+    """
+          start_time=$(date +%s);
+          timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
+          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
+            now=$(date +%s);
+            elapsed=$((now - start_time));
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout waiting for driver after ${timeout}s";
+              exit 1;
+            fi;
+            echo "waiting for driver...";
+            sleep 1;
+          done
+        """.stripMargin.trim
 }
