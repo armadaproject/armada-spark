@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# init environment variables
+# init environment variables -test
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
 
