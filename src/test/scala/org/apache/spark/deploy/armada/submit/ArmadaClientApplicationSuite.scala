@@ -46,7 +46,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   test("Test driver container default values") {
-
     // Set expected values to defaults
     val mem = DEFAULT_MEM
     val cpu = DEFAULT_CORES
@@ -65,16 +64,22 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
 
     val container = driver.getPodSpec.containers.head
     assert(container.getImage == imageName)
-    val driverArgsString = container.args.mkString("\n")
+
+    val argSize = getDriverArgs(defaultValues).split("\n").length
+    val driverArgsString = container.args.take(argSize).mkString("\n")
     assert(driverArgsString == getDriverArgs(defaultValues))
 
+    val driverConfList = container.args.drop(argSize).filter(_ != "--conf").sorted.toList
+    val driverConfExpectedList = getDriverConf(defaultValues).split("\n").sorted.toList
+    assert(driverConfList == driverConfExpectedList)
     val driverPortString = container.ports.head.toProtoString
     assert(driverPortString == getDriverPort)
 
-
+    // Filter out service name because it contains a random suffix
     val driverEnvString = container.env.filter(_.getName != "ARMADA_SPARK_DRIVER_SERVICE_NAME").map(_.toProtoString).mkString
     assert(driverEnvString == getDriverEnv)
 
+    // Test service name by filter out random suffix
     val driverServicePrefix = container.env.filter(_.getName == "ARMADA_SPARK_DRIVER_SERVICE_NAME" ).head.getValue
     val validPrefix = "armada-spark-driver-.....".r
     assert(driverServicePrefix.matches(validPrefix.regex))
@@ -84,7 +89,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   test("Test driver container non-default values") {
-
     // Change expected values from defaults
     val mem = "20Gi"
     val cpu = "2"
@@ -101,7 +105,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
       "limitCPU" -> cpu,
       "requestMem" -> mem,
       "requestCPU" -> cpu)
-
 
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
@@ -120,20 +123,16 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |--master
         |${valueMap("sparkMaster")}
         |--class
-        |$className
-        |--conf
-        |spark.driver.port=7078
-        |--conf
+        |$className""".stripMargin
+  }
+
+  private def getDriverConf(valueMap: Map[String, String]) = {
+    s"""|spark.driver.port=7078
         |spark.driver.host=$bindAddress
-        |--conf
         |spark.armada.scheduling.nodeUniformity=$nodeUniformityLabel
-        |--conf
         |spark.armada.queue=$queue
-        |--conf
         |spark.master=${valueMap("sparkMaster")}
-        |--conf
         |spark.armada.container.image=$imageName
-        |--conf
         |spark.armada.jobSetId=$jobSet""".stripMargin
   }
 
@@ -187,7 +186,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   test("Test executor container default values") {
-
     // Set expected values to defaults
     val mem = DEFAULT_MEM
     val cpu = DEFAULT_CORES
@@ -206,7 +204,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
     val (_, executors) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
-
     assert(executors.size == 2)
 
     val executor = executors.head
@@ -216,6 +213,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val container = executor.getPodSpec.containers.filter(_.getName == "executor").head
 
     assert(container.getImage == imageName)
+
+    // filter out driver url, (contains random suffix)
     val executorEnvString = container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(defaultValues))
 
@@ -227,7 +226,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
   }
 
   test("Test executor container non-default values") {
-
     // Change expected values from defaults
     val mem = "10Gi"
     val cpu = "10"
@@ -262,7 +260,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val aca = new ArmadaClientApplication()
     val armadaJobConfig = aca.validateArmadaJobConfig(sparkConf)
     val (_, executors) = aca.newSparkJobSubmitRequestItems(clientArgs, armadaJobConfig, sparkConf)
-
     assert(executors.size == instanceCount)
 
     val executor = executors.head
@@ -270,8 +267,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     assert(executor.priority == priority)
 
     val container = executor.getPodSpec.containers.filter(_.getName == "executor").head
-
-
     val executorEnvString = container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
     assert(executorEnvString == getExecutorEnv(nonDefaultValues))
 

@@ -648,7 +648,6 @@ object Utils {
       .map(_ => suffixChars(Random.nextInt(suffixChars.length)))
       .mkString
 
-
   val initContainerCommand =
         """
           start_time=$(date +%s);

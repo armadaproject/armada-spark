@@ -214,7 +214,6 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_CORES)
 
-
   val ARMADA_EXECUTOR_LIMIT_CORES: ConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.limit.cores")
       .doc("Specify the hard cpu limit for each executor pod")
@@ -258,7 +257,6 @@ private[spark] object Config {
       .version("1.0.0")
       .stringConf
       .createWithDefaultString(DEFAULT_MEM)
-
 
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
