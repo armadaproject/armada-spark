@@ -199,7 +199,7 @@ private[spark] object Config {
       .createOptional
 
   val DEFAULT_SPARK_EXECUTOR_CORES = "1"
-  val DEFAULT_CORES = "1"
+  val DEFAULT_CORES                = "1"
   val ARMADA_DRIVER_LIMIT_CORES: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.cores")
       .doc("Specify the hard cpu limit for the driver pod")
@@ -228,7 +228,7 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_CORES)
 
-  val DEFAULT_MEM = "1Gi"
+  val DEFAULT_MEM                   = "1Gi"
   val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
   val ARMADA_DRIVER_LIMIT_MEMORY: ConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.memory")

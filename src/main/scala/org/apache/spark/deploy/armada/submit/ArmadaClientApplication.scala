@@ -459,14 +459,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withValue(serviceName)
     )
 
-
     val driverLimits = Map(
       "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_MEMORY))),
-      "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES)))
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_DRIVER_LIMIT_CORES)))
     )
     val driverRequests = Map(
       "memory" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_MEMORY))),
-      "cpu" -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES)))
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_DRIVER_REQUEST_CORES)))
     )
     Container()
       .withName("driver")
@@ -584,24 +583,31 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withFieldPath("status.podIP")
     )
     val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
-    val podName = EnvVarSource().withFieldRef(ObjectFieldSelector()
-      .withApiVersion("v1").withFieldPath("metadata.name"))
-    val sparkExecutorMemory = conf.getOption("spark.executor.memory").getOrElse(DEFAULT_SPARK_EXECUTOR_MEMORY)
-    val sparkExecutorCores = conf.getOption("spark.executor.cores").getOrElse(DEFAULT_SPARK_EXECUTOR_CORES)
+    val podName = EnvVarSource().withFieldRef(
+      ObjectFieldSelector()
+        .withApiVersion("v1")
+        .withFieldPath("metadata.name")
+    )
+    val sparkExecutorMemory =
+      conf.getOption("spark.executor.memory").getOrElse(DEFAULT_SPARK_EXECUTOR_MEMORY)
+    val sparkExecutorCores =
+      conf.getOption("spark.executor.cores").getOrElse(DEFAULT_SPARK_EXECUTOR_CORES)
 
     val executorLimits = Map(
       "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_MEMORY))),
-      "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_CORES)))
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_EXECUTOR_LIMIT_CORES)))
     )
     val executorRequests = Map(
       "memory" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_MEMORY))),
-      "cpu" -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_CORES)))
+      "cpu"    -> Quantity(Option(conf.get(ARMADA_EXECUTOR_REQUEST_CORES)))
     )
     val envVars = Seq(
       EnvVar().withName("SPARK_EXECUTOR_ID").withValue(index.toString),
       EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
       EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(podName),
-      EnvVar().withName("SPARK_APPLICATION_ID").withValue(conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)),
+      EnvVar()
+        .withName("SPARK_APPLICATION_ID")
+        .withValue(conf.getOption("spark.app.id").getOrElse(DEFAULT_ARMADA_APP_ID)),
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue(sparkExecutorCores),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue(sparkExecutorMemory),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
@@ -649,7 +655,7 @@ object Utils {
       .mkString
 
   val initContainerCommand =
-        """
+    """
           start_time=$(date +%s);
           timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
           while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
