@@ -67,23 +67,23 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val container = driver.getPodSpec.containers.head
     assert(container.getImage == imageName)
 
-    val driverArgs       = getDriverArgs(defaultValues)
+    val driverArgs       = getExpectedDriverArgs(defaultValues)
     val argSize          = driverArgs.split("\n").length
     val driverArgsString = container.args.take(argSize).mkString("\n")
     assert(driverArgsString == driverArgs)
 
     val driverConfList         = container.args.drop(argSize).filter(_ != "--conf").sorted.toList
-    val driverConfExpectedList = getDriverConf(defaultValues).split("\n").sorted.toList
+    val driverConfExpectedList = getExpectedDriverConf(defaultValues).split("\n").sorted.toList
     assert(driverConfList == driverConfExpectedList)
     val driverPortString = container.ports.head.toProtoString
-    assert(driverPortString == getDriverPort)
+    assert(driverPortString == getExpectedDriverPort)
 
     // Filter out service name because it contains a random suffix
     val driverEnvString = container.env
       .filter(_.getName != "ARMADA_SPARK_DRIVER_SERVICE_NAME")
       .map(_.toProtoString)
       .mkString
-    assert(driverEnvString == getDriverEnv)
+    assert(driverEnvString == getExpectedDriverEnv)
 
     // Test service name by filter out random suffix
     val driverServicePrefix =
@@ -92,7 +92,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     assert(driverServicePrefix.matches(validPrefix.regex))
 
     val driverResourcesString = container.resources.get.toProtoString
-    assert(driverResourcesString == getResources(defaultValues))
+    assert(driverResourcesString == getExpectedResources(defaultValues))
   }
 
   test("Test driver container non-default values") {
@@ -122,10 +122,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
 
     val container             = driver.getPodSpec.containers.head
     val driverResourcesString = container.resources.get.toProtoString
-    assert(driverResourcesString == getResources(nonDefaultValues))
+    assert(driverResourcesString == getExpectedResources(nonDefaultValues))
   }
 
-  private def getDriverArgs(valueMap: Map[String, String]) = {
+  private def getExpectedDriverArgs(valueMap: Map[String, String]) = {
     s"""|driver
         |--verbose
         |--master
@@ -134,7 +134,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |$className""".stripMargin
   }
 
-  private def getDriverConf(valueMap: Map[String, String]) = {
+  private def getExpectedDriverConf(valueMap: Map[String, String]) = {
     s"""|spark.driver.port=7078
         |spark.driver.host=$bindAddress
         |spark.armada.scheduling.nodeUniformity=$nodeUniformityLabel
@@ -144,13 +144,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |spark.armada.jobSetId=$jobSet""".stripMargin
   }
 
-  private def getDriverPort = {
+  private def getExpectedDriverPort = {
     s"""|name: "driver"
         |containerPort: 7078
         |""".stripMargin
   }
 
-  private def getDriverEnv = {
+  private def getExpectedDriverEnv = {
     s"""|name: "SPARK_DRIVER_BIND_ADDRESS"
         |valueFrom {
         |  fieldRef {
@@ -165,7 +165,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
         |""".stripMargin
 
   }
-  private def getResources(valueMap: Map[String, String]) = {
+  private def getExpectedResources(valueMap: Map[String, String]) = {
     s"""|limits {
         |  key: "memory"
         |  value {
@@ -226,13 +226,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     // filter out driver url, (contains random suffix)
     val executorEnvString =
       container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
-    assert(executorEnvString == getExecutorEnv(defaultValues))
+    assert(executorEnvString == getExpectedExecutorEnv(defaultValues))
 
     val driverUrl = container.env.filter(_.getName == "SPARK_DRIVER_URL").head.getValue
     val validUrl  = "spark://CoarseGrainedScheduler@armada-spark-driver-.....:7078".r
     assert(driverUrl.matches(validUrl.regex))
     val executorResourcesString = container.resources.get.toProtoString
-    assert(executorResourcesString == getResources(defaultValues))
+    assert(executorResourcesString == getExpectedResources(defaultValues))
   }
 
   test("Test executor container non-default values") {
@@ -280,17 +280,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter {
     val container = executor.getPodSpec.containers.filter(_.getName == "executor").head
     val executorEnvString =
       container.env.filter(_.getName != "SPARK_DRIVER_URL").map(_.toProtoString).mkString
-    assert(executorEnvString == getExecutorEnv(nonDefaultValues))
+    assert(executorEnvString == getExpectedExecutorEnv(nonDefaultValues))
 
     val driverUrl = container.env.filter(_.getName == "SPARK_DRIVER_URL").head.getValue
     val validUrl  = s"spark://CoarseGrainedScheduler@$driverPrefix.....:7078".r
     assert(driverUrl.matches(validUrl.regex))
 
     val executorResourcesString = container.resources.get.toProtoString
-    assert(executorResourcesString == getResources(nonDefaultValues))
+    assert(executorResourcesString == getExpectedResources(nonDefaultValues))
   }
 
-  private def getExecutorEnv(valueMap: Map[String, String]) = {
+  private def getExpectedExecutorEnv(valueMap: Map[String, String]) = {
     s"""|name: "SPARK_EXECUTOR_ID"
         |value: "0"
         |name: "SPARK_RESOURCE_PROFILE_ID"
