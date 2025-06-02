@@ -174,7 +174,7 @@ main() {
 
     echo "---------- about to check for driver and executor job ids ----"
     DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
-    EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
+    EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
 
     echo "---------- about to run armadactl watch ----"
     (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" driver --exit-if-inactive 2>&1 | tee armadactl.watch.log; \

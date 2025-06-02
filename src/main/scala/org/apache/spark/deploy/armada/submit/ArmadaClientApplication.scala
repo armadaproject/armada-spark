@@ -268,7 +268,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, executors)
     val executorJobIds = executorsResponse.jobResponseItems.map(item => {
       log(
-        s"Submitted executor job with ID: ${item.jobId}, Error: ${item.error}"
+        s"Submitted executor job with ID: ${item.jobId}  Error: ${item.error}"
       )
       item.jobId
     })
