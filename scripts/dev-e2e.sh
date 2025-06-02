@@ -181,7 +181,7 @@ main() {
     EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
 
     echo "---------- about to run armadactl watch ----"
-    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" driver --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
+    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
     echo "---------- about to curl for job spec ----"
