@@ -176,9 +176,11 @@ main() {
     DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
     EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
 
+    echo "---------- about to run armadactl watch ----"
     (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" driver --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
+    echo "---------- about to curl for job spec ----"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
       --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq | log_group "Driver Job Spec  $DRIVER_JOBID"
 
@@ -188,8 +190,10 @@ main() {
     done
   fi
  
+  echo "---------- about to get list of pods ----"
   kubectl get pods -A 2>&1 | log_group "pods"
 
+  echo "---------- about to iterate through pod list ----"
   kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
   do
     (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
