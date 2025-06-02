@@ -11,6 +11,10 @@ AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
 JOB_DETAILS=1
 
+if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
+  AOHOME="$scripts/../armada-operator"
+fi
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
