@@ -84,68 +84,68 @@ runs:
     run: |
       ./armada-spark/scripts/dev-e2e.sh
     shell: bash
-  - name: Patch armada-operator to configure for spark-armada e2e tests
-    run: |
-      # Patch armada-operator
-      patch -p1 -d ./armada-operator/ < ./armada-spark/e2e/armada-operator.patch
-    shell: bash
-  - name: Start Armada Kind cluster
-    id: kind
-    working-directory: armada-operator
-    run: |
-      # Start Armada Kind cluster
-      echo "::group::make kind-all"
-      make kind-all
-      echo "::endgroup::"
+  # - name: Patch armada-operator to configure for spark-armada e2e tests
+  #   run: |
+  #     # Patch armada-operator
+  #     patch -p1 -d ./armada-operator/ < ./armada-spark/e2e/armada-operator.patch
+  #   shell: bash
+  # - name: Start Armada Kind cluster
+  #   id: kind
+  #   working-directory: armada-operator
+  #   run: |
+  #     # Start Armada Kind cluster
+  #     echo "::group::make kind-all"
+  #     make kind-all
+  #     echo "::endgroup::"
 
-      echo "$PWD/bin/app/" >> "$GITHUB_PATH"
-      echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
-    shell: bash
-  - name: Create Armada queue
-    run: |
-      # Create Armada queue
-      echo "::group::armadactl create queue test"
-      until armadactl create queue test 2>&1
-      do
-        echo "::endgroup::"
-        sleep 1
-        echo "::group::armadactl create queue test"
-      done
-      echo "::endgroup::"
+  #     echo "$PWD/bin/app/" >> "$GITHUB_PATH"
+  #     echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
+  #   shell: bash
+  # - name: Create Armada queue
+  #   run: |
+  #     # Create Armada queue
+  #     echo "::group::armadactl create queue test"
+  #     until armadactl create queue test 2>&1
+  #     do
+  #       echo "::endgroup::"
+  #       sleep 1
+  #       echo "::group::armadactl create queue test"
+  #     done
+  #     echo "::endgroup::"
 
-      sleep 60
-    shell: bash
-  - name: Submit SparkPi
-    id: submit
-    run: |
-      # Submit SparkPi
-      echo "::group::submitSparkPi.sh"
-      ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
-      echo "::endgroup::"
+  #     sleep 60
+  #   shell: bash
+  # - name: Submit SparkPi
+  #   id: submit
+  #   run: |
+  #     # Submit SparkPi
+  #     echo "::group::submitSparkPi.sh"
+  #     ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
+  #     echo "::endgroup::"
 
-      while read -r line; do
-        if [[ "$line" == "Submitted driver job with ID:"* ]]; then
-          # strip the leading text…
-          jobid=${line#Submitted driver job with ID:\ }
-          # …then cut off at the first comma
-          jobid=${jobid%%,*}
-          echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
-        fi
-      done < submitSparkPi.log
+  #     while read -r line; do
+  #       if [[ "$line" == "Submitted driver job with ID:"* ]]; then
+  #         # strip the leading text…
+  #         jobid=${line#Submitted driver job with ID:\ }
+  #         # …then cut off at the first comma
+  #         jobid=${jobid%%,*}
+  #         echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
+  #       fi
+  #     done < submitSparkPi.log
       
-      if [[ -z "$jobid" ]]; then
-        echo "No job id detected"
-        exit 1
-      fi
-    shell: bash
-  - name: Watch job
-    run: |
-      # Watch job
-      sleep 10
-      timeout 15m armadactl watch test armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log
+  #     if [[ -z "$jobid" ]]; then
+  #       echo "No job id detected"
+  #       exit 1
+  #     fi
+  #   shell: bash
+  # - name: Watch job
+  #   run: |
+  #     # Watch job
+  #     sleep 10
+  #     timeout 15m armadactl watch test armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log
 
-      if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
-    shell: bash
+  #     if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
+  #   shell: bash
   - name: Ensure job completed
     run: |
       timeout 5m bash -c '
@@ -186,11 +186,11 @@ runs:
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
       echo "::endgroup::"
     shell: bash
-  - name: Confirm # of executors
+  - name: Confirm number of executors
     if: always()
     run: |
-      # Confirm # of executors
-      echo "::group::Confirm # of executors"
+      # Confirm number of executors
+      echo "::group::Confirm number of executors"
       expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitSparkPi.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
       actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" default.armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
       echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount

@@ -258,7 +258,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, Seq(driver))
     val driverJobId = driverResponse.jobResponseItems.head.jobId
     log(
-      s"Submitted driver job with ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
+      s"Submitted driver job for queue ${armadaJobConfig.queue} with JobSet ID ${armadaJobConfig.jobSetId}"
+    )
+    log(
+      s"Driver Job ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
     )
 
     val executorsResponse =
