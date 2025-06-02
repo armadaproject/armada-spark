@@ -11,10 +11,12 @@ index d76880c..0eac6cf 100644
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: Executor
-@@ -70,6 +72,10 @@ spec:
+@@ -70,8 +72,12 @@ spec:
      executorApiConnection:
        armadaUrl: armada-scheduler.armada.svc.cluster.local:50051
        forceNoTls: true
+     metric:
+       port: 9001
 +    kubernetes:
 +      trackedNodeLabels:
 +        - kubernetes.io/hostname
