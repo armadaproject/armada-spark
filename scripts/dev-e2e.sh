@@ -169,11 +169,12 @@ main() {
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh" 2>&1 | \
     tee submitSparkPi.log | log_group "Submitting SparkPI job"
 
-  DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
-  EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
-
   if [ "$JOB_DETAILS" = 1 ]; then
-    sleep 5   # wait a moment for Armada to schedule & run the job
+    sleep 10   # wait a moment for Armada to schedule & run the job
+
+    echo "---------- about to check for driver and executor job ids ----"
+    DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
+    EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
 
     (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" driver --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
