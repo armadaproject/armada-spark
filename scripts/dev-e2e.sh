@@ -17,6 +17,7 @@ else
   now=$(date +'%Y%m%d%H%M%S')
   AOHOME="$scripts/../../armada-operator"
   JOBSET="armada-spark-$now" # interactive users may run this multiple times on same cluster
+  GITHUB_OUTPUT=/dev/stdout
 fi
 
 GREEN='\033[0;32m'
@@ -177,14 +178,15 @@ main() {
   sleep 30
 
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
-    tee submitSparkPi.log | log_group "Submitting SparkPI job"
+    tee submitSparkPi.log
+  DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
+  EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
+
+  echo "jobid=$DRIVER_JOBID" | tee "$GITHUB_OUTPUT" | log_group "submit"
 
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-    echo "---------- about to check for driver and executor job ids ----"
-    DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
-    EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
 
     echo "---------- about to run armadactl watch ----"
     (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
@@ -199,7 +201,7 @@ main() {
           --json "{\"jobId\":\"$exec_jobid\"}" | jq | log_group "Executor Job Spec  $exec_jobid"
     done
   fi
- 
+
   echo "---------- about to get list of pods ----"
   kubectl get pods -A 2>&1 | log_group "pods"
 
