@@ -5,6 +5,8 @@ set -euo pipefail
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
 
+JOBSET="${JOBSET:-armada-spark}"
+
 if [ "${INCLUDE_PYTHON}" == "false" ]; then
     echo Running Scala Spark
     NAME=spark-pi
@@ -38,7 +40,7 @@ docker run --rm --network host $IMAGE_NAME \
     $CLASS_PROMPT $CLASS_ARG \
     --conf spark.armada.internalUrl=armada-server.armada:50051 \
     --conf spark.armada.queue=$ARMADA_QUEUE \
-    --conf spark.armada.jobSetId=armada-spark \
+    --conf spark.armada.jobSetId="$JOBSET" \
     --conf spark.executor.instances=2 \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \

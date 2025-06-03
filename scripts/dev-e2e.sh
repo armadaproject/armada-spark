@@ -5,7 +5,6 @@ set -euo pipefail
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
 
-AOHOME="$scripts/../../armada-operator"
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
@@ -13,6 +12,11 @@ JOB_DETAILS=1
 
 if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
   AOHOME="$scripts/../armada-operator"
+  JOBSET='armada-spark'
+else
+  now=$(date +'%Y%m%d%H%M%S')
+  AOHOME="$scripts/../../armada-operator"
+  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same cluster
 fi
 
 GREEN='\033[0;32m'
@@ -166,11 +170,13 @@ main() {
 
   armadactl-retry create queue "$ARMADA_QUEUE" 2>&1 | log_group "Creating $ARMADA_QUEUE queue"
 
-  echo "Loading Docker image $IMAGE_NAME into Armada cluster"
-  test -d "$scripts/.tmp" || mkdir "$scripts/.tmp"
-  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
+  (test -d "$scripts/.tmp" || mkdir "$scripts/.tmp";
+   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1) \
+   | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
-  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh" 2>&1 | \
+  sleep 30
+
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
     tee submitSparkPi.log | log_group "Submitting SparkPI job"
 
   if [ "$JOB_DETAILS" = 1 ]; then
@@ -181,7 +187,7 @@ main() {
     EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
 
     echo "---------- about to run armadactl watch ----"
-    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
+    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
     echo "---------- about to curl for job spec ----"
