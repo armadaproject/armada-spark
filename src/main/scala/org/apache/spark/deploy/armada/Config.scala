@@ -198,6 +198,12 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.token")
+      .doc("Armada auth token.")
+      .stringConf
+      .createOptional
+
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
     * @param str

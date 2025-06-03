@@ -19,6 +19,12 @@ else
     FIRST_ARG=/opt/spark/examples/src/main/python/pi.py
 fi
 
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
+else
+    AUTH_ARG=""
+fi
+
 # Ensure queue exists on Armada
 if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
   armadactl create queue $ARMADA_QUEUE
@@ -36,6 +42,7 @@ docker run --rm --network host $IMAGE_NAME \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
+    $AUTH_ARG \
     --conf spark.armada.internalUrl=armada-server.armada:50051 \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.jobSetId=armada-spark \
