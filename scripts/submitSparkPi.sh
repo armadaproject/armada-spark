@@ -39,7 +39,7 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.armada.internalUrl=armada-server.armada:50051 \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.jobSetId=armada-spark \
-    --conf spark.executor.instances=4 \
+    --conf spark.executor.instances=2 \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
