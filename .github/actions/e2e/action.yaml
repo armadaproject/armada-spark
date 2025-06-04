@@ -81,6 +81,7 @@ runs:
       echo "::endgroup::"
     shell: bash
   - name: Test job processing
+    id: submit
     run: |
       ./armada-spark/scripts/dev-e2e.sh
     shell: bash
