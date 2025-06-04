@@ -187,12 +187,9 @@ main() {
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-
-    echo "---------- about to run armadactl watch ----"
     (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
-    echo "---------- about to curl for job spec ----"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
       --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq | log_group "Driver Job Spec  $DRIVER_JOBID"
 

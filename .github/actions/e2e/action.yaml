@@ -83,70 +83,10 @@ runs:
   - name: Test job processing
     id: submit
     run: |
+      echo "::group::dev-e2e.sh"
       ./armada-spark/scripts/dev-e2e.sh
+      echo "::endgroup::"
     shell: bash
-  # - name: Patch armada-operator to configure for spark-armada e2e tests
-  #   run: |
-  #     # Patch armada-operator
-  #     patch -p1 -d ./armada-operator/ < ./armada-spark/e2e/armada-operator.patch
-  #   shell: bash
-  # - name: Start Armada Kind cluster
-  #   id: kind
-  #   working-directory: armada-operator
-  #   run: |
-  #     # Start Armada Kind cluster
-  #     echo "::group::make kind-all"
-  #     make kind-all
-  #     echo "::endgroup::"
-
-  #     echo "$PWD/bin/app/" >> "$GITHUB_PATH"
-  #     echo "$PWD/bin/tooling/" >> "$GITHUB_PATH"
-  #   shell: bash
-  # - name: Create Armada queue
-  #   run: |
-  #     # Create Armada queue
-  #     echo "::group::armadactl create queue test"
-  #     until armadactl create queue test 2>&1
-  #     do
-  #       echo "::endgroup::"
-  #       sleep 1
-  #       echo "::group::armadactl create queue test"
-  #     done
-  #     echo "::endgroup::"
-
-  #     sleep 60
-  #   shell: bash
-  # - name: Submit SparkPi
-  #   id: submit
-  #   run: |
-  #     # Submit SparkPi
-  #     echo "::group::submitSparkPi.sh"
-  #     ./armada-spark/scripts/submitSparkPi.sh 2>&1 | tee submitSparkPi.log
-  #     echo "::endgroup::"
-
-  #     while read -r line; do
-  #       if [[ "$line" == "Submitted driver job with ID:"* ]]; then
-  #         # strip the leading text…
-  #         jobid=${line#Submitted driver job with ID:\ }
-  #         # …then cut off at the first comma
-  #         jobid=${jobid%%,*}
-  #         echo "jobid=$jobid" >> "$GITHUB_OUTPUT"
-  #       fi
-  #     done < submitSparkPi.log
-      
-  #     if [[ -z "$jobid" ]]; then
-  #       echo "No job id detected"
-  #       exit 1
-  #     fi
-  #   shell: bash
-  # - name: Watch job
-  #   run: |
-  #     # Watch job
-  #     sleep 10
-  #     timeout 15m armadactl watch test armada-spark --exit-if-inactive 2>&1 | tee armadactl.watch.log
-
-  #     if grep "Job failed:" armadactl.watch.log; then echo "Job failed"; exit 1; fi
-  #   shell: bash
   - name: Ensure job completed
     run: |
       timeout 5m bash -c '
