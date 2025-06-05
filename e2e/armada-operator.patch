@@ -2,12 +2,6 @@ diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
 index d76880c..0eac6cf 100644
 --- a/dev/quickstart/armada-crs.yaml
 +++ b/dev/quickstart/armada-crs.yaml
-@@ -56,6 +56,8 @@ spec:
-     redis:
-       addrs:
-         - redis-ha.data.svc.cluster.local:6379
-+    submission:
-+      allowCustomServiceNames: true
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: Executor

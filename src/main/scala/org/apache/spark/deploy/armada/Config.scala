@@ -129,19 +129,6 @@ private[spark] object Config {
       )
       .createOptional
 
-  val SPARK_DRIVER_SERVICE_NAME_PREFIX: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.driver.serviceNamePrefix")
-      .doc(
-        "Prefix for the driver service name which should follow the RFC 1035 label names " +
-          "specification. Should not be longer than 57 characters."
-      )
-      .stringConf
-      .checkValue(
-        v => v.length <= 57 && K8sValidator.Name.isValidPrefix(v),
-        "Service name prefix must adhere to RFC 1035 label names."
-      )
-      .createWithDefaultString("armada-spark-driver-")
-
   val ARMADA_SPARK_POD_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.pod.labels")
       .doc(
