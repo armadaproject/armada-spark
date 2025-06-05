@@ -184,7 +184,9 @@ main() {
   DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
   EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
 
-  echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT" | log_group "submit"
+  echo "::group::submit"
+  echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
+  echo "::endgroup::"
 
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
