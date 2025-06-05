@@ -62,7 +62,7 @@ Here's an example of calling `ArmadaSparkSubmit`:
     --conf spark.Executor.instances=4 \
     --conf spark.kubernetes.container.image=armada-spark \
     --conf spark.armada.lookouturl=http://localhost:30000 \
-    --conf spark.armada.clusterSelectors="armada-spark=true" \
+    --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
     "local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar"
 ```
 
@@ -88,7 +88,7 @@ Then comes several configuration options specified with `--conf` flags:
   container image `ArmadaSparkSubmit` should use for the Driver and Executors.
 - `--conf spark.armada.lookouturl=http://localhost:30000` gives the Lookout
     URL so we can easily find the results of jobs submitted to Armada.
-- `--conf spark.armada.clusterSelectors="armada-spark=true"` helps Armada pick
+- `--conf spark.armada.scheduling.nodeSelectors="armada-spark=true"` helps Armada pick
     a specific kubernetes cluster to use in order to shedule Executors and
     Drivers to the same cluster.
 
@@ -131,7 +131,7 @@ The invocation is mostly the same:
     --conf spark.Executor.instances=4 \
     --conf spark.kubernetes.container.image=armada-spark \
     --conf spark.armada.lookouturl=http://localhost:30000 \
-    --conf spark.armada.clusterSelectors="armada-spark=true" \
+    --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
     /opt/spark/examples/src/main/python/pi.py
 ```
 
@@ -148,26 +148,45 @@ Execution will proceed similarly as in the Java case.
 
 Each option consists of a `String` unless otherwise noted.
 
-- `spark.armada.Executor.trackerPollingInterval` - Specifies
-    the interval between polls to check the state of Executors.
-- `spark.armada.Executor.trackerTimeout` - Specifies the time to
-    wait for the minimum number of Executors.
+
+- `spark.armada.container.image` - Container image to use for Spark containers.
+- `spark.armada.driver.limit.cores` - Specify the hard cpu limit for the driver pod
+- `spark.armada.driver.request.cores` - Specify the cpu request for the driver pod
+- `spark.armada.driver.limit.memory` - Specify the hard memory limit for the driver pod
+- `spark.armada.driver.request.memory` - Specify the memory request for the driver pod
+- `spark.armada.executor.limit.cores` - Specify the hard cpu limit for each executor pod
+- `spark.armada.executor.request.cores` - Specify the cpu request for each executor pod
+- `spark.armada.executor.limit.memory` - Specify the hard memory limit for each executor pod
+- `spark.armada.executor.request.memory` - Specify the memory request for each executor pod
+- `spark.armada.executor.connectionTimeout` - Time to wait for the executor to connect to the driver. (Long seconds)
+- `spark.armada.queue` - The name of the job queue to use for the Armada job.
+- `spark.armada.jobSetId` - The JobSet ID for which the driver and executor pods will be part of. 
+          If not set, it will be derived from the Spark application name.
+- `spark.armada.internalUrl` - The Kubernetes DNS or IP address of the Armada Server.
+          This URL is used by the Driver when running in Cluster mode.
+          If not specified, 'spark.master' will be used.
+- `spark.armada.scheduling.namespace` - The namespace to use for the job. If not set, the default namespace will be used.
+- `spark.armada.scheduling.priority` - The priority to use for the job. If not set, the default priority will be used. (Double)
+- `spark.armada.executor.trackerPollingInterval` - Specifies
+    the interval between polls to check the state of Executors. (Long milliseconds)
+- `spark.armada.executor.trackerTimeout` - Specifies the time to
+    wait for the minimum number of Executors. (Long milliseconds)
 - `spark.armada.lookouturl` - Sets the base URL to use for Armada's Lookout
     service.
 - `spark.armada.health.checkTimeout` - Time to wait for Armada's health check
-    to succeed in seconds.
-- `spark.armada.clusterSelectors` - A comma-separated list of kubernetes
+    to succeed in seconds. (Long)
+- `spark.armada.scheduling.nodeSelectors` - A comma-separated list of kubernetes
     label selectors (in key=value format) to ensure the spark Driver and
     its Executors are deployed to the same cluster.
 - `spark.armada.scheduling.nodeUniformityLabel` - A single kubernetes label to
     apply to both Driver and Executors.
-- `spark.armada.DriverServiceNamePrefix` - Defines the Driver's service name
+- `spark.armada.driver.serviceNamePrefix` - Defines the Driver's service name
     prefix within Armada. Must consist of lowercase a-z and '-' characters only.
-- `spark.armada.global.labels` - A comma-separated list of kubernetes labels
-    (in key=value format) to be added to all both the Driver and Executor pods.
-- `spark.armada.Driver.labels` - A comma-separated list of kubernetes labels
+- `spark.armada.pod.labels` - A comma-separated list of kubernetes labels
+    (in key=value format) to be added to both the Driver and Executor pods.
+- `spark.armada.driver.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to the Driver pod.
-- `spark.armada.Executor.labels` A comma-separated list of kubernetes labels
+- `spark.armada.executor.labels` A comma-separated list of kubernetes labels
     (in key=value format) to be added to all Executor pods.
 
 # Building `armada-spark`
