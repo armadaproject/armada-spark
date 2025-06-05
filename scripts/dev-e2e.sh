@@ -141,7 +141,7 @@ main() {
   fi
   echo "Checking for armadactl .."
   if ! test -x "$scripts"/armadactl; then
-    fetch-armadactl | log_group "Fetching armadactl"
+    fetch-armadactl 2>&1 | log_group "Fetching armadactl"
   fi
 
   echo "Checking if image $IMAGE_NAME is available"
@@ -175,6 +175,8 @@ main() {
    TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1) \
    | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
+  # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
+  # proceeding immediately causes sporadic immediate job rejections by Armada
   sleep 30
 
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
