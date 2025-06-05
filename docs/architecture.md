@@ -154,11 +154,11 @@ Each option consists of a `String` unless otherwise noted.
 - `spark.armada.driver.request.cores` - Specify the cpu request for the driver pod
 - `spark.armada.driver.limit.memory` - Specify the hard memory limit for the driver pod
 - `spark.armada.driver.request.memory` - Specify the memory request for the driver pod
-- `spark.armada.executor.limit.cores` - Specify the hard cpu limit for each executor pod
-- `spark.armada.executor.request.cores` - Specify the cpu request for each executor pod
-- `spark.armada.executor.limit.memory` - Specify the hard memory limit for each executor pod
-- `spark.armada.executor.request.memory` - Specify the memory request for each executor pod
-- `spark.armada.executor.connectionTimeout` - Time to wait for the executor to connect to the driver. (Long seconds)
+- `spark.armada.executor.limit.cores` - Specify the hard cpu limit for each executor pod.  (k8s syntax)
+- `spark.armada.executor.request.cores` - Specify the cpu request for each executor pod.   (k8s syntax)
+- `spark.armada.executor.limit.memory` - Specify the hard memory limit for each executor pod.  (k8s syntax)
+- `spark.armada.executor.request.memory` - Specify the memory request for each executor pod.   (k8s syntax)
+- `spark.armada.executor.connectionTimeout` - Time to wait for the executor to connect to the driver. (Duration string)
 - `spark.armada.queue` - The name of the job queue to use for the Armada job.
 - `spark.armada.jobSetId` - The JobSet ID for which the driver and executor pods will be part of. 
           If not set, it will be derived from the Spark application name.
@@ -168,13 +168,13 @@ Each option consists of a `String` unless otherwise noted.
 - `spark.armada.scheduling.namespace` - The namespace to use for the job. If not set, the default namespace will be used.
 - `spark.armada.scheduling.priority` - The priority to use for the job. If not set, the default priority will be used. (Double)
 - `spark.armada.executor.trackerPollingInterval` - Specifies
-    the interval between polls to check the state of Executors. (Long milliseconds)
+    the interval between polls to check the state of Executors. (Duration string)
 - `spark.armada.executor.trackerTimeout` - Specifies the time to
-    wait for the minimum number of Executors. (Long milliseconds)
+    wait for the minimum number of Executors. (Duration string)
 - `spark.armada.lookouturl` - Sets the base URL to use for Armada's Lookout
     service.
 - `spark.armada.health.checkTimeout` - Time to wait for Armada's health check
-    to succeed in seconds. (Long)
+    to succeed in seconds. (Duration string)
 - `spark.armada.scheduling.nodeSelectors` - A comma-separated list of kubernetes
     label selectors (in key=value format) to ensure the spark Driver and
     its Executors are deployed to the same cluster.
@@ -188,6 +188,8 @@ Each option consists of a `String` unless otherwise noted.
     (in key=value format) to be added to the Driver pod.
 - `spark.armada.executor.labels` A comma-separated list of kubernetes labels
     (in key=value format) to be added to all Executor pods.
+- `spark.executor.memory` - Amount of memory to use per executor process, in the same format as JVM memory
+    strings with a size unit suffix ("k", "m", "g" or "t") (e.g. 512m, 2g).
 
 # Building `armada-spark`
 
