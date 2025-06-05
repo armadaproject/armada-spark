@@ -31,7 +31,6 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
   CONTAINER_IMAGE,
-  SPARK_DRIVER_SERVICE_NAME_PREFIX,
   commaSeparatedLabelsToMap
 }
 
@@ -44,8 +43,6 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
-
-import scala.util.Random
 
 /** Encapsulates arguments to the submission client.
   *
@@ -211,8 +208,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaClientUrl
       }
 
-    val driverServiceName = conf.get(SPARK_DRIVER_SERVICE_NAME_PREFIX) + Utils.randAlphanum()
-
     ArmadaJobConfig(
       queue = queue,
       jobSetId = jobSetId,
@@ -225,7 +220,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors = nodeSelectors.getOrElse(Map.empty),
       nodeUniformityLabel = gangUniformityLabel,
       armadaClusterUrl = armadaClusterUrl,
-      driverServiceName = driverServiceName,
       executorConnectionTimeout = Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)
     )
   }
@@ -242,7 +236,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClusterUrl: String,
       nodeSelectors: Map[String, String],
       nodeUniformityLabel: Option[String],
-      driverServiceName: String,
       executorConnectionTimeout: Duration
   )
 
@@ -252,33 +245,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val (driver, executors) = newSparkJobSubmitRequestItems(clientArguments, armadaJobConfig, conf)
-
-    val driverResponse =
-      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, Seq(driver))
-    val driverJobId = driverResponse.jobResponseItems.head.jobId
-    log(
-      s"Submitted driver job with ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
-    )
-
-    val executorsResponse =
-      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, executors)
-    val executorJobIds = executorsResponse.jobResponseItems.map(item => {
-      log(
-        s"Submitted executor job with ID: ${item.jobId}, Error: ${item.error}"
-      )
-      item.jobId
-    })
-
-    (driverJobId, executorJobIds)
-  }
-
-  private def newSparkJobSubmitRequestItems(
-      clientArguments: ClientArguments,
-      armadaJobConfig: ArmadaJobConfig,
-      conf: SparkConf
-  ): (api.submit.JobSubmitRequestItem, Seq[api.submit.JobSubmitRequestItem]) = {
-
     val primaryResource = clientArguments.mainAppResource match {
       case JavaMainAppResource(Some(resource)) => Seq(resource)
       case PythonMainAppResource(resource)     => Seq(resource)
@@ -316,7 +282,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverLabels,
       armadaJobConfig.containerImage,
       driverPort,
-      armadaJobConfig.driverServiceName,
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -324,8 +289,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq ++ primaryResource ++ clientArguments.driverArgs
     )
 
+    val driverResponse =
+      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, Seq(driver))
+    val driverJobId = driverResponse.jobResponseItems.head.jobId
+    log(
+      s"Submitted driver job with ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
+    )
+
     val executorLabels =
       globalLabels ++ armadaJobConfig.executorLabels
+    val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
     val executors = (0 until executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
@@ -336,7 +309,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig.containerImage,
         javaOptEnvVars(conf),
         armadaJobConfig.nodeUniformityLabel,
-        armadaJobConfig.driverServiceName,
+        driverHostname,
         driverPort,
         configGenerator.getVolumes,
         nodeSelectors,
@@ -344,7 +317,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     }
 
-    (driver, executors)
+    val executorsResponse =
+      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, executors)
+    val executorJobIds = executorsResponse.jobResponseItems.map(item => {
+      log(
+        s"Submitted executor job with ID: ${item.jobId}, Error: ${item.error}"
+      )
+      item.jobId
+    })
+
+    (driverJobId, executorJobIds)
   }
 
   // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh
@@ -376,7 +358,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       labels: Map[String, String],
       driverImage: String,
       driverPort: Int,
-      serviceName: String,
       mainClass: String,
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
@@ -388,7 +369,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverImage,
       driverPort,
       mainClass,
-      serviceName,
       volumeMounts,
       additionalDriverArgs
     )
@@ -410,8 +390,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         Seq(
           api.submit.ServiceConfig(
             api.submit.ServiceType.Headless,
-            Seq(driverPort),
-            serviceName
+            Seq(driverPort)
           )
         )
       )
@@ -422,7 +401,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       image: String,
       port: Int,
       mainClass: String,
-      serviceName: String,
       volumeMounts: Seq[VolumeMount],
       additionalDriverArgs: Seq[String]
   ): Container = {
@@ -435,13 +413,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
       EnvVar()
         .withName(ConfigGenerator.ENV_SPARK_CONF_DIR)
-        .withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
-      EnvVar()
-        .withName("EXTERNAL_CLUSTER_SUPPORT_ENABLED")
-        .withValue("true"),
-      EnvVar()
-        .withName("ARMADA_SPARK_DRIVER_SERVICE_NAME")
-        .withValue(serviceName)
+        .withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME)
     )
     Container()
       .withName("driver")
@@ -497,6 +469,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors: Map[String, String],
       connectionTimeout: Duration
   ): api.submit.JobSubmitRequestItem = {
+    println(s"driver service name $driverHostname")
     val initContainer = newExecutorInitContainer(driverHostname, driverPort, connectionTimeout)
     val container = newExecutorContainer(
       index,
@@ -609,25 +582,4 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     "memory" -> Quantity(Option("512Mi")),
     "cpu"    -> Quantity(Option("250m"))
   )
-}
-
-object Utils {
-  // define the allowed characters: a–z and 0–9
-  private val suffixChars: IndexedSeq[Char] =
-    ('a' to 'z') ++ ('0' to '9')
-
-  /** Generates a random lowercase alphanumeric string of the specified length.
-    *
-    * This function picks characters uniformly at random from the set [a–z0–9] and concatenates them
-    * into a single string.
-    *
-    * @param length
-    *   the length of the resulting string (default is 5)
-    * @return
-    *   a randomly generated string containing only lowercase letters and digits, e.g. "a3k9q"
-    */
-  def randAlphanum(length: Int = 5): String =
-    (1 to length)
-      .map(_ => suffixChars(Random.nextInt(suffixChars.length)))
-      .mkString
 }

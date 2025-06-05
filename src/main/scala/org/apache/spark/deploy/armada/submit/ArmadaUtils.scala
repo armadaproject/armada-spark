@@ -35,4 +35,6 @@ object ArmadaUtils {
       .filter(_._2 >= 0)
       .getOrElse(throw new MasterUrlParsingException)
   }
+
+  def buildServiceNameFromJobId(jobId: String): String = s"armada-${jobId}-0-service-0"
 }
