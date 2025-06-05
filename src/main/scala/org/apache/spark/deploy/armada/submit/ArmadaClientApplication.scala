@@ -536,7 +536,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
       .withCommand(Seq("sh", "-c"))
       .withArgs(
-        Seq(Utils.initContainerCommand)
+        Seq(ArmadaUtils.initContainerCommand)
       )
   }
 
