@@ -1,40 +1,31 @@
 #!/bin/bash
 
-set -euo pipefail
+#set -euo pipefail
 
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
 
-AOHOME="$scripts/../../armada-operator"
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
-JOB_DETAILS=1
+JOB_DETAILS="${JOB_DETAILS:-0}"
+
+if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
+  AOHOME="$scripts/../armada-operator"
+  JOBSET='armada-spark'
+  JOB_DETAILS=1
+else
+  now=$(date +'%Y%m%d%H%M%S')
+  AOHOME="$scripts/../../armada-operator"
+  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same cluster
+  GITHUB_OUTPUT=/dev/stdout
+fi
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
 trap 'rm -f -- "$STATUSFILE"' EXIT
-
-usage() {
-  cat > /dev/stderr  <<USAGE
-Usage: ${0} -s
-  -s => get job status details from Armada
-
-USAGE
-  exit 1
-}
-
-while getopts "s" opt; do
-    case "${opt}" in
-        s )
-          JOB_DETAILS=1 ;;
-        * )
-          echo "opt is $opt"
-          usage ;;
-    esac
-done
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -44,6 +35,15 @@ err() {
   echo -e "${RED}$1${NC}" >&2
 }
 
+log_group() {
+  if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then echo -n "::group::"; fi
+  echo "$@"
+  while read -r line
+  do
+    echo "$line"
+  done
+  if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then echo; echo "::endgroup::"; fi
+}
 
 fetch-armadactl() {
   os=$(uname -s)
@@ -123,11 +123,10 @@ main() {
   fi
   echo "Checking for armadactl .."
   if ! test -x "$scripts"/armadactl; then
-    log "Fetching armadactl..."
-    fetch-armadactl
+    fetch-armadactl 2>&1 | log_group "Fetching armadactl"
   fi
 
-  echo "Checking if image $IMAGE_NAME is available ..."
+  echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
     err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh), and re-run this script"
@@ -138,8 +137,7 @@ main() {
 
   if ! "$scripts"/armadactl get queues > "$STATUSFILE" 2>&1 ; then
     if grep -q 'connection refused' "$STATUSFILE"; then
-      echo "Using armada-operator to start Armada cluster; this may take up to 5 minutes"
-      start-armada
+      start-armada 2>&1 | log_group "Using armada-operator to start Armada; this may take up to 5 minutes"
       sleep 10
       armadactl-retry get queues
     else
@@ -153,31 +151,47 @@ main() {
     log "Armada is available"
   fi
 
-  echo "Creating $ARMADA_QUEUE queue..."
-  armadactl-retry create queue "$ARMADA_QUEUE"
+  armadactl-retry create queue "$ARMADA_QUEUE" 2>&1 | log_group "Creating $ARMADA_QUEUE queue"
 
-  echo "Loading Docker image $IMAGE_NAME into Armada cluster"
-  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada
+  (test -d "$scripts/.tmp" || mkdir "$scripts/.tmp";
+   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1) \
+   | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
-  echo "Submitting SparkPI job"
-  PATH="$AOHOME/bin/tooling/:$PATH" "$scripts/submitSparkPi.sh"  2>&1 | tee submitSparkPi.log
+  # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
+  # proceeding immediately causes sporadic immediate job rejections by Armada
+  sleep 30
 
-  DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
-  EXECUTOR_JOBIDS=$(grep '^Executor JobID:' submitSparkPi.log | awk '{print $3}')
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
+    tee submitSparkPi.log
+  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
+  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
+
+  if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
+    echo "::group::submit"
+    echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
+    echo "::endgroup::"
+  fi
 
   if [ "$JOB_DETAILS" = 1 ]; then
-    sleep 5   # wait a moment for Armada to schedule & run the job
+    sleep 10   # wait a moment for Armada to schedule & run the job
 
-    timeout 1m "$scripts"/armadactl watch test driver --exit-if-inactive 2>&1 | tee armadactl.watch.log
-    if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
+    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
+     if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
-    echo "Driver Job Spec  $DRIVER_JOBID"
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
-      --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq
+      --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq | log_group "Driver Job Spec  $DRIVER_JOBID"
+
     for exec_jobid in $EXECUTOR_JOBIDS; do
-      log "Executor Job Spec  $exec_jobid"
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
-          --json "{\"jobId\":\"$exec_jobid\"}" | jq
+          --json "{\"jobId\":\"$exec_jobid\"}" | jq | log_group "Executor Job Spec  $exec_jobid"
+    done
+
+    kubectl get pods -A 2>&1 | log_group "pods"
+
+    kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
+    do
+      (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
+       kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
     done
   fi
 }
