@@ -74,3 +74,4 @@ project/**/metals.sbt
 scripts/config.sh
 
 dependency-reduced-pom.xml
+.spark-*

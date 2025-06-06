@@ -47,4 +47,12 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
     --conf spark.armada.scheduling.nodeSelectors=armada-spark=true \
     --conf spark.armada.pod.labels=foo=bar \
+    --conf spark.armada.driver.limit.cores=200m \
+    --conf spark.armada.driver.limit.memory=450Mi \
+    --conf spark.armada.driver.request.cores=200m \
+    --conf spark.armada.driver.request.memory=450Mi \
+    --conf spark.armada.executor.limit.cores=100m \
+    --conf spark.armada.executor.limit.memory=510Mi \
+    --conf spark.armada.executor.request.cores=100m \
+    --conf spark.armada.executor.request.memory=510Mi \
     $FIRST_ARG 100

@@ -185,6 +185,66 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  val DEFAULT_SPARK_EXECUTOR_CORES = "1"
+  val DEFAULT_CORES                = "1"
+  val ARMADA_DRIVER_LIMIT_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.limit.cores")
+      .doc("Specify the hard cpu limit for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+  val ARMADA_DRIVER_REQUEST_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.request.cores")
+      .doc("Specify the cpu request for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+  val ARMADA_EXECUTOR_LIMIT_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.limit.cores")
+      .doc("Specify the hard cpu limit for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+  val ARMADA_EXECUTOR_REQUEST_CORES: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.request.cores")
+      .doc("Specify the cpu request for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_CORES)
+
+  val DEFAULT_MEM                   = "1Gi"
+  val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
+  val ARMADA_DRIVER_LIMIT_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.limit.memory")
+      .doc("Specify the hard memory limit for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_DRIVER_REQUEST_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.request.memory")
+      .doc("Specify the memory request for the driver pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_EXECUTOR_LIMIT_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.limit.memory")
+      .doc("Specify the hard memory limit for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
+  val ARMADA_EXECUTOR_REQUEST_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.request.memory")
+      .doc("Specify the memory request for each executor pod")
+      .version("1.0.0")
+      .stringConf
+      .createWithDefaultString(DEFAULT_MEM)
+
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
     * @param str
