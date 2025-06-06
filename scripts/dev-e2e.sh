@@ -181,8 +181,8 @@ main() {
 
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
     tee submitSparkPi.log
-  DRIVER_JOBID=$(grep '^Driver JobID:' submitSparkPi.log | awk '{print $3}')
-  EXECUTOR_JOBIDS=$(grep 'executor job with ID:' submitSparkPi.log | awk '{print $6}')
+  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
+  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
 
   echo "::group::submit"
   echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
