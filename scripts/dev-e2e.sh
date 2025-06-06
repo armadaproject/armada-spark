@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+#set -euo pipefail
 
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts"/init.sh
