@@ -8,11 +8,12 @@ source "$scripts"/init.sh
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
-JOB_DETAILS=1
+JOB_DETAILS="${JOB_DETAILS:-0}"
 
 if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
   AOHOME="$scripts/../armada-operator"
   JOBSET='armada-spark'
+  JOB_DETAILS=1
 else
   now=$(date +'%Y%m%d%H%M%S')
   AOHOME="$scripts/../../armada-operator"
@@ -25,25 +26,6 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 trap 'rm -f -- "$STATUSFILE"' EXIT
-
-usage() {
-  cat > /dev/stderr  <<USAGE
-Usage: ${0} -s
-  -s => get job status details from Armada
-
-USAGE
-  exit 1
-}
-
-while getopts "s" opt; do
-    case "${opt}" in
-        s )
-          JOB_DETAILS=1 ;;
-        * )
-          echo "opt is $opt"
-          usage ;;
-    esac
-done
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -203,17 +185,15 @@ main() {
       curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
           --json "{\"jobId\":\"$exec_jobid\"}" | jq | log_group "Executor Job Spec  $exec_jobid"
     done
+
+    kubectl get pods -A 2>&1 | log_group "pods"
+
+    kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
+    do
+      (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
+       kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
+    done
   fi
-
-  echo "---------- about to get list of pods ----"
-  kubectl get pods -A 2>&1 | log_group "pods"
-
-  echo "---------- about to iterate through pod list ----"
-  kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
-  do
-    (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
-     kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
-  done
 }
 
 main
