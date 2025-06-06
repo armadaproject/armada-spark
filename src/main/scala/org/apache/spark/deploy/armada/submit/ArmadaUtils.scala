@@ -37,4 +37,20 @@ object ArmadaUtils {
   }
 
   def buildServiceNameFromJobId(jobId: String): String = s"armada-${jobId}-0-service-0"
+
+  val initContainerCommand =
+    """
+          start_time=$(date +%s);
+          timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
+          while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
+            now=$(date +%s);
+            elapsed=$((now - start_time));
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout waiting for driver after ${timeout}s";
+              exit 1;
+            fi;
+            echo "waiting for driver...";
+            sleep 1;
+          done
+        """.stripMargin.trim
 }
