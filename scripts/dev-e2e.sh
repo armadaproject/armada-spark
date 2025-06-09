@@ -10,14 +10,14 @@ AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
 JOB_DETAILS="${JOB_DETAILS:-0}"
 
-now=$(date +'%Y%m%d%H%M%S')
-JOBSET="armada-spark-$now" # users may run this multiple times on same cluster
-
 if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
   AOHOME="$scripts/../armada-operator"
+  JOBSET='armada-spark'
   JOB_DETAILS=1
 else
+  now=$(date +'%Y%m%d%H%M%S')
   AOHOME="$scripts/../../armada-operator"
+  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same cluster
   GITHUB_OUTPUT=/dev/stdout
 fi
 
