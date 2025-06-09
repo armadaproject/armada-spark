@@ -38,7 +38,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
-  ARMADA_SPARK_RUN_AS_USER,
+  ARMADA_RUN_AS_USER,
   DEFAULT_SPARK_EXECUTOR_CORES,
   DEFAULT_SPARK_EXECUTOR_MEMORY,
   CONTAINER_IMAGE,
@@ -363,14 +363,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  private def configurePodSpec(p: PodSpec) {
-      if (ARMADA_SPARK_RUN_AS_USER.isDefined) {
-        p.withSecurityContext(new PodSecurityContext().withRunAsUser(ARMADA_SPARK_RUN_AS_USER.get))
-      } else {
-        p
-      }
-    }
-
   private def newSparkDriverJobSubmitRequestItem(
       master: String,
       namespace: String,
@@ -402,13 +394,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
 
+    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
+    if (runAsUser.isDefined) {
+        podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
+    }
+
     api.submit
       .JobSubmitRequestItem()
       .withPriority(priority)
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(configurePodSpec(podSpec))
+      .withPodSpec(podSpec)
       .withServices(
         Seq(
           api.submit.ServiceConfig(
@@ -516,13 +513,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(container))
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
+
+    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
+    if (runAsUser.isDefined) {
+        podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
+    }
+
     api.submit
       .JobSubmitRequestItem()
       .withPriority(priority)
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(configure(podSpec))
+      .withPodSpec(podSpec)
   }
 
   private def newExecutorInitContainer(
