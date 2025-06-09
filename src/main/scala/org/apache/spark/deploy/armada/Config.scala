@@ -245,6 +245,12 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_MEM)
 
+  val ARMADA_RUN_AS_USER: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.runAsUser")
+      .doc("Specify the numeric id of user to run job as")
+      .version("1.0.0")
+      .createOptional
+
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
     * @param str

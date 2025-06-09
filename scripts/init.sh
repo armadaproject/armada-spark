@@ -25,9 +25,10 @@ print_usage () {
     exit 1
 }
 
-while getopts "hpi:l:m:q" opt; do
+while getopts "hkpi:l:m:q" opt; do
   case "$opt" in
     h) print_usage ;;
+    k) USE_KIND=true ;;
     p) INCLUDE_PYTHON=true ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
