@@ -29,11 +29,12 @@ print_usage () {
     exit 1
 }
 
-while getopts "hkpi:l:m:q" opt; do
+while getopts "hkpi:a:l:m:q" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
     p) INCLUDE_PYTHON=true ;;
+    a) ARMADA_AUTH_TOKEN=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
     q) ARMADA_QUEUE=$OPTARG ;;
@@ -45,6 +46,7 @@ export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
+export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-""}
 export ARMADA_LOOKOUT_URL="${ARMADA_LOOKOUT_URL:-http://localhost:30000}"
 
 # derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh

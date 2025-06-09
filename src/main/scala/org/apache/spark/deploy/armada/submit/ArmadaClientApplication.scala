@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
+  ARMADA_AUTH_TOKEN,
   ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
   ARMADA_DRIVER_LIMIT_CORES,
   ARMADA_DRIVER_LIMIT_MEMORY,
@@ -140,7 +141,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
-    val armadaClient = ArmadaClient(host, port)
+
+    val armadaClient = ArmadaClient(host, port, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
