@@ -29,7 +29,7 @@ print_usage () {
     exit 1
 }
 
-while getopts "hkpi:a:l:m:q" opt; do
+while getopts "hkpi:a:l:m:q:" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;

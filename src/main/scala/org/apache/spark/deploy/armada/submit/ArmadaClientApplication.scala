@@ -313,6 +313,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorLabels =
       globalLabels ++ armadaJobConfig.executorLabels
     val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    log(s"driver service name $driverHostname")
     val executors = (0 until executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
@@ -497,7 +498,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       connectionTimeout: Duration,
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    println(s"driver service name $driverHostname")
     val initContainer = newExecutorInitContainer(driverHostname, driverPort, connectionTimeout)
     val container = newExecutorContainer(
       index,
