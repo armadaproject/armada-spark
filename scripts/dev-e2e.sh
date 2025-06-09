@@ -175,7 +175,7 @@ main() {
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-    (timeout 1m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
+    (timeout 3m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
      if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
 
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
