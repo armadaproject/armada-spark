@@ -19,16 +19,18 @@ else
     FIRST_ARG=/opt/spark/examples/src/main/python/pi.py
 fi
 
-# Ensure queue exists on Armada
-if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
-  armadactl create queue $ARMADA_QUEUE
-fi
+if [ "${USE_KIND}" == "true" ]; then
+    # Ensure queue exists on Armada
+    if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
+        armadactl create queue $ARMADA_QUEUE
+    fi
 
-# needed by kind load docker-image (if docker is installed via snap)
-# https://github.com/kubernetes-sigs/kind/issues/2535
-export TMPDIR="$scripts/.tmp"
-mkdir -p "$TMPDIR"
-kind load docker-image $IMAGE_NAME --name armada
+    # needed by kind load docker-image (if docker is installed via snap)
+    # https://github.com/kubernetes-sigs/kind/issues/2535
+    export TMPDIR="$scripts/.tmp"
+    mkdir -p "$TMPDIR"
+    kind load docker-image $IMAGE_NAME --name armada
+fi
 
 # run spark pi example via Docker image
 docker run --rm --network host $IMAGE_NAME \
@@ -40,6 +42,7 @@ docker run --rm --network host $IMAGE_NAME \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.jobSetId=armada-spark \
     --conf spark.executor.instances=4 \
+    --conf spark.jars.ivy=/tmp/.ivy \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.lookouturl=$ARMADA_LOOKOUT_URL \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
