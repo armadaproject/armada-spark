@@ -15,9 +15,9 @@ if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
   JOBSET='armada-spark'
   JOB_DETAILS=1
 else
-  now=$(date +'%Y%m%d%H%M%S')
   AOHOME="$scripts/../../armada-operator"
-  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same cluster
+  now=$(date +'%Y%m%d%H%M%S')
+  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same Armada cluster
   GITHUB_OUTPUT=/dev/stdout
 fi
 
