@@ -12,6 +12,8 @@ fi
 print_usage () {
     echo ' Usage:'
     echo '   -h  help'
+    echo '   -k  "use kind cluster"'
+    echo '   -p  "use python script"'
     echo '   -i  <image-name>'
     echo '   -m  <armada-master-url>'
     echo '   -q  <armada-queue>'
@@ -21,6 +23,8 @@ print_usage () {
     echo '   IMAGE_NAME=spark:armada'
     echo '   ARMADA_MASTER=armada://localhost:30002'
     echo '   ARMADA_QUEUE=test'
+    echo '   USE_KIND=true'
+    echo '   INCLUDE_PYTHON=true'
     echo '   ARMADA_LOOKOUT_URL=http://localhost:30000'
     exit 1
 }
