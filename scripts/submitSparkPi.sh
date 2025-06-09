@@ -32,12 +32,20 @@ if [ "${USE_KIND}" == "true" ]; then
     kind load docker-image $IMAGE_NAME --name armada
 fi
 
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
+else
+    AUTH_ARG=""
+fi
+
+
 # run spark pi example via Docker image
 docker run --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
+    $AUTH_ARG \
     --conf spark.armada.internalUrl=armada-server.armada:50051 \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.jobSetId=armada-spark \
