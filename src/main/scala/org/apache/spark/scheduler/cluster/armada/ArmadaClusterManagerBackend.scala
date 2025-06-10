@@ -87,7 +87,7 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
     private def getAliveCount: Int = {
-      (0 until numberOfExecutors).map(i => scheduler.isExecutorAlive(i.toString)).count(x => x)
+      ArmadaUtils.getExecutorRange(numberOfExecutors).map(i => scheduler.isExecutorAlive(i.toString)).count(x => x)
     }
 
     def stop(): Unit = {
