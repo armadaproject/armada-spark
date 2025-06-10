@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# generate armada spark docker image
+echo Generating armada spark docker image.
 
 root="$(cd "$(dirname "$0")/.."; pwd)"
 scripts="$(cd "$(dirname "$0")"; pwd)"

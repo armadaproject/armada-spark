@@ -16,6 +16,10 @@
  */
 package org.apache.spark.deploy.armada.submit
 
+import org.apache.spark.SparkConf
+import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
+
+import scala.collection.immutable.NumericRange
 import scala.util.Try
 
 object ArmadaUtilsExceptions {
@@ -53,4 +57,8 @@ object ArmadaUtils {
             sleep 1;
           done
         """.stripMargin.trim
+
+  def getExecutorRange(numberOfExecutors: Int): Range = {
+    (0 until numberOfExecutors)
+  }
 }

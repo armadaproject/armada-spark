@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+echo Submitting spark job to Armada.
+
 # init environment variables
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
