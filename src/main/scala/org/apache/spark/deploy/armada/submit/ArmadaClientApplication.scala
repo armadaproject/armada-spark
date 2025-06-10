@@ -314,7 +314,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       globalLabels ++ armadaJobConfig.executorLabels
     val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
     log(s"driver service name $driverHostname")
-    val executors = (0 until executorCount).map { index =>
+    val executors = ArmadaUtils.getExecutorRange(executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
         armadaJobConfig.priority,

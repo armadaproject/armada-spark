@@ -17,10 +17,8 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
-  ARMADA_EXECUTOR_TRACKER_TIMEOUT
-}
+import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -73,12 +71,14 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
     def checkMin(): Unit = {
-      logInfo("Checking number of Executors")
-      if (getAliveCount < numberOfExecutors) {
+      logInfo("Checking number of Executors.  Should be: " + numberOfExecutors)
+      val count = getAliveCount
+      if (count < numberOfExecutors) {
+        logInfo("AliveCount is: " + count)
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
         } else if (clock.getTimeMillis() - startTime > timeout) {
-          scheduler.error("Inufficient executors running.  Driver exiting.")
+          scheduler.error("Insufficient executors running.  Driver exiting.")
         }
       } else {
         startTime = 0
@@ -87,7 +87,7 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
     private def getAliveCount: Int = {
-      (1 to numberOfExecutors).map(i => scheduler.isExecutorAlive(i.toString)).count(x => x)
+      (0 until numberOfExecutors).map(i => scheduler.isExecutorAlive(i.toString)).count(x => x)
     }
 
     def stop(): Unit = {
