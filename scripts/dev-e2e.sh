@@ -18,7 +18,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-trap 'echo "\n\nTest Failed; exiting";rm -f -- "$STATUSFILE"' EXIT
+trap 'rm -f -- "$STATUSFILE"' EXIT
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -188,7 +188,6 @@ run-test() {
        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
     done
   fi
-  echo \n\nSuccess! test finished successfully
 }
 
 main() {
