@@ -42,6 +42,7 @@ else
     AUTH_ARG=""
 fi
 
+# Run Armada Spark via docker image
 docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
     --master $ARMADA_MASTER --deploy-mode cluster \
@@ -50,4 +51,5 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
     --conf spark.armada.container.image=$IMAGE_NAME \
+    --conf spark.armada.jobSetId="$JOBSET" \
     $FIRST_ARG  "${FINAL_ARGS[@]}"
