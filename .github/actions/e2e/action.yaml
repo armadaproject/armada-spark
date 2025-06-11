@@ -20,11 +20,6 @@ runs:
     uses: actions/checkout@v4
     with:
       path: armada-spark
-  - name: Checkout
-    uses: actions/checkout@v4
-    with:
-      repository: armadaproject/armada-operator
-      path: armada-operator
 
   - name: Restore Maven packages cache
     uses: actions/cache@v4
@@ -41,7 +36,7 @@ runs:
       distribution: 'zulu'
   - name: Setup Go
     id: setup-go
-    uses: ./armada-operator/.github/actions/setup-go-cache
+    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@main
     with:
       cache-prefix: go-e2e
 

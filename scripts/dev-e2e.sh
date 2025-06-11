@@ -8,18 +8,11 @@ source "$scripts"/init.sh
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 ARMADACTL_VERSION='0.19.1'
-JOB_DETAILS="${JOB_DETAILS:-0}"
+JOB_DETAILS="${JOB_DETAILS:-1}"
 
-if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
-  AOHOME="$scripts/../armada-operator"
-  JOBSET='armada-spark'
-  JOB_DETAILS=1
-else
-  AOHOME="$scripts/../../armada-operator"
-  now=$(date +'%Y%m%d%H%M%S')
-  JOBSET="armada-spark-$now" # interactive users may run this multiple times on same Armada cluster
-  GITHUB_OUTPUT=/dev/stdout
-fi
+AOHOME="$scripts/../../armada-operator"
+now=$(date +'%Y%m%d%H%M%S')
+JOBSET="armada-spark-$now" # interactive users may run this multiple times on same Armada cluster
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -38,10 +31,7 @@ err() {
 log_group() {
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then echo -n "::group::"; fi
   echo "$@"
-  while read -r line
-  do
-    echo "$line"
-  done
+  cat -
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then echo; echo "::endgroup::"; fi
 }
 
@@ -153,8 +143,9 @@ main() {
 
   armadactl-retry create queue "$ARMADA_QUEUE" 2>&1 | log_group "Creating $ARMADA_QUEUE queue"
 
-  (test -d "$scripts/.tmp" || mkdir "$scripts/.tmp";
-   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1) \
+  mkdir -p "$scripts/.tmp"
+
+  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
    | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
   # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
@@ -167,16 +158,16 @@ main() {
   EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
 
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
-    echo "::group::submit"
     echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
-    echo "::endgroup::"
   fi
 
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-    (timeout 3m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | tee armadactl.watch.log; \
-     if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi) | log_group "Watching Driver Job"
+    timeout 3m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
+      tee armadactl.watch.log | log_group "Watching Driver Job"
+
+    if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
 
     curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
       --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq | log_group "Driver Job Spec  $DRIVER_JOBID"
