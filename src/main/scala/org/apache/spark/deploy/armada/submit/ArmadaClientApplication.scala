@@ -142,7 +142,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
-    val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
@@ -390,7 +390,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       additionalDriverArgs,
       conf
     )
-    var podSpec = PodSpec()
+    val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(container))
@@ -503,7 +503,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       javaOptEnvVars,
       conf
     )
-    var podSpec = PodSpec()
+    val podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withInitContainers(Seq(initContainer))
