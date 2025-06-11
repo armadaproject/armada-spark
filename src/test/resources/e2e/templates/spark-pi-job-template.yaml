@@ -1,0 +1,24 @@
+queue: template-queue
+job_set_id: template-job-set
+job_request_items:
+  - priority: 1.0
+    namespace: default
+    annotations:
+      armada/template: spark-pi
+      armada/version: "1.0"
+    labels:
+      app: spark-pi
+      template-source: e2e-test
+    podSpec:
+      containers:
+        - name: spark-driver
+          image: spark:armada
+          resources:
+            requests:
+              cpu: 200m
+              memory: 450Mi
+            limits:
+              cpu: 200m
+              memory: 450Mi
+      nodeSelector:
+        kubernetes.io/hostname: armada-worker
