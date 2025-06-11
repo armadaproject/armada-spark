@@ -31,6 +31,9 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_JOB_NODE_SELECTORS,
   ARMADA_JOB_QUEUE,
   ARMADA_JOB_SET_ID,
+  ARMADA_JOB_TEMPLATE,
+  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
+  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
   ARMADA_LOOKOUTURL,
   ARMADA_SERVER_INTERNAL_URL,
   ARMADA_SPARK_DRIVER_LABELS,
@@ -165,10 +168,71 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   private[spark] def validateArmadaJobConfig(conf: SparkConf): ArmadaJobConfig = {
-    val queue = conf.get(ARMADA_JOB_QUEUE).getOrElse {
-      throw new IllegalArgumentException(
-        s"Queue name must be set via ${ARMADA_JOB_QUEUE.key}"
-      )
+    val jobTemplate = conf.get(ARMADA_JOB_TEMPLATE) match {
+      case Some(path) =>
+        try {
+          Some(JobTemplateLoader.loadJobTemplate(path))
+        } catch {
+          case e: Exception =>
+            throw new RuntimeException(
+              s"Failed to load job template from: $path - ${e.getMessage}",
+              e
+            )
+        }
+      case None => None
+    }
+
+    val driverJobItemTemplate = conf.get(ARMADA_DRIVER_JOB_ITEM_TEMPLATE) match {
+      case Some(path) =>
+        try {
+          Some(JobTemplateLoader.loadJobItemTemplate(path))
+        } catch {
+          case e: Exception =>
+            throw new RuntimeException(
+              s"Failed to load driver job item template from: $path - ${e.getMessage}",
+              e
+            )
+        }
+      case None => None
+    }
+
+    val executorJobItemTemplate = conf.get(ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE) match {
+      case Some(path) =>
+        try {
+          Some(JobTemplateLoader.loadJobItemTemplate(path))
+        } catch {
+          case e: Exception =>
+            throw new RuntimeException(
+              s"Failed to load executor job item template from: $path - ${e.getMessage}",
+              e
+            )
+        }
+      case None => None
+    }
+
+    val queue: String = conf
+      .get(ARMADA_JOB_QUEUE)
+      .filter(_.nonEmpty)
+      .orElse(jobTemplate.map(_.queue).filter(_.nonEmpty))
+      .getOrElse {
+        throw new IllegalArgumentException(
+          s"Queue name must be set via ${ARMADA_JOB_QUEUE.key} or in the job template."
+        )
+      }
+
+    val jobSetId: String = conf.get(ARMADA_JOB_SET_ID) match {
+      case Some(id) if id.nonEmpty => id
+      case Some(_) =>
+        throw new IllegalArgumentException(
+          s"Empty jobSetId is not allowed. " +
+            s"Please set a valid jobSetId via ${ARMADA_JOB_SET_ID.key}"
+        )
+      case None =>
+        // No CLI config, check template
+        jobTemplate
+          .map(_.jobSetId)
+          .filter(_.nonEmpty)
+          .getOrElse(conf.getAppId)
     }
 
     val nodeSelectors       = conf.get(ARMADA_JOB_NODE_SELECTORS).map(commaSeparatedLabelsToMap)
@@ -178,16 +242,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       throw new IllegalArgumentException(
         s"Either ${ARMADA_JOB_NODE_SELECTORS.key} or ${ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key} must be set."
       )
-    }
-
-    val jobSetId = conf.get(ARMADA_JOB_SET_ID) match {
-      case Some(id) if id.nonEmpty => id
-      case Some(_) =>
-        throw new IllegalArgumentException(
-          s"Empty jobSetId is not allowed. " +
-            s"Please set a valid jobSetId via ${ARMADA_JOB_SET_ID.key}"
-        )
-      case None => conf.getAppId
     }
 
     val containerImage = conf.get(CONTAINER_IMAGE) match {
@@ -221,7 +275,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ArmadaJobConfig(
       queue = queue,
       jobSetId = jobSetId,
-      namespace = conf.get(ARMADA_SPARK_JOB_NAMESPACE),
+      namespace = conf.get(ARMADA_SPARK_JOB_NAMESPACE).getOrElse("default"),
       priority = conf.get(ARMADA_SPARK_JOB_PRIORITY),
       containerImage = containerImage,
       podLabels = podLabels,
@@ -230,10 +284,42 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors = nodeSelectors.getOrElse(Map.empty),
       nodeUniformityLabel = gangUniformityLabel,
       armadaClusterUrl = armadaClusterUrl,
-      executorConnectionTimeout = Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)
+      executorConnectionTimeout = Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS),
+      jobTemplate = jobTemplate,
+      driverJobItemTemplate = driverJobItemTemplate,
+      executorJobItemTemplate = executorJobItemTemplate
     )
   }
 
+  /** Configuration object for Armada job submission parameters.
+    *
+    * @param queue
+    *   Armada queue name for job submission
+    * @param jobSetId
+    *   Unique identifier for grouping related jobs
+    * @param namespace
+    *   Kubernetes namespace for job execution
+    * @param priority
+    *   Job priority for scheduling (higher values = higher priority)
+    * @param containerImage
+    *   Docker image to use for Spark containers
+    * @param podLabels
+    *   Kubernetes labels applied to all pods (driver and executors)
+    * @param driverLabels
+    *   Additional Kubernetes labels applied only to driver pod
+    * @param executorLabels
+    *   Additional Kubernetes labels applied only to executor pods
+    * @param armadaClusterUrl
+    *   URL for connecting to Armada cluster
+    * @param nodeSelectors
+    *   Kubernetes node selectors for pod placement
+    * @param nodeUniformityLabel
+    *   Label key for gang scheduling node uniformity constraints
+    * @param executorConnectionTimeout
+    *   Maximum time to wait for executor connection to driver
+    * @param jobTemplate
+    *   Optional loaded job template for advanced job customization
+    */
   private[spark] case class ArmadaJobConfig(
       queue: String,
       jobSetId: String,
@@ -246,7 +332,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClusterUrl: String,
       nodeSelectors: Map[String, String],
       nodeUniformityLabel: Option[String],
-      executorConnectionTimeout: Duration
+      executorConnectionTimeout: Duration,
+      jobTemplate: Option[api.submit.JobSubmitRequest],
+      driverJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
+      executorJobItemTemplate: Option[api.submit.JobSubmitRequestItem]
   )
 
   private def submitArmadaJob(
@@ -264,19 +353,39 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val executorCount = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
+    // Merge template with configuration overrides if template is provided
+    val (finalQueue, finalJobSetId, templateAnnotations, templateLabels) =
+      armadaJobConfig.jobTemplate match {
+        case Some(templateRequest) =>
+          val merged = mergeTemplateWithConfig(templateRequest, armadaJobConfig, conf)
+          log(s"Successfully merged job template with configuration")
+          merged
+        case None =>
+          // No template - use current configuration
+          (
+            armadaJobConfig.queue,
+            armadaJobConfig.jobSetId,
+            Map.empty[String, String],
+            Map.empty[String, String]
+          )
+      }
+
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
-    val annotations = configGenerator.getAnnotations ++ armadaJobConfig.nodeUniformityLabel
-      .map(label =>
-        GangSchedulingAnnotations(
-          None,
-          1 + executorCount,
-          label
+    val annotations = configGenerator.getAnnotations ++
+      templateAnnotations ++
+      armadaJobConfig.nodeUniformityLabel
+        .map(label =>
+          GangSchedulingAnnotations(
+            None,
+            1 + executorCount,
+            label
+          )
         )
-      )
-      .getOrElse(Map.empty)
-    val globalLabels = armadaJobConfig.podLabels
-    val driverLabels =
-      globalLabels ++ armadaJobConfig.driverLabels
+        .getOrElse(Map.empty)
+
+    // Merge template labels with config labels, config takes precedence
+    val globalLabels  = templateLabels ++ armadaJobConfig.podLabels
+    val driverLabels  = globalLabels ++ armadaJobConfig.driverLabels
     val nodeSelectors = armadaJobConfig.nodeSelectors
 
     val driverPort = 7078
@@ -284,24 +393,43 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val confSeq = conf.getAll.flatMap { case (k, v) =>
       Seq("--conf", s"$k=$v")
     }
-    val driver = newSparkDriverJobSubmitRequestItem(
-      armadaJobConfig.armadaClusterUrl,
-      armadaJobConfig.namespace,
-      armadaJobConfig.priority,
-      annotations,
-      driverLabels,
-      armadaJobConfig.containerImage,
-      driverPort,
-      clientArguments.mainClass,
-      configGenerator.getVolumes,
-      configGenerator.getVolumeMounts,
-      nodeSelectors,
-      confSeq ++ primaryResource ++ clientArguments.driverArgs,
-      conf
-    )
+    val driver = armadaJobConfig.driverJobItemTemplate match {
+      case Some(template) =>
+        // Use driver template and merge with runtime configuration
+        mergeDriverTemplate(
+          template,
+          armadaJobConfig,
+          annotations,
+          driverLabels,
+          driverPort,
+          clientArguments.mainClass,
+          configGenerator.getVolumes,
+          configGenerator.getVolumeMounts,
+          nodeSelectors,
+          confSeq ++ primaryResource ++ clientArguments.driverArgs,
+          conf
+        )
+      case None =>
+        // Use default driver creation
+        newSparkDriverJobSubmitRequestItem(
+          armadaJobConfig.armadaClusterUrl,
+          armadaJobConfig.namespace,
+          armadaJobConfig.priority,
+          annotations,
+          driverLabels,
+          armadaJobConfig.containerImage,
+          driverPort,
+          clientArguments.mainClass,
+          configGenerator.getVolumes,
+          configGenerator.getVolumeMounts,
+          nodeSelectors,
+          confSeq ++ primaryResource ++ clientArguments.driverArgs,
+          conf
+        )
+    }
 
     val driverResponse =
-      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, Seq(driver))
+      armadaClient.submitJobs(finalQueue, finalJobSetId, Seq(driver))
     val driverJobId = driverResponse.jobResponseItems.head.jobId
     log(
       s"Submitted driver job with ID: $driverJobId, Error: ${driverResponse.jobResponseItems.head.error}"
@@ -311,26 +439,45 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       globalLabels ++ armadaJobConfig.executorLabels
     val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
     val executors = (0 until executorCount).map { index =>
-      newExecutorJobSubmitItem(
-        index,
-        armadaJobConfig.priority,
-        armadaJobConfig.namespace,
-        annotations,
-        executorLabels,
-        armadaJobConfig.containerImage,
-        javaOptEnvVars(conf),
-        armadaJobConfig.nodeUniformityLabel,
-        driverHostname,
-        driverPort,
-        configGenerator.getVolumes,
-        nodeSelectors,
-        armadaJobConfig.executorConnectionTimeout,
-        conf
-      )
+      armadaJobConfig.executorJobItemTemplate match {
+        case Some(template) =>
+          // Use executor template and merge with runtime configuration
+          mergeExecutorTemplate(
+            template,
+            index,
+            armadaJobConfig,
+            annotations,
+            executorLabels,
+            javaOptEnvVars(conf),
+            driverHostname,
+            driverPort,
+            configGenerator.getVolumes,
+            nodeSelectors,
+            conf
+          )
+        case None =>
+          // Use default executor creation
+          newExecutorJobSubmitItem(
+            index,
+            armadaJobConfig.priority,
+            armadaJobConfig.namespace,
+            annotations,
+            executorLabels,
+            armadaJobConfig.containerImage,
+            javaOptEnvVars(conf),
+            armadaJobConfig.nodeUniformityLabel,
+            driverHostname,
+            driverPort,
+            configGenerator.getVolumes,
+            nodeSelectors,
+            armadaJobConfig.executorConnectionTimeout,
+            conf
+          )
+      }
     }
 
     val executorsResponse =
-      armadaClient.submitJobs(armadaJobConfig.queue, armadaJobConfig.jobSetId, executors)
+      armadaClient.submitJobs(finalQueue, finalJobSetId, executors)
     val executorJobIds = executorsResponse.jobResponseItems.map(item => {
       log(
         s"Submitted executor job with ID: ${item.jobId}, Error: ${item.error}"
@@ -339,6 +486,231 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     })
 
     (driverJobId, executorJobIds)
+  }
+
+  /** Merges a job template with runtime configuration following clear precedence hierarchy.
+    *
+    * Precedence hierarchy (highest to lowest):
+    *   1. Hardcoded values (always override): queue, jobSetId from ArmadaJobConfig
+    *   2. Individual runtime configuration: already applied in validateArmadaJobConfig
+    *   3. Template values: queue, jobSetId, annotations, labels from template
+    *
+    * @param templateRequest
+    *   JobSubmitRequest from loaded template
+    * @param armadaJobConfig
+    *   Configuration derived from --conf options and validation
+    * @param conf
+    *   SparkConf containing all configuration
+    * @return
+    *   Tuple of (finalQueue, finalJobSetId, templateAnnotations, templateLabels)
+    */
+  private def mergeTemplateWithConfig(
+      templateRequest: api.submit.JobSubmitRequest,
+      armadaJobConfig: ArmadaJobConfig,
+      conf: SparkConf
+  ): (String, String, Map[String, String], Map[String, String]) = {
+
+    // Level 1: Hardcoded/validated config values always override template
+    // These were already validated in validateArmadaJobConfig with proper precedence
+    val finalQueue = armadaJobConfig.queue // Already follows: individual config > template > error
+    val finalJobSetId =
+      armadaJobConfig.jobSetId // Already follows: individual config > template > appId
+
+    // Level 3: Extract template values (lowest precedence)
+    val (templateAnnotations, templateLabels) = if (templateRequest.jobRequestItems.nonEmpty) {
+      val firstItem = templateRequest.jobRequestItems.head
+      (firstItem.annotations, firstItem.labels)
+    } else {
+      (Map.empty[String, String], Map.empty[String, String])
+    }
+
+    log(s"Template extracted: queue=${templateRequest.queue}, jobSetId=${templateRequest.jobSetId}")
+    log(s"Final values (precedence applied): queue=$finalQueue, jobSetId=$finalJobSetId")
+    log(s"Template annotations: ${templateAnnotations.size} entries")
+    log(s"Template labels: ${templateLabels.size} entries")
+
+    (finalQueue, finalJobSetId, templateAnnotations, templateLabels)
+  }
+
+  /** Merges a driver job item template with runtime configuration.
+    *
+    * Precedence hierarchy (highest to lowest):
+    *   1. Hardcoded values (always override): containers, podSpec fields like restartPolicy,
+    *      terminationGracePeriodSeconds, services
+    *   2. Individual runtime configuration: priority, namespace, specific labels/annotations
+    *   3. Template values: all other fields from template
+    *
+    * @param template
+    *   Driver job item template
+    * @param armadaJobConfig
+    *   Current job configuration
+    * @param annotations
+    *   Runtime annotations (merged with template)
+    * @param labels
+    *   Runtime labels (merged with template)
+    * @param driverPort
+    *   Driver port (hardcoded)
+    * @param mainClass
+    *   Main class (hardcoded)
+    * @param volumes
+    *   Volumes (hardcoded)
+    * @param volumeMounts
+    *   Volume mounts (hardcoded)
+    * @param nodeSelectors
+    *   Node selectors (hardcoded)
+    * @param additionalDriverArgs
+    *   Additional driver arguments (hardcoded)
+    * @param conf
+    *   Spark configuration
+    * @return
+    *   Merged JobSubmitRequestItem for driver
+    */
+  private def mergeDriverTemplate(
+      template: api.submit.JobSubmitRequestItem,
+      armadaJobConfig: ArmadaJobConfig,
+      annotations: Map[String, String],
+      labels: Map[String, String],
+      driverPort: Int,
+      mainClass: String,
+      volumes: Seq[Volume],
+      volumeMounts: Seq[VolumeMount],
+      nodeSelectors: Map[String, String],
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
+  ): api.submit.JobSubmitRequestItem = {
+
+    // Level 1: Hardcoded values (always override templates and config)
+    val hardcodedContainer = newSparkDriverContainer(
+      armadaJobConfig.armadaClusterUrl,
+      armadaJobConfig.containerImage,
+      driverPort,
+      mainClass,
+      volumeMounts,
+      additionalDriverArgs,
+      conf
+    )
+
+    val hardcodedPodSpec = template.podSpec
+      .getOrElse(PodSpec())
+      .withTerminationGracePeriodSeconds(0)    // Hardcoded
+      .withRestartPolicy("Never")              // Hardcoded
+      .withContainers(Seq(hardcodedContainer)) // Hardcoded
+      .withVolumes(volumes)                    // Hardcoded
+      .withNodeSelector(nodeSelectors)         // Hardcoded
+
+    val hardcodedServices = Seq(
+      api.submit.ServiceConfig(
+        api.submit.ServiceType.Headless,
+        Seq(driverPort)
+      )
+    )
+
+    // Level 2: Individual runtime configuration overrides template
+    val finalPriority  = armadaJobConfig.priority  // Runtime config overrides template
+    val finalNamespace = armadaJobConfig.namespace // Runtime config overrides template
+
+    // Level 3: Merge runtime and template values (runtime takes precedence)
+    val mergedAnnotations = template.annotations ++ annotations
+    val mergedLabels      = template.labels ++ labels
+
+    // Apply precedence hierarchy: hardcoded > runtime config > template
+    template
+      .withPriority(finalPriority)        // Level 2: Runtime config
+      .withNamespace(finalNamespace)      // Level 2: Runtime config
+      .withLabels(mergedLabels)           // Level 3: Runtime + template merge
+      .withAnnotations(mergedAnnotations) // Level 3: Runtime + template merge
+      .withPodSpec(hardcodedPodSpec)      // Level 1: Hardcoded
+      .withServices(hardcodedServices)    // Level 1: Hardcoded
+  }
+
+  /** Merges an executor job item template with runtime configuration.
+    *
+    * Precedence hierarchy (highest to lowest):
+    *   1. Hardcoded values (always override): containers, initContainers, podSpec fields like
+    *      restartPolicy, terminationGracePeriodSeconds
+    *   2. Individual runtime configuration: priority, namespace, specific labels/annotations
+    *   3. Template values: all other fields from template
+    *
+    * @param template
+    *   Executor job item template
+    * @param index
+    *   Executor index (hardcoded)
+    * @param armadaJobConfig
+    *   Current job configuration
+    * @param annotations
+    *   Runtime annotations (merged with template)
+    * @param labels
+    *   Runtime labels (merged with template)
+    * @param javaOptEnvVars
+    *   Java option environment variables (hardcoded)
+    * @param driverHostname
+    *   Driver hostname (hardcoded)
+    * @param driverPort
+    *   Driver port (hardcoded)
+    * @param volumes
+    *   Volumes (hardcoded)
+    * @param nodeSelectors
+    *   Node selectors (hardcoded)
+    * @param conf
+    *   Spark configuration
+    * @return
+    *   Merged JobSubmitRequestItem for executor
+    */
+  private def mergeExecutorTemplate(
+      template: api.submit.JobSubmitRequestItem,
+      index: Int,
+      armadaJobConfig: ArmadaJobConfig,
+      annotations: Map[String, String],
+      labels: Map[String, String],
+      javaOptEnvVars: Seq[EnvVar],
+      driverHostname: String,
+      driverPort: Int,
+      volumes: Seq[Volume],
+      nodeSelectors: Map[String, String],
+      conf: SparkConf
+  ): api.submit.JobSubmitRequestItem = {
+
+    // Level 1: Hardcoded values (always override templates and config)
+    val hardcodedInitContainer = newExecutorInitContainer(
+      driverHostname,
+      driverPort,
+      armadaJobConfig.executorConnectionTimeout
+    )
+
+    val hardcodedContainer = newExecutorContainer(
+      index,
+      armadaJobConfig.containerImage,
+      driverHostname,
+      driverPort,
+      armadaJobConfig.nodeUniformityLabel,
+      javaOptEnvVars,
+      conf
+    )
+
+    val hardcodedPodSpec = template.podSpec
+      .getOrElse(PodSpec())
+      .withTerminationGracePeriodSeconds(0)            // Hardcoded
+      .withRestartPolicy("Never")                      // Hardcoded
+      .withInitContainers(Seq(hardcodedInitContainer)) // Hardcoded
+      .withContainers(Seq(hardcodedContainer))         // Hardcoded
+      .withVolumes(volumes)                            // Hardcoded
+      .withNodeSelector(nodeSelectors)                 // Hardcoded
+
+    // Level 2: Individual runtime configuration overrides template
+    val finalPriority  = armadaJobConfig.priority  // Runtime config overrides template
+    val finalNamespace = armadaJobConfig.namespace // Runtime config overrides template
+
+    // Level 3: Merge runtime and template values (runtime takes precedence)
+    val mergedAnnotations = template.annotations ++ annotations
+    val mergedLabels      = template.labels ++ labels
+
+    // Apply precedence hierarchy: hardcoded > runtime config > template
+    template
+      .withPriority(finalPriority)        // Level 2: Runtime config
+      .withNamespace(finalNamespace)      // Level 2: Runtime config
+      .withLabels(mergedLabels)           // Level 3: Runtime + template merge
+      .withAnnotations(mergedAnnotations) // Level 3: Runtime + template merge
+      .withPodSpec(hardcodedPodSpec)      // Level 1: Hardcoded
   }
 
   // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh

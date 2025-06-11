@@ -54,6 +54,74 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  /** Configuration for specifying a job template file to customize Armada job submissions.
+    *
+    * The template file should contain a JobSubmitRequest structure in JSON or YAML format that will
+    * be used as a base for job submission. This allows for advanced customization of queue, job set
+    * ID, and job request items including container specifications, resource requirements, labels,
+    * annotations, and other Kubernetes-specific configurations.
+    *
+    * Supported template sources:
+    *   - File URI: "[file:/]//absolute/path/to/template.yaml"
+    *   - HTTP/HTTPS: "https://config-server.example.com/spark-template.json"
+    *
+    * Example template content (JSON): { "queue": "default", "job_set_id": "spark-jobs",
+    * "job_request_items": [{ "priority": 1.0, "namespace": "spark-production", "labels": { "team":
+    * "data-engineering", "environment": "production" }, "pod_specs": [{ "containers": [{ "name":
+    * "spark-driver", "resources": { "requests": {"cpu": "2", "memory": "4Gi"}, "limits": {"cpu":
+    * "4", "memory": "8Gi"} } }] }] }] }
+    */
+  val ARMADA_JOB_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.jobTemplate")
+      .doc(
+        "URL or file path to a job template YAML/JSON file. " +
+          "Supports local files (with or without file:// prefix), " +
+          "HTTP/HTTPS URLs. The template should contain " +
+          "JobSubmitRequest configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  val ARMADA_DRIVER_JOB_ITEM_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.jobItemTemplate")
+      .doc(
+        "URL or file path to a job item template YAML/JSON file for the driver. " +
+          "Supports local files (with or without file:// prefix), HTTP/HTTPS URLs. " +
+          "The template should contain a JobRequestItem configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  val ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.jobItemTemplate")
+      .doc(
+        "URL or file path to a job item template YAML/JSON file for executors. " +
+          "Supports local files (with or without file:// prefix), HTTP/HTTPS URLs. " +
+          "The template should contain a JobRequestItem configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  private def isValidFilePath(path: String): Boolean = {
+    val normalizedPath = path.toLowerCase
+    normalizedPath.startsWith("file://") ||
+    normalizedPath.startsWith("http://") ||
+    normalizedPath.startsWith("https://") ||
+    (!normalizedPath.contains("://") && path.nonEmpty) // Local file without protocol
+  }
+
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
       .doc(
@@ -149,13 +217,13 @@ private[spark] object Config {
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
       .createOptional
 
-  val ARMADA_SPARK_JOB_NAMESPACE: ConfigEntry[String] =
+  val ARMADA_SPARK_JOB_NAMESPACE: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.namespace")
       .doc(
         "The namespace to use for the job. If not set, the default namespace will be used."
       )
       .stringConf
-      .createWithDefaultString("default")
+      .createOptional
 
   val ARMADA_SPARK_JOB_PRIORITY: ConfigEntry[Double] =
     ConfigBuilder("spark.armada.scheduling.priority")
