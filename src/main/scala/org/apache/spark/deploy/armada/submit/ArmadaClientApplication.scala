@@ -142,7 +142,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
-    val armadaClient = ArmadaClient(host, port, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
@@ -390,7 +390,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       additionalDriverArgs,
       conf
     )
-    val podSpec = PodSpec()
+    var podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withContainers(Seq(container))
@@ -399,7 +399,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val runAsUser = conf.get(ARMADA_RUN_AS_USER)
     if (runAsUser.isDefined) {
-        podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
+        podSpec = podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
     }
 
     api.submit
@@ -508,7 +508,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       javaOptEnvVars,
       conf
     )
-    val podSpec = PodSpec()
+    var podSpec = PodSpec()
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
       .withInitContainers(Seq(initContainer))
@@ -518,7 +518,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val runAsUser = conf.get(ARMADA_RUN_AS_USER)
     if (runAsUser.isDefined) {
-        podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
+      podSpec = podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
     }
 
     api.submit
