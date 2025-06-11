@@ -17,7 +17,10 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.deploy.armada.Config.{
+  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
+  ARMADA_EXECUTOR_TRACKER_TIMEOUT
+}
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
@@ -87,7 +90,10 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
     private def getAliveCount: Int = {
-      ArmadaUtils.getExecutorRange(numberOfExecutors).map(i => scheduler.isExecutorAlive(i.toString)).count(x => x)
+      ArmadaUtils
+        .getExecutorRange(numberOfExecutors)
+        .map(i => scheduler.isExecutorAlive(i.toString))
+        .count(x => x)
     }
 
     def stop(): Unit = {

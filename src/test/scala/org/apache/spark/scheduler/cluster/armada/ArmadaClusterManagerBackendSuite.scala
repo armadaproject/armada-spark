@@ -42,10 +42,9 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
   @Mock
   private var rpcEnv: RpcEnv = _
 
-  private val timeout = 10000
-  val executorCount = 2
+  private val timeout         = 10000
+  val executorCount           = 2
   val executorRange: Seq[Int] = ArmadaUtils.getExecutorRange(executorCount)
-
 
   private val sparkConf = new SparkConf(false)
     .set("spark.armada.executor.trackerTimeout", timeout.toString)
