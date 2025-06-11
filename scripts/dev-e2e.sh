@@ -18,7 +18,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-trap 'rm -f -- "$STATUSFILE"' EXIT
+trap 'echo "\n\nTest Failed; exiting";rm -f -- "$STATUSFILE"' EXIT
 
 log() {
   echo -e "${GREEN}$1${NC}"
@@ -99,7 +99,7 @@ start-armada() {
   fi
 }
 
-main() {
+init-cluster() {
   if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
@@ -119,7 +119,7 @@ main() {
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
-    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh), and re-run this script"
+    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
     exit 1
   fi
 
@@ -148,10 +148,13 @@ main() {
   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
    | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
+  cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
   # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
   # proceeding immediately causes sporadic immediate job rejections by Armada
   sleep 30
+}
 
+run-test() {
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
     tee submitSparkPi.log
   DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
@@ -185,6 +188,12 @@ main() {
        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
     done
   fi
+  echo \n\nSuccess! test finished successfully
 }
 
-main
+main() {
+    init-cluster
+    run-test
+}
+
+run-test
