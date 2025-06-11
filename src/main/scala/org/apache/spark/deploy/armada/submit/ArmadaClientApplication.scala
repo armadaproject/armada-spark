@@ -313,7 +313,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorLabels =
       globalLabels ++ armadaJobConfig.executorLabels
     val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
-    log(s"driver service name $driverHostname")
     val executors = ArmadaUtils.getExecutorRange(executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
@@ -396,6 +395,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(container))
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
 
     api.submit
       .JobSubmitRequestItem()
@@ -403,7 +403,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(configurePodSpec(conf, podSpec))
+      .withPodSpec(podSpec)
       .withServices(
         Seq(
           api.submit.ServiceConfig(
@@ -510,6 +510,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(container))
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
 
     api.submit
       .JobSubmitRequestItem()
@@ -517,16 +518,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(configurePodSpec(conf, podSpec))
-  }
-
-  private def configurePodSpec(conf: SparkConf, podSpec: PodSpec) = {
-    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
-    if (runAsUser.isDefined) {
-      podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
-    } else {
-      podSpec
-    }
+      .withPodSpec(podSpec)
   }
 
   private def newExecutorInitContainer(

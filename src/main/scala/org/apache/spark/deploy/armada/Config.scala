@@ -245,12 +245,14 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_MEM)
 
-  val ARMADA_RUN_AS_USER: OptionalConfigEntry[Long] =
+  val ARMADA_RUN_AS_USER: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.runAsUser")
       .doc("Specify the numeric id of user to run job as")
       .version("1.0.0")
       .longConf
-      .createOptional
+      // The id of the "spark" user on most spark images
+      .createWithDefaultString("185")
+
 
   val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.auth.token")
