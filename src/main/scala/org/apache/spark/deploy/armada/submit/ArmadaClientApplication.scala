@@ -142,7 +142,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
-    val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
@@ -397,18 +397,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
 
-    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
-    if (runAsUser.isDefined) {
-        podSpec = podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
-    }
-
     api.submit
       .JobSubmitRequestItem()
       .withPriority(priority)
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(podSpec)
+      .withPodSpec(configurePodSpec(conf, podSpec))
       .withServices(
         Seq(
           api.submit.ServiceConfig(
@@ -516,18 +511,22 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
 
-    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
-    if (runAsUser.isDefined) {
-      podSpec = podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
-    }
-
     api.submit
       .JobSubmitRequestItem()
       .withPriority(priority)
       .withNamespace(namespace)
       .withLabels(labels)
       .withAnnotations(annotations)
-      .withPodSpec(podSpec)
+      .withPodSpec(configurePodSpec(conf, podSpec))
+  }
+
+  private def configurePodSpec(conf: SparkConf, podSpec: PodSpec) = {
+    val runAsUser = conf.get(ARMADA_RUN_AS_USER)
+    if (runAsUser.isDefined) {
+      podSpec.withSecurityContext(new PodSecurityContext().withRunAsUser(runAsUser.get))
+    } else {
+      podSpec
+    }
   }
 
   private def newExecutorInitContainer(

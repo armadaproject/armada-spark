@@ -16,10 +16,6 @@
  */
 package org.apache.spark.deploy.armada.submit
 
-import org.apache.spark.SparkConf
-import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
-
-import scala.collection.immutable.NumericRange
 import scala.util.Try
 
 object ArmadaUtilsExceptions {
@@ -40,9 +36,9 @@ object ArmadaUtils {
       .getOrElse(throw new MasterUrlParsingException)
   }
 
-  def buildServiceNameFromJobId(jobId: String): String = s"armada-${jobId}-0-service-0"
+  def buildServiceNameFromJobId(jobId: String): String = s"armada-$jobId-0-service-0"
 
-  val initContainerCommand =
+  val initContainerCommand: String =
     """
           start_time=$(date +%s);
           timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
@@ -59,6 +55,6 @@ object ArmadaUtils {
         """.stripMargin.trim
 
   def getExecutorRange(numberOfExecutors: Int): Range = {
-    (0 until numberOfExecutors)
+    0 until numberOfExecutors
   }
 }
