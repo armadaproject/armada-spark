@@ -18,6 +18,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+ITERATION_COUNT=102
 trap 'rm -f -- "$STATUSFILE"' EXIT
 
 log() {
@@ -155,7 +156,8 @@ init-cluster() {
 }
 
 run-test() {
-  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
+  echo Running $1 test $2 $3 $4
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" $2 $3 $4 2>&1 | \
     tee submitSparkPi.log
   DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
   EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
@@ -192,7 +194,8 @@ run-test() {
 
 main() {
     init-cluster
-    run-test
+    run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar"
+    run-test python -P "/opt/spark/extraFiles/src/main/python/pi.py" $ITERATION_COUNT
 }
 
-run-test
+run-test python  -P "/opt/spark/extraFiles/src/main/python/pi.py" $ITERATION_COUNT

@@ -87,3 +87,5 @@ done
 if [ ${#FINAL_ARGS[@]} -eq 0 ]; then
     FINAL_ARGS+=("100")
 fi
+
+image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}-ubuntu"
