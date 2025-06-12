@@ -51,5 +51,6 @@ docker build \
   --build-arg spark_base_image_prefix=$image_prefix \
   --build-arg spark_base_image_tag=$image_tag \
   --build-arg scala_binary_version=$SCALA_BIN_VERSION \
+  --build-arg include_python=$INCLUDE_PYTHON \
   -f "$root/docker/Dockerfile" \
   "$root"

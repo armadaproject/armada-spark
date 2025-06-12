@@ -149,7 +149,9 @@ init-cluster() {
   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
    | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
+  # configure the defaults for the e2e test
   cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
+
   # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
   # proceeding immediately causes sporadic immediate job rejections by Armada
   sleep 30
@@ -169,7 +171,7 @@ run-test() {
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-    timeout 3m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
+    timeout 5m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
       tee armadactl.watch.log | log_group "Watching Driver Job"
 
     if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
@@ -194,8 +196,6 @@ run-test() {
 
 main() {
     init-cluster
-    run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar"
+    run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar" $ITERATION_COUNT
     run-test python -P "/opt/spark/extraFiles/src/main/python/pi.py" $ITERATION_COUNT
 }
-
-run-test python  -P "/opt/spark/extraFiles/src/main/python/pi.py" $ITERATION_COUNT
