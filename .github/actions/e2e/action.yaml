@@ -157,7 +157,7 @@ runs:
     if: always()
     run: |
       echo "::group::Confirm iteration count"
-      export count={{ inputs.iteration_count }}
+      export count=${{ inputs.iteration_count }}
       if grep "TaskSetManager: Finished task .* ($count/$count)" default.armada-${{ steps.submit.outputs.jobid }}-0.log; then
         echo "got expected iteration count"
       else
