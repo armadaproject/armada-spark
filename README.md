@@ -118,10 +118,12 @@ Make sure that the [SparkPi](#sparkpi-example) job successfully runs on your Arm
 
 ### SparkPi Example
 
-The project includes a ready-to-use SparkPi job to test your setup:
+The project includes a ready-to-use Spark job to test your setup:
 
 ```bash
-./scripts/submitSparkPi.sh
+./scripts/submitArmadaSpark.sh
 ```
 
 This job leverages the same configuration parameters (`ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_LOOKOUT_URL`) as the `scripts/config.sh` script.
+
+Use the -h option to see what other options are available.

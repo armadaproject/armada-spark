@@ -159,10 +159,10 @@ init-cluster() {
 
 run-test() {
   echo Running $1 test $2 $3 $4
-  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" $2 $3 $4 2>&1 | \
-    tee submitSparkPi.log
-  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
-  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitArmadaSpark.sh" $2 $3 $4 2>&1 | \
+    tee submitArmadaSpark.log
+  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
+  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
 
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
     echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"

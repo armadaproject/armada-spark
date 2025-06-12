@@ -41,13 +41,13 @@ to the [Armada Operator Dev Quickstart Config](https://github.com/armadaproject/
 
 The [README](../README.md) covers all this in more detail.
 
-## Running `armada-spark`
+## Running `armada-spark` Scala example
 
 `armada-spark`'s main entry point is a class called
 [`ArmadaSparkSubmit`](../src/main/scala-spark-4.1/org/apache/spark/deploy/ArmadaSparkSubmit.scala).
 It's designed to be a drop-in replacement/extension for `spark-submit`.
-However, upstream integration is not quite there yet, but we're working on getting
-it [accepted upstream](https://github.com/apache/spark/pull/50770), therefore
+Upstream integration is not quite there yet, but we're working on getting
+it [accepted](https://github.com/apache/spark/pull/50770); for now,
 we must load it via the
 [`spark-class`](https://github.com/apache/spark/blob/master/bin/spark-class)
 helper program instead of using `spark-submit` directly.
@@ -60,7 +60,7 @@ Here's an example of calling `ArmadaSparkSubmit`:
     --name spark-pi \
     --class org.apache.spark.examples.SparkPi \
     --conf spark.Executor.instances=4 \
-    --conf spark.kubernetes.container.image=armada-spark \
+    --conf spark.armada.container.image=armada-spark \
     --conf spark.armada.lookouturl=http://localhost:30000 \
     --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
     "local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar"
@@ -84,7 +84,7 @@ load `org.apache.spark.examples.SparkPi` as the main workload program.
 Then comes several configuration options specified with `--conf` flags:
 - `--conf spark.Executor.instances=4` The number of Executor jobs/instances to
   launch. `armada-spark` only supports static Executors at the moment.
-- `--conf spark.kubernetes.container.image=armada-spark` lets us know what
+- `--conf spark.armada.container.image=armada-spark` lets us know what
   container image `ArmadaSparkSubmit` should use for the Driver and Executors.
 - `--conf spark.armada.lookouturl=http://localhost:30000` gives the Lookout
     URL so we can easily find the results of jobs submitted to Armada.
@@ -119,7 +119,7 @@ Lookout URL for this job is http://localhost:30000/?page=0&sort[id]=jobId&sort[d
 Note the Lookout URL. This will let us easily view results for the Driver and
 its Executors. If all goes well the jobs will succeed and produce a result!
 
-### Running Python Jobs
+### Running Python example
 
 `armada-spark` also supports running Python jobs instead of Java.
 
@@ -129,7 +129,7 @@ The invocation is mostly the same:
     --master armada://localhost:50051 --deploy-mode cluster \
     --name python-pi \
     --conf spark.Executor.instances=4 \
-    --conf spark.kubernetes.container.image=armada-spark \
+    --conf spark.armada.container.image=armada-spark \
     --conf spark.armada.lookouturl=http://localhost:30000 \
     --conf spark.armada.scheduling.nodeSelectors="armada-spark=true" \
     /opt/spark/examples/src/main/python/pi.py
@@ -141,6 +141,27 @@ With a couple of critical differences:
 
 Execution will proceed similarly as in the Java case.
 
+### submitArmadaSpark.sh Convenience script
+
+There is a convience script ./scripts/submitArmadaSpark.sh, that makes it easier to submit jobs to the cluster.  There are many options; run it with -h to see them all.  By default, it will run the sparkPi example jobs.  To run your own jobs, you can run it like so:
+
+```
+./scripts/submitArmadaSpark.sh -P /opt/spark/extraFiles/src/main/python/pi.py 1000
+```
+-P allows you to run your own python scripts.  Run scala/java programs like so:
+```
+./scripts/submitArmadaSpark.sh -s org.apache.spark.examples.SparkPi -c local:///opt/spark/extraFiles/jars/spark-examples_2.12-3.5.3.jar 102
+
+```
+
+
+### Running the Spark UI
+To run the spark ui, you must get access to port 4040 on the driver, like so:
+```
+kubectl --context <cluster> -n <namespace> port-forward <spark-driver-pod-name> 4040:4040
+```
+You can get the specific cluster, namespace, podName details on the driver job's "Commands" page in the Lookout UI.  (You can determine which is the driver job, by looking at for the "driver" container on the Lookout UI "Details" page.
+
 ## Configuration Options
 
 `armada-spark` has a slew of configuration options that can be set with the
@@ -148,7 +169,9 @@ Execution will proceed similarly as in the Java case.
 
 Each option consists of a `String` unless otherwise noted.
 
+They can be set in the [conf](../conf/spark-defaults.conf) file.
 
+- `spark.armada.auth.token` - Armada auth token, (specific to the OIDC server being used.)
 - `spark.armada.container.image` - Container image to use for Spark containers.
 - `spark.armada.driver.limit.cores` - Specify the hard cpu limit for the driver pod
 - `spark.armada.driver.request.cores` - Specify the cpu request for the driver pod
@@ -186,8 +209,10 @@ Each option consists of a `String` unless otherwise noted.
     (in key=value format) to be added to both the Driver and Executor pods.
 - `spark.armada.driver.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to the Driver pod.
-- `spark.armada.executor.labels` A comma-separated list of kubernetes labels
+- `spark.armada.executor.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to all Executor pods.
+- `spark.armada.runAsUser` - the numeric id of user to run job as, usually 185 for the spark user on the apache spark images.
+
 - `spark.executor.memory` - Amount of memory to use per executor process, in the same format as JVM memory
     strings with a size unit suffix ("k", "m", "g" or "t") (e.g. 512m, 2g).
 
@@ -203,6 +228,9 @@ section of the README for more information.
 `armada-spark` uses docker to produce container images that serve as spark
 Drivers and Executors. See the [Building Docker Images](../README.md#building-docker-images)
 section of the README for more information.
+
+Any files you wish to include on the image, (e.g. python scripts or scala/java jar files,) should be copied into the [extraFiles](../extraFiles) directory.  They will appear on the image in the /opt/spark/extraFiles directory.
+
 
 # Architecture & Design
 
@@ -230,11 +258,7 @@ The basic flow of an `armada-spark` execution is as follows:
     - Submits `n` Executor jobs to Armada.
 3. After job submissions, `ArmadaSparkSubmit` prints a Lookout link and exits.
 4. Armada schedules Driver and Executor jobs submitted by `ArmadaSparkSubmit`.
-    - Each job submits a pod with a single container.
-    - By using a common label, we can guarantee Driver and Executor jobs are
-    scheduled to the same cluster. This guarantees network connectivity and has
-    the added benefit of ensuring Drivers and Executors run relatively close to
-    each other, reducing network latency and overhead.
+   Each job submits a pod with a single container.
 5. Asynchronously:
     - Driver starts up and waits for each expected Executor to establish
     connections.
@@ -256,15 +280,13 @@ The `armada-spark` cluster manager is defined by inheriting the
 [`ExternalClusterManager`](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/ExternalClusterManager.scala)
 trait and implementing the required methods. Mostly those methods center around
 the creation, management, and deletion of Spark Executors tied to a particular
-Driver program.
+instance of Driver program .
 
 ### Integrating with `spark-submit`
 
-While Spark seems to take some care around providing a defined interface for
-individual Cluster Managers, there's still a fair bit of cluster-specific code
-within `SparkSubmit`. While most of Spark supports an open "plugin" cluster
-manager architecture, SparkSubmit does not.
-
+While Spark provides a defined "plugin" interface to help create
+new Cluster Managers, (like Armada), there's still a fair bit of cluster-specific code
+within `SparkSubmit` code. 
 Therefore, `armada-spark` maintains and
 provides it's own `ArmadaSparkSubmit` implementation which serves as a drop-in
 replacement.
@@ -277,7 +299,7 @@ Currently the following versions of Spark are supported:
 ### Using Armada as a "cluster"
 
 While Armada can be treated as a cluster for the purposes of Spark, some care
-and consideration must be taken in order to meet most, if not all, of Spark's
+and consideration must be taken in order to meet Spark's
 expectations.
 
 ### Driver and Executor (and Cluster Manager) Network Communications
@@ -321,18 +343,7 @@ several considerations that must be observed when submitting these jobs.
 `armada-spark` uses gang scheduling annotations to schedule the driver and
 its executors together. By using the gang scheduling “Node Uniformity Label”
 we can guarantee that a driver and its executors are scheduled to the same
-cluster if Kubernetes node labels are applied correctly.
-
-#### Kubernetes Node Labels
-
-Any Kubernetes worker nodes should have a common label, such as "armada-spark",
-and each cluster should have a unique value assigned to that label.
-
-#### Custom Service Names
-
-A unique service name is assigned to each Spark job’s driver when submitting
-a Spark job to Armada. This service name acts as a DNS name within Kubernetes
-and allows Spark Executors to connect to their corresponding Drivers.
+cluster.
 
 ### Armada Job Limitations
 
@@ -343,16 +354,6 @@ jobs so their corresponding Pods can be freely scheduled by Armada.
 # `armada-spark` Deployment Considerations
 
 ## Necessary Kubernetes Configuration
-
-### Kubernetes Cluster Nodes
-
-All nodes in a particular Kubernetes cluster must be labeled by a common
-`(label, value)` tuple. The `label` must be an agreed upon name which shows
-the cluster will accept `armada-spark` jobs (e.g., `armada-spark`).
-The `value` must be unique per cluster to ensure individual `armada-spark` jobs
-are scheduled to the same cluster. Cross-cluster jobs are not currently supported
-by `armada-spark`. This should match an entry in the `trackedNodeLabels` and
-`indexedNodeLabels` configuration options mentioned below.
 
 ## Necessary Armada Configuration
 
@@ -368,21 +369,13 @@ Armada Executors must track whatever label is assigned to cluster nodes
 that denote they accept `armada-spark` jobs through their `kubernetes.trackedNodeLabels`
 configuration option.
 
-### Armada Server
-
-The Armada Server must enable custom service names through the
-`submission.allowCustomServiceNames` configuration option. `armada-spark`
-relies on custom service names to provide a unique DNS name for each
-individual Driver.
-
 ### Example Configuration
 
 An example configuration of Armada services with all the necessary options
 configured can be found by applying this [patch](../e2e/armada-operator.patch)
 to the [Armada Operator Dev Quickstart Config](https://github.com/armadaproject/armada-operator/blob/main/dev/quickstart/armada-crs.yaml)
 
-# Where To Go From Here
+# Unsupported features
 
-```
-// TODO
-```
+Currently unsupported features include Spark Connect, Jupyter notebook support, and Spark client mode.
+

@@ -143,7 +143,7 @@ runs:
     run: |
       # Confirm number of executors
       echo "::group::Confirm number of executors"
-      expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitSparkPi.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
+      expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitArmadaSpark.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
       actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" default.armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
       echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount
       if [ $expectedExecutorCount -eq $actualExecutorCount ]; then
