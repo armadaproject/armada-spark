@@ -253,7 +253,6 @@ private[spark] object Config {
       // The id of the "spark" user on most spark images
       .createWithDefaultString("185")
 
-
   val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.auth.token")
       .doc("Armada auth token.")
