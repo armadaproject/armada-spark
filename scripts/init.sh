@@ -34,7 +34,7 @@ print_usage () {
     exit 1
 }
 
-while getopts "hekpi:a:m:P:s:c:q" opt; do
+while getopts "hekpi:a:m:P:s:c:q:" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
