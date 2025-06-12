@@ -199,3 +199,5 @@ main() {
     run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar" $ITERATION_COUNT
     run-test python -P "/opt/spark/extraFiles/src/main/python/pi.py" $ITERATION_COUNT
 }
+
+main
