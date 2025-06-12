@@ -92,7 +92,7 @@ runs:
     id: submit
     run: |
       echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh
+      ./armada-spark/scripts/dev-e2e.sh -q test
       echo "::endgroup::"
     shell: bash
   - name: Ensure job completed
