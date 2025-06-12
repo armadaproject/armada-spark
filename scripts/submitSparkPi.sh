@@ -50,6 +50,7 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     $CLASS_PROMPT $CLASS_ARG \
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
+    --conf spark.executor.instances 2 \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.jobSetId="$JOBSET" \
     $FIRST_ARG  "${FINAL_ARGS[@]}"
