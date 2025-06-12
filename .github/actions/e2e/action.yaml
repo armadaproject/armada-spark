@@ -85,8 +85,7 @@ runs:
     run: |
       # Build image
       echo "::group::createImage.sh"
-      ./armada-spark/scripts/prepExtraFiles.sh
-      ./armada-spark/scripts/createImage.sh -p
+      ./armada-spark/scripts/createImage.sh -p -e
       echo "::endgroup::"
     shell: bash
   - name: Test job processing

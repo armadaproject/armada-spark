@@ -16,9 +16,10 @@ print_usage () {
     echo '   -p  "build image with python"'
     echo '   -i  <image-name>'
     echo '   -m  <armada-master-url>'
-    echo '   -P <python script to run>'
-    echo '   -s <scala class to run>'
-    echo '   -c <class path to use>'
+    echo '   -P  <python script to run>'
+    echo '   -s  <scala class to run>'
+    echo '   -c  <class path to use>'
+    echo '   -e  running e2e tests'
     echo ''
     echo 'You also can specify those parameters in scripts/config.sh, like so:'
     echo '   IMAGE_NAME=spark:armada'
@@ -31,7 +32,7 @@ print_usage () {
     exit 1
 }
 
-while getopts "hkpi:a:m:P:s:c:" opt; do
+while getopts "hekpi:a:m:P:s:c:" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
@@ -42,6 +43,7 @@ while getopts "hkpi:a:m:P:s:c:" opt; do
     P) PYTHON_SCRIPT=$OPTARG ;;
     s) SCALA_CLASS=$OPTARG ;;
     c) CLASSPATH=$OPTARG ;;
+    e) RUNNING_E2E_TESTS=true ;;
   esac
 done
 
@@ -50,6 +52,7 @@ export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-""}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
+export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
 if [ ${PYTHON_SCRIPT:-""} == "" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
