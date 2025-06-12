@@ -21,7 +21,7 @@ FROM ${spark_base_image_prefix}:${spark_base_image_tag}
 
 ARG scala_binary_version=2.13
 
-COPY extraFiles /opt/spark/extraFiles
+COPY extraFiles /opt/spark
 COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/jars/
 
 WORKDIR /

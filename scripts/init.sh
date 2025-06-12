@@ -51,7 +51,7 @@ while getopts "hekpi:a:m:P:s:c:q:" opt; do
 done
 
 export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
-export USE_KIND="${INCLUDE_PYTHON:-false}"
+export USE_KIND="${USE_KIND:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"

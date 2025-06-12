@@ -12,6 +12,9 @@ inputs:
   java_version:
     description: Java version to build with, e.g. "11"
     required: true
+  iteration_count:
+    description: iteration parameter to pass into the sparkPi command
+    required: true
 
 runs:
   using: composite
@@ -92,7 +95,7 @@ runs:
     id: submit
     run: |
       echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh -q test -k
+      ./armada-spark/scripts/dev-e2e.sh -q test -k ${{ inputs.iteration_count }}
       echo "::endgroup::"
     shell: bash
   - name: Ensure job completed
@@ -147,6 +150,18 @@ runs:
         echo "got expected executor count"
       else
         echo "Bad executor count"; exit 1
+      fi
+      echo "::endgroup::"
+    shell: bash
+  - name: Confirm iteration count
+    if: always()
+    run: |
+      echo "::group::Confirm iteration count"
+      export count={{ inputs.iteration_count }}
+      if grep "TaskSetManager: Finished task .* ($count/$count)" default.armada-${{ steps.submit.outputs.jobid }}-0.log; then
+        echo "got expected iteration count"
+      else
+        echo "Bad iteration count"; exit 1
       fi
       echo "::endgroup::"
     shell: bash
