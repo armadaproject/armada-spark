@@ -20,10 +20,10 @@ jobs:
             spark_version: "3.5.5"
             java_version: "17"
 
-          - scala_version: "2.13.8"
+          - scala_version: "2.13.16"
             spark_version: "3.3.4"
             java_version: "11"
-          - scala_version: "2.13.8"
+          - scala_version: "2.13.16"
             spark_version: "3.5.5"
             java_version: "17"
 
