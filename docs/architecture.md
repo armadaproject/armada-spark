@@ -143,15 +143,14 @@ Execution will proceed similarly as in the Java case.
 
 ### submitArmadaSpark.sh Convenience script
 
-There is a convience script ./scripts/submitArmadaSpark.sh, that makes it easier to submit jobs to the cluster.  There are many options; run it with -h to see them all.  By default, it will run the sparkPi example jobs.  To run your own jobs, you can run it like so:
+There is a convience script `./scripts/submitArmadaSpark.sh`, that makes it easier to submit jobs to the cluster.  There are many options; run it with `-h` to see them all.  By default, it will run the sparkPi example jobs.  To run your own jobs, you can run it like so:
 
 ```
 ./scripts/submitArmadaSpark.sh -P /opt/spark/extraFiles/src/main/python/pi.py 1000
 ```
--P allows you to run your own python scripts.  Run scala/java programs like so:
+Option `-P` allows you to run your own Python scripts.  Run Scala / Java programs like so:
 ```
 ./scripts/submitArmadaSpark.sh -s org.apache.spark.examples.SparkPi -c local:///opt/spark/extraFiles/jars/spark-examples_2.12-3.5.3.jar 102
-
 ```
 
 
@@ -160,7 +159,7 @@ To run the spark ui, you must get access to port 4040 on the driver, like so:
 ```
 kubectl --context <cluster> -n <namespace> port-forward <spark-driver-pod-name> 4040:4040
 ```
-You can get the specific cluster, namespace, podName details on the driver job's "Commands" page in the Lookout UI.  (You can determine which is the driver job, by looking at for the "driver" container on the Lookout UI "Details" page.
+You can get the specific cluster, namespace, podName details on the driver job's "Commands" page in the Lookout UI. The "driver" container on the Lookout UI "Details" page refers to the driver job.
 
 ## Configuration Options
 
@@ -229,7 +228,7 @@ section of the README for more information.
 Drivers and Executors. See the [Building Docker Images](../README.md#building-docker-images)
 section of the README for more information.
 
-Any files you wish to include on the image, (e.g. python scripts or scala/java jar files,) should be copied into the [extraFiles](../extraFiles) directory.  They will appear on the image in the /opt/spark/extraFiles directory.
+Any files you wish to be included in the image, (e.g. Python scripts or Scala / Java jar files) should be copied into the [extraFiles](../extraFiles) directory.  They will appear on the image in the /opt/spark/extraFiles directory.
 
 
 # Architecture & Design

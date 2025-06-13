@@ -55,11 +55,11 @@ export USE_KIND="${USE_KIND:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
-export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-""}
+export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
-if [ ${PYTHON_SCRIPT:-""} == "" ]; then
+if [ -z "${PYTHON_SCRIPT:-}" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
 else
     INCLUDE_PYTHON=true
@@ -87,13 +87,11 @@ fi
 
 
 shift $((OPTIND - 1))
-FINAL_ARGS=()
-for arg in "$@"; do
-    FINAL_ARGS+=("$arg")
-done
+FINAL_ARGS=("${@}")   
 
 if [ ${#FINAL_ARGS[@]} -eq 0 ]; then
     FINAL_ARGS+=("100")
 fi
 
-image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}-ubuntu"
+if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
+image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
