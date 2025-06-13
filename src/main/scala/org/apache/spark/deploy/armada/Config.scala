@@ -54,6 +54,105 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  /** Configuration for specifying a job template file to customize Armada job submissions.
+    *
+    * The template file should contain a JobSubmitRequest structure in JSON or YAML format that will
+    * be used as a base for job submission. This allows for advanced customization of queue and job
+    * set ID. The jobRequestsItems field is ignored, as there is a separate configuration option for
+    * the driver and executor job submit item template.
+    *
+    * Supported template sources:
+    *   - File path: "/absolute/path/to/template.yaml" or "relative/path/to/template.yaml"
+    *   - File URI: "file:///absolute/path/to/template.yaml" *
+    *   - HTTP/HTTPS: "http(s)://config-server.example.com/spark-template.json"
+    */
+  val ARMADA_JOB_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.jobTemplate")
+      .doc(
+        "URL or file path to a job template YAML/JSON file. " +
+          "Supports local files (with or without file:// prefix), " +
+          "HTTP/HTTPS URLs. The template should contain " +
+          "JobSubmitRequest configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  /** Configuration for specifying a driver job item template file to customize driver pods.
+    *
+    * The template file should contain a JobSubmitRequestItem structure in JSON or YAML format that
+    * will be used as a base for driver pod configuration. This allows for advanced customization of
+    * driver-specific pod specifications, resources, labels, annotations, and other Kubernetes
+    * settings while preserving runtime-configured values.
+    *
+    * The template follows a precedence hierarchy:
+    *   1. Hardcoded values (containers, services, restartPolicy) - always override template
+    *   2. Runtime configuration (priority, namespace) - override template values
+    *   3. Template values - used as fallbacks for unspecified configuration
+    *
+    * Supported template sources:
+    *   - File path: "/absolute/path/to/driver-template.yaml" or
+    *     "relative/path/to/driver-template.yaml"
+    *   - File URI: "file:///absolute/path/to/driver-template.yaml"
+    *   - HTTP/HTTPS: "http(s)://config-server.example.com/driver-template.json"
+    */
+  val ARMADA_DRIVER_JOB_ITEM_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.jobItemTemplate")
+      .doc(
+        "URL or file path to a job item template YAML/JSON file for the driver. " +
+          "Supports local files (with or without file:// prefix), HTTP/HTTPS URLs. " +
+          "The template should contain a JobRequestItem configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  /** Configuration for specifying an executor job item template file to customize executor pods.
+    *
+    * The template file should contain a JobSubmitRequestItem structure in JSON or YAML format that
+    * will be used as a base for executor pod configuration. This allows for advanced customization
+    * of executor-specific pod specifications, resources, labels, annotations, init containers, and
+    * other Kubernetes settings while preserving runtime-configured values.
+    *
+    * The template follows a precedence hierarchy:
+    *   1. Hardcoded values (containers, initContainers, restartPolicy) - always override template
+    *   2. Runtime configuration (priority, namespace) - override template values
+    *   3. Template values - used as fallbacks for unspecified configuration
+    *
+    * Supported template sources:
+    *   - File path: "/absolute/path/to/executor-template.yaml" or
+    *     "relative/path/to/executor-template.yaml"
+    *   - File URI: "file:///absolute/path/to/executor-template.yaml"
+    *   - HTTP/HTTPS: "http(s)://config-server.example.com/executor-template.json"
+    */
+  val ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.jobItemTemplate")
+      .doc(
+        "URL or file path to a job item template YAML/JSON file for executors. " +
+          "Supports local files (with or without file:// prefix), HTTP/HTTPS URLs. " +
+          "The template should contain a JobRequestItem configuration in JSON or YAML format."
+      )
+      .stringConf
+      .checkValue(
+        path => if (path.isEmpty) false else isValidFilePath(path),
+        "Must be a valid local file path, file://, http://, https:// URL"
+      )
+      .createOptional
+
+  private def isValidFilePath(path: String): Boolean = {
+    val normalizedPath = path.toLowerCase
+    normalizedPath.startsWith("file://") ||
+    normalizedPath.startsWith("http://") ||
+    normalizedPath.startsWith("https://") ||
+    (!normalizedPath.contains("://") && path.nonEmpty) // Local file without protocol
+  }
+
   val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.trackerPollingInterval")
       .doc(
@@ -149,13 +248,13 @@ private[spark] object Config {
       .checkValue(k8sLabelListValidator, invalidLabelListErrorMessage)
       .createOptional
 
-  val ARMADA_SPARK_JOB_NAMESPACE: ConfigEntry[String] =
+  val ARMADA_SPARK_JOB_NAMESPACE: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.namespace")
       .doc(
         "The namespace to use for the job. If not set, the default namespace will be used."
       )
       .stringConf
-      .createWithDefaultString("default")
+      .createOptional
 
   val ARMADA_SPARK_JOB_PRIORITY: ConfigEntry[Double] =
     ConfigBuilder("spark.armada.scheduling.priority")
@@ -187,63 +286,63 @@ private[spark] object Config {
 
   val DEFAULT_SPARK_EXECUTOR_CORES = "1"
   val DEFAULT_CORES                = "1"
-  val ARMADA_DRIVER_LIMIT_CORES: ConfigEntry[String] =
+  val ARMADA_DRIVER_LIMIT_CORES: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.cores")
       .doc("Specify the hard cpu limit for the driver pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_CORES)
+      .createOptional
 
-  val ARMADA_DRIVER_REQUEST_CORES: ConfigEntry[String] =
+  val ARMADA_DRIVER_REQUEST_CORES: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.request.cores")
       .doc("Specify the cpu request for the driver pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_CORES)
+      .createOptional
 
-  val ARMADA_EXECUTOR_LIMIT_CORES: ConfigEntry[String] =
+  val ARMADA_EXECUTOR_LIMIT_CORES: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.limit.cores")
       .doc("Specify the hard cpu limit for each executor pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_CORES)
+      .createOptional
 
-  val ARMADA_EXECUTOR_REQUEST_CORES: ConfigEntry[String] =
+  val ARMADA_EXECUTOR_REQUEST_CORES: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.request.cores")
       .doc("Specify the cpu request for each executor pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_CORES)
+      .createOptional
 
   val DEFAULT_MEM                   = "1Gi"
   val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
-  val ARMADA_DRIVER_LIMIT_MEMORY: ConfigEntry[String] =
+  val ARMADA_DRIVER_LIMIT_MEMORY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.memory")
       .doc("Specify the hard memory limit for the driver pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_MEM)
+      .createOptional
 
-  val ARMADA_DRIVER_REQUEST_MEMORY: ConfigEntry[String] =
+  val ARMADA_DRIVER_REQUEST_MEMORY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.request.memory")
       .doc("Specify the memory request for the driver pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_MEM)
+      .createOptional
 
-  val ARMADA_EXECUTOR_LIMIT_MEMORY: ConfigEntry[String] =
+  val ARMADA_EXECUTOR_LIMIT_MEMORY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.limit.memory")
       .doc("Specify the hard memory limit for each executor pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_MEM)
+      .createOptional
 
-  val ARMADA_EXECUTOR_REQUEST_MEMORY: ConfigEntry[String] =
+  val ARMADA_EXECUTOR_REQUEST_MEMORY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.request.memory")
       .doc("Specify the memory request for each executor pod")
       .version("1.0.0")
       .stringConf
-      .createWithDefaultString(DEFAULT_MEM)
+      .createOptional
 
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
