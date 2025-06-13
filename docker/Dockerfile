@@ -23,26 +23,3 @@ ARG scala_binary_version=2.13
 
 COPY extraFiles /opt/spark
 COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/jars/
-
-WORKDIR /
-
-# Reset to root to run installation tasks
-USER 0
-ARG include_python=true
-ARG spark_base_image_prefix=apache/spark
-
-# apache/spark images don't have python installed
-RUN if [ "$include_python" = "true" ]; then \
-      if [ "${spark_base_image_prefix}" = "apache/spark" ]; then \
-        apt-get update && \
-        apt install -y python3 python3-pip && \
-        pip3 install --upgrade pip setuptools; \
-      fi \
-  fi
-
-WORKDIR /opt/spark/work-dir
-ENTRYPOINT [ "/opt/entrypoint.sh" ]
-
-# Specify the User that the actual main process will run as
-ARG spark_uid=185
-USER ${spark_uid}
