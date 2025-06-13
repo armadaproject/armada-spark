@@ -12,6 +12,9 @@ inputs:
   java_version:
     description: Java version to build with, e.g. "11"
     required: true
+  iteration_count:
+    description: iteration parameter to pass into the sparkPi command
+    required: true
 
 runs:
   using: composite
@@ -29,6 +32,19 @@ runs:
       restore-keys:
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
         ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
+  - name: Move docker
+    run: |
+      # Moving docker to save space
+      echo "::group::moving Docker"
+      df -h /mnt
+      sudo systemctl stop docker
+      sudo cp -rpd /var/lib/docker /mnt
+      sudo mv /var/lib/docker /var/lib/docker.old
+      sudo ln -s /mnt/docker /var/lib
+      sudo systemctl start docker
+      df -h /mnt
+      echo "::endgroup::"
+    shell: bash
   - name: Setup JDK
     uses: actions/setup-java@v4
     with:
@@ -72,14 +88,14 @@ runs:
     run: |
       # Build image
       echo "::group::createImage.sh"
-      ./armada-spark/scripts/createImage.sh
+      ./armada-spark/scripts/createImage.sh -p -e
       echo "::endgroup::"
     shell: bash
   - name: Test job processing
     id: submit
     run: |
       echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh
+      ./armada-spark/scripts/dev-e2e.sh -q test -k ${{ inputs.iteration_count }}
       echo "::endgroup::"
     shell: bash
   - name: Ensure job completed
@@ -127,13 +143,25 @@ runs:
     run: |
       # Confirm number of executors
       echo "::group::Confirm number of executors"
-      expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitSparkPi.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
+      expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitArmadaSpark.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
       actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" default.armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
       echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount
       if [ $expectedExecutorCount -eq $actualExecutorCount ]; then
         echo "got expected executor count"
       else
         echo "Bad executor count"; exit 1
+      fi
+      echo "::endgroup::"
+    shell: bash
+  - name: Confirm iteration count
+    if: always()
+    run: |
+      echo "::group::Confirm iteration count"
+      export count=${{ inputs.iteration_count }}
+      if grep "TaskSetManager: Finished task .* ($count/$count)" default.armada-${{ steps.submit.outputs.jobid }}-0.log; then
+        echo "got expected iteration count"
+      else
+        echo "Bad iteration count"; exit 1
       fi
       echo "::endgroup::"
     shell: bash

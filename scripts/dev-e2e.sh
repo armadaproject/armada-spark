@@ -18,6 +18,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+ITERATION_COUNT=${FINAL_ARGS[0]}
 trap 'rm -f -- "$STATUSFILE"' EXIT
 
 log() {
@@ -99,7 +100,7 @@ start-armada() {
   fi
 }
 
-main() {
+init-cluster() {
   if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
@@ -119,7 +120,7 @@ main() {
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
-    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh), and re-run this script"
+    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
     exit 1
   fi
 
@@ -148,14 +149,20 @@ main() {
   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
    | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
 
+  # configure the defaults for the e2e test
+  cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
+
   # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
   # proceeding immediately causes sporadic immediate job rejections by Armada
   sleep 30
+}
 
-  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitSparkPi.sh" 2>&1 | \
-    tee submitSparkPi.log
-  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
-  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitSparkPi.log | awk '{print $6}' | sed -e 's/,$//')
+run-test() {
+  echo Running $1 test $2 $3 $4
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitArmadaSpark.sh" $2 $3 $4 2>&1 | \
+    tee submitArmadaSpark.log
+  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
+  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
 
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
     echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
@@ -164,7 +171,7 @@ main() {
   if [ "$JOB_DETAILS" = 1 ]; then
     sleep 10   # wait a moment for Armada to schedule & run the job
 
-    timeout 3m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
+    timeout 5m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
       tee armadactl.watch.log | log_group "Watching Driver Job"
 
     if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
@@ -185,6 +192,11 @@ main() {
        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
     done
   fi
+}
+
+main() {
+    init-cluster
+    run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar" $ITERATION_COUNT
 }
 
 main

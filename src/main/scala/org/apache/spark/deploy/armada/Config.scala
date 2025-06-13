@@ -245,6 +245,20 @@ private[spark] object Config {
       .stringConf
       .createWithDefaultString(DEFAULT_MEM)
 
+  val ARMADA_RUN_AS_USER: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.runAsUser")
+      .doc("Specify the numeric id of the Unix/OS user running inside the docker container.")
+      .version("1.0.0")
+      .longConf
+      // 185 is the id of the "spark" user on most spark images
+      .createWithDefaultString("185")
+
+  val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.token")
+      .doc("Armada auth token, (specific to the OIDC server being used.)")
+      .stringConf
+      .createOptional
+
   /** Converts a comma-separated list of key=value pairs into a Map.
     *
     * @param str

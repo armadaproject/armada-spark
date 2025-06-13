@@ -17,6 +17,7 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
+import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.util.ManualClock
@@ -41,7 +42,10 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
   @Mock
   private var rpcEnv: RpcEnv = _
 
-  private val timeout = 10000
+  private val timeout         = 10000
+  val executorCount           = 2
+  val executorRange: Seq[Int] = ArmadaUtils.getExecutorRange(executorCount)
+
   private val sparkConf = new SparkConf(false)
     .set("spark.armada.executor.trackerTimeout", timeout.toString)
 
@@ -51,7 +55,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     when(sc.env).thenReturn(env)
     when(taskSchedulerImpl.sc).thenReturn(sc)
     when(env.rpcEnv).thenReturn(rpcEnv)
-    when(taskSchedulerImpl.isExecutorAlive("1")).thenReturn(true)
+    when(taskSchedulerImpl.isExecutorAlive(executorRange.head.toString)).thenReturn(true)
   }
   def runTrackerTest(): Unit = {
     val clock = new ManualClock()
@@ -61,7 +65,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
       null,
       "master"
     )
-    val executorTracker = new backend.ExecutorTracker(clock, 2)
+
+    val executorTracker = new backend.ExecutorTracker(clock, executorCount)
     clock.advance(timeout - 1)
     executorTracker.checkMin()
     verify(taskSchedulerImpl, never()).error(anyString())
@@ -69,13 +74,13 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     executorTracker.checkMin()
   }
   test("Verify ExecutorTracker discovers insufficient executor") {
-    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(false)
+    when(taskSchedulerImpl.isExecutorAlive(executorRange.drop(1).head.toString)).thenReturn(false)
     runTrackerTest()
     verify(taskSchedulerImpl).error(anyString())
   }
 
   test("Verify ExecutorTracker no errors on sufficient executor") {
-    when(taskSchedulerImpl.isExecutorAlive("2")).thenReturn(true)
+    when(taskSchedulerImpl.isExecutorAlive(executorRange.drop(1).head.toString)).thenReturn(true)
     runTrackerTest()
     verify(taskSchedulerImpl, never()).error(anyString())
   }

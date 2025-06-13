@@ -36,9 +36,9 @@ object ArmadaUtils {
       .getOrElse(throw new MasterUrlParsingException)
   }
 
-  def buildServiceNameFromJobId(jobId: String): String = s"armada-${jobId}-0-service-0"
+  def buildServiceNameFromJobId(jobId: String): String = s"armada-$jobId-0-service-0"
 
-  val initContainerCommand =
+  val initContainerCommand: String =
     """
           start_time=$(date +%s);
           timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
@@ -53,4 +53,8 @@ object ArmadaUtils {
             sleep 1;
           done
         """.stripMargin.trim
+
+  def getExecutorRange(numberOfExecutors: Int): Range = {
+    0 until numberOfExecutors
+  }
 }

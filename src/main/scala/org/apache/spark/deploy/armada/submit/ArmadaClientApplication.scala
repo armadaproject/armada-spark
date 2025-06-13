@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.deploy.armada.Config.{
+  ARMADA_AUTH_TOKEN,
   ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
   ARMADA_DRIVER_LIMIT_CORES,
   ARMADA_DRIVER_LIMIT_MEMORY,
@@ -38,6 +39,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
+  ARMADA_RUN_AS_USER,
   DEFAULT_SPARK_EXECUTOR_CORES,
   DEFAULT_SPARK_EXECUTOR_MEMORY,
   CONTAINER_IMAGE,
@@ -139,7 +141,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
+
     val armadaClient = ArmadaClient(host, port)
+    // val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
@@ -310,7 +314,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorLabels =
       globalLabels ++ armadaJobConfig.executorLabels
     val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
-    val executors = (0 until executorCount).map { index =>
+    val executors = ArmadaUtils.getExecutorRange(executorCount).map { index =>
       newExecutorJobSubmitItem(
         index,
         armadaJobConfig.priority,
@@ -392,6 +396,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(container))
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
 
     api.submit
       .JobSubmitRequestItem()
@@ -489,7 +494,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       connectionTimeout: Duration,
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    println(s"driver service name $driverHostname")
     val initContainer = newExecutorInitContainer(driverHostname, driverPort, connectionTimeout)
     val container = newExecutorContainer(
       index,
@@ -507,6 +511,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(container))
       .withVolumes(volumes)
       .withNodeSelector(nodeSelectors)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
+
     api.submit
       .JobSubmitRequestItem()
       .withPriority(priority)
