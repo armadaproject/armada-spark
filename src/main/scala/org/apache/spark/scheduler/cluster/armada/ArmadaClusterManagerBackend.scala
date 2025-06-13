@@ -77,7 +77,7 @@ private[spark] class ArmadaClusterManagerBackend(
       logInfo("Checking number of Executors.  Should be: " + numberOfExecutors)
       val count = getAliveCount
       if (count < numberOfExecutors) {
-        logInfo("AliveCount is: " + count)
+        logInfo("Found " + count + " Executors running")
         if (startTime == 0) {
           startTime = clock.getTimeMillis()
         } else if (clock.getTimeMillis() - startTime > timeout) {

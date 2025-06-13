@@ -247,10 +247,10 @@ private[spark] object Config {
 
   val ARMADA_RUN_AS_USER: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.runAsUser")
-      .doc("Specify the numeric id of user to run job as")
+      .doc("Specify the numeric id of the Unix/OS user running inside the docker container.")
       .version("1.0.0")
       .longConf
-      // The id of the "spark" user on most spark images
+      // 185 is the id of the "spark" user on most spark images
       .createWithDefaultString("185")
 
   val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
