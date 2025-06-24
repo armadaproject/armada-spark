@@ -21,7 +21,6 @@ import api.submit.JobSubmitRequestItem
 import k8s.io.api.core.v1.generated.{EnvVar, PodSpec, Volume, VolumeMount}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.armada.submit.{ConfigGenerator, JobTemplateLoader}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -212,7 +211,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     config.cliConfig.jobSetId shouldBe Some("test-job-set")
   }
   test("mergeExecutorTemplate should merge template with runtime configuration") {
-    val template = JobSubmitRequestItem(
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
       priority = 0.5,
       namespace = "template-namespace",
       annotations = Map("template-annotation" -> "template-value"),
@@ -278,6 +277,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
               k8s.io.api.core.v1.generated
                 .Container()
                 .withName("template-container")
+                .withImage("executor-template-image:1.0")
                 .withVolumeMounts(
                   Seq(
                     k8s.io.api.core.v1.generated
@@ -327,9 +327,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       cliConfig = cliConfig
     )
 
-    val runtimeAnnotations = Map("runtime-annotation" -> "runtime-value")
-    val runtimeLabels      = Map("runtime-label" -> "runtime-value")
-    val javaOptEnvVars     = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
+    val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "runtime-namespace",
@@ -390,17 +388,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .filter(e => e.name.isDefined && e.value.isDefined)
       .map(e => e.name.get -> e.value.get)
       .toMap
-    envVars should contain key ("SPARK_EXECUTOR_ID")
+    envVars should contain key "SPARK_EXECUTOR_ID"
     envVars should contain(
       "SPARK_DRIVER_URL" -> "spark://CoarseGrainedScheduler@driver-service:7078"
     )
 
     container.resources should not be empty
     val resources = container.resources.get
-    resources.limits should contain key ("memory")
-    resources.limits should contain key ("cpu")
-    resources.requests should contain key ("memory")
-    resources.requests should contain key ("cpu")
+    resources.limits should contain key "memory"
+    resources.limits should contain key "cpu"
+    resources.requests should contain key "memory"
+    resources.requests should contain key "cpu"
 
     podSpec.tolerations should have size 1
     val toleration = podSpec.tolerations.head
@@ -438,7 +436,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("mergeExecutorTemplate should handle template without podSpec") {
-    val template = JobSubmitRequestItem(
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
       priority = 1.0,
       namespace = "template-namespace",
       annotations = Map.empty,
@@ -534,17 +532,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .filter(e => e.name.isDefined && e.value.isDefined)
       .map(e => e.name.get -> e.value.get)
       .toMap
-    envVars should contain key ("SPARK_EXECUTOR_ID")
+    envVars should contain key "SPARK_EXECUTOR_ID"
     envVars should contain(
       "SPARK_DRIVER_URL" -> "spark://CoarseGrainedScheduler@driver-service:7078"
     )
 
     container.resources should not be empty
     val resources = container.resources.get
-    resources.limits should contain key ("memory")
-    resources.limits should contain key ("cpu")
-    resources.requests should contain key ("memory")
-    resources.requests should contain key ("cpu")
+    resources.limits should contain key "memory"
+    resources.limits should contain key "cpu"
+    resources.requests should contain key "memory"
+    resources.requests should contain key "cpu"
   }
 
   test("validateRequiredConfig should validate all requirements") {
@@ -565,17 +563,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
 
-    armadaClientApp.validateRequiredConfig(cliConfig, None, sparkConf)
+    armadaClientApp.validateRequiredConfig(cliConfig, None, None, None, sparkConf)
 
     val invalidConfig = cliConfig.copy(containerImage = None)
     val exception = intercept[IllegalArgumentException] {
-      armadaClientApp.validateRequiredConfig(invalidConfig, None, sparkConf)
+      armadaClientApp.validateRequiredConfig(invalidConfig, None, None, None, sparkConf)
     }
     exception.getMessage should include("Container image must be set")
 
     val emptyImageConfig = cliConfig.copy(containerImage = Some(""))
     val emptyException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateRequiredConfig(emptyImageConfig, None, sparkConf)
+      armadaClientApp.validateRequiredConfig(emptyImageConfig, None, None, None, sparkConf)
     }
     emptyException.getMessage should include("Empty container image is not allowed")
   }
@@ -591,7 +589,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("mergeDriverTemplate should merge template with runtime configuration") {
-    val template = JobSubmitRequestItem(
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
       priority = 0.5,
       namespace = "template-namespace",
       annotations = Map("template-annotation" -> "template-value"),
@@ -623,6 +621,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
               k8s.io.api.core.v1.generated
                 .Container()
                 .withName("driver-template-container")
+                .withImage("driver-template-image:1.0")
                 .withVolumeMounts(
                   Seq(
                     k8s.io.api.core.v1.generated
@@ -675,9 +674,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       executorJobItemTemplate = None,
       cliConfig = cliConfig
     )
-
-    val runtimeAnnotations = Map("runtime-annotation" -> "runtime-value")
-    val runtimeLabels      = Map("runtime-label" -> "runtime-value")
 
     val result = armadaClientApp.mergeDriverTemplate(
       template,
@@ -758,7 +754,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("mergeDriverTemplate should handle template without podSpec") {
-    val template = JobSubmitRequestItem(
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
       priority = 1.0,
       namespace = "template-namespace",
       annotations = Map.empty,
@@ -1017,10 +1013,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     container.resources should not be empty
     val resources = container.resources.get
-    resources.limits should contain key ("memory")
-    resources.limits should contain key ("cpu")
-    resources.requests should contain key ("memory")
-    resources.requests should contain key ("cpu")
+    resources.limits should contain key "memory"
+    resources.limits should contain key "cpu"
+    resources.requests should contain key "memory"
+    resources.requests should contain key "cpu"
 
     result.services should have size 1
     result.services.head.ports should contain(7078)
@@ -1105,7 +1101,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .filter(e => e.name.isDefined && e.value.isDefined)
       .map(e => e.name.get -> e.value.get)
       .toMap
-    envVars should contain key ("SPARK_EXECUTOR_ID")
+    envVars should contain key "SPARK_EXECUTOR_ID"
     envVars should contain(
       "SPARK_DRIVER_URL" -> "spark://CoarseGrainedScheduler@driver-service:7078"
     )
@@ -1113,10 +1109,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     container.resources should not be empty
     val resources = container.resources.get
-    resources.limits should contain key ("memory")
-    resources.limits should contain key ("cpu")
-    resources.requests should contain key ("memory")
-    resources.requests should contain key ("cpu")
+    resources.limits should contain key "memory"
+    resources.limits should contain key "cpu"
+    resources.requests should contain key "memory"
+    resources.requests should contain key "cpu"
   }
 
   test("createDriverJob should handle both template and non-template cases") {
@@ -1259,7 +1255,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     results should have size 2
-    results.zipWithIndex.foreach { case (job, index) =>
+    results.zipWithIndex.foreach { case (job, _) =>
       job.priority shouldBe 1.0
       job.namespace shouldBe "test-namespace"
       job.podSpec should not be empty
@@ -1286,7 +1282,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         .filter(e => e.name.isDefined && e.value.isDefined)
         .map(e => e.name.get -> e.value.get)
         .toMap
-      envVars should contain key ("SPARK_EXECUTOR_ID")
+      envVars should contain key "SPARK_EXECUTOR_ID"
       envVars should contain(
         "SPARK_DRIVER_URL" -> "spark://CoarseGrainedScheduler@driver-service:7078"
       )
@@ -1348,5 +1344,151 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
     exception.getMessage should include("Failed to parse template as YAML")
     exception.getMessage should include("malformed-template.yaml")
+  }
+
+  test("container image should follow precedence: CLI > template > error") {
+    val templateWithImage = JobSubmitRequestItem(
+      priority = 1.0,
+      namespace = "template-namespace",
+      annotations = Map.empty,
+      labels = Map.empty,
+      podSpec = Some(
+        PodSpec()
+          .withContainers(
+            Seq(
+              k8s.io.api.core.v1.generated
+                .Container()
+                .withName("template-container")
+                .withImage("template-image:1.0")
+            )
+          )
+      )
+    )
+
+    val cliConfig = armadaClientApp.CLIConfig(
+      queue = Some("test-queue"),
+      jobSetId = Some("test-job-set"),
+      namespace = Some("test-namespace"),
+      priority = Some(1.0),
+      containerImage = Some("cli-image:2.0"),
+      podLabels = Map.empty,
+      driverLabels = Map.empty,
+      executorLabels = Map.empty,
+      armadaClusterUrl = Some("armada://localhost:50051"),
+      nodeSelectors = Map.empty,
+      nodeUniformityLabel = None,
+      executorConnectionTimeout = Some(300.seconds),
+      driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
+      executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
+    )
+
+    val resolvedConfig = armadaClientApp.resolveJobConfig(
+      cliConfig,
+      Some(templateWithImage),
+      Map.empty,
+      Map.empty,
+      sparkConf
+    )
+
+    resolvedConfig.containerImage shouldBe "cli-image:2.0"
+
+    val cliConfigWithoutImage = cliConfig.copy(containerImage = None)
+    val resolvedConfigWithTemplateImage = armadaClientApp.resolveJobConfig(
+      cliConfigWithoutImage,
+      Some(templateWithImage),
+      Map.empty,
+      Map.empty,
+      sparkConf
+    )
+
+    resolvedConfigWithTemplateImage.containerImage shouldBe "template-image:1.0"
+  }
+
+  test("validateRequiredConfig should require both templates to have container image") {
+    val driverTemplateWithImage = JobSubmitRequestItem(
+      priority = 1.0,
+      namespace = "template-namespace",
+      annotations = Map.empty,
+      labels = Map.empty,
+      podSpec = Some(
+        PodSpec()
+          .withContainers(
+            Seq(
+              k8s.io.api.core.v1.generated
+                .Container()
+                .withName("driver")
+                .withImage("driver-template-image:1.0")
+            )
+          )
+      )
+    )
+
+    val executorTemplateWithImage = JobSubmitRequestItem(
+      priority = 1.0,
+      namespace = "template-namespace",
+      annotations = Map.empty,
+      labels = Map.empty,
+      podSpec = Some(
+        PodSpec()
+          .withContainers(
+            Seq(
+              k8s.io.api.core.v1.generated
+                .Container()
+                .withName("executor")
+                .withImage("executor-template-image:1.0")
+            )
+          )
+      )
+    )
+
+    val cliConfigWithoutImage = armadaClientApp.CLIConfig(
+      queue = Some("test-queue"),
+      jobSetId = Some("test-job-set"),
+      namespace = Some("test-namespace"),
+      priority = Some(1.0),
+      containerImage = None,
+      podLabels = Map.empty,
+      driverLabels = Map.empty,
+      executorLabels = Map.empty,
+      armadaClusterUrl = Some("armada://localhost:50051"),
+      nodeSelectors = Map.empty,
+      nodeUniformityLabel = None,
+      executorConnectionTimeout = Some(300.seconds),
+      driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
+      executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
+    )
+
+    // Should succeed when both templates have images
+    armadaClientApp.validateRequiredConfig(
+      cliConfigWithoutImage,
+      None,
+      Some(driverTemplateWithImage),
+      Some(executorTemplateWithImage),
+      sparkConf
+    )
+
+    // Should fail when only driver template has image
+    val exception1 = intercept[IllegalArgumentException] {
+      armadaClientApp.validateRequiredConfig(
+        cliConfigWithoutImage,
+        None,
+        Some(driverTemplateWithImage),
+        None,
+        sparkConf
+      )
+    }
+    exception1.getMessage should include("BOTH driver and executor")
+
+    // Should fail when only executor template has image
+    val exception2 = intercept[IllegalArgumentException] {
+      armadaClientApp.validateRequiredConfig(
+        cliConfigWithoutImage,
+        None,
+        None,
+        Some(executorTemplateWithImage),
+        sparkConf
+      )
+    }
+    exception2.getMessage should include("BOTH driver and executor")
   }
 }

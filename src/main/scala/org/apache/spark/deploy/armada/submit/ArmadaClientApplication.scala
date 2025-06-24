@@ -131,10 +131,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // scalastyle:on println
   }
 
-  // ========================================================================
-  // ENTRY POINTS
-  // ========================================================================
-
   override def start(args: Array[String], conf: SparkConf): Unit = {
     log("ArmadaClientApplication.start() called!")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
@@ -194,9 +190,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val cliConfig = parseCLIConfig(conf)
 
-    validateRequiredConfig(cliConfig, jobTemplate, conf)
+    validateRequiredConfig(
+      cliConfig,
+      jobTemplate,
+      driverJobItemTemplate,
+      executorJobItemTemplate,
+      conf
+    )
 
-    // Resolve using precedence: CLI > Template (validation already done)
     val finalQueue = cliConfig.queue
       .filter(_.nonEmpty)
       .orElse(jobTemplate.map(_.queue).filter(_.nonEmpty))
@@ -275,7 +276,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.cliConfig.executorLabels
     )
 
-    // Resolve executor-specific config
     val executorResolvedConfig = resolveJobConfig(
       armadaJobConfig.cliConfig,
       armadaJobConfig.executorJobItemTemplate,
@@ -403,6 +403,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   CLI configuration parsed from --conf options
     * @param jobTemplate
     *   Optional job template for validation
+    * @param driverJobItemTemplate
+    *   Optional driver job item template for validation
+    * @param executorJobItemTemplate
+    *   Optional executor job item template for validation
     * @param conf
     *   Spark configuration
     * @throws IllegalArgumentException
@@ -411,17 +415,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private[submit] def validateRequiredConfig(
       cliConfig: CLIConfig,
       jobTemplate: Option[api.submit.JobSubmitRequest],
+      driverJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
+      executorJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
       conf: SparkConf
   ): Unit = {
-    if (cliConfig.containerImage.exists(_.isEmpty)) {
-      throw new IllegalArgumentException(
-        s"Empty container image is not allowed. Please set a valid container image via ${CONTAINER_IMAGE.key}"
-      )
-    } else if (cliConfig.containerImage.isEmpty) {
-      throw new IllegalArgumentException(
-        s"Container image must be set via ${CONTAINER_IMAGE.key}"
-      )
-    }
+    validateContainerImage(cliConfig, driverJobItemTemplate, executorJobItemTemplate)
 
     val hasValidQueue = cliConfig.queue.exists(_.nonEmpty) ||
       jobTemplate.exists(_.queue.nonEmpty)
@@ -499,8 +497,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       "default"
     )
 
-    // Container image is guaranteed to exist and be non-empty after validation
-    val containerImage = cliConfig.containerImage.get
+    val containerImage = cliConfig.containerImage
+      .orElse(extractContainerImageFromTemplate(template))
+      .get // Safe to use .get because validation ensures container image exists
     val armadaClusterUrl = resolveValue(
       cliConfig.armadaClusterUrl,
       None,
@@ -1117,6 +1116,43 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .map(_.volumeMounts)
       .getOrElse(Seq.empty)
     (templateVolumes, templateVolumeMounts)
+  }
+
+  // Helper method to extract container image from a template
+  private def extractContainerImageFromTemplate(
+      template: Option[api.submit.JobSubmitRequestItem]
+  ): Option[String] = {
+    for {
+      t         <- template
+      podSpec   <- t.podSpec
+      container <- podSpec.containers.headOption
+      image     <- container.image
+    } yield image
+  }
+
+  // Validates that container image is provided either via CLI or in both templates
+  private def validateContainerImage(
+      cliConfig: CLIConfig,
+      driverTemplate: Option[api.submit.JobSubmitRequestItem],
+      executorTemplate: Option[api.submit.JobSubmitRequestItem]
+  ): Unit = {
+    cliConfig.containerImage match {
+      case Some(image) if image.isEmpty =>
+        throw new IllegalArgumentException(
+          s"Empty container image is not allowed. Please set a valid container image via ${CONTAINER_IMAGE.key}"
+        )
+      case None =>
+        val driverImage   = extractContainerImageFromTemplate(driverTemplate)
+        val executorImage = extractContainerImageFromTemplate(executorTemplate)
+
+        if (driverImage.isEmpty || executorImage.isEmpty) {
+          throw new IllegalArgumentException(
+            s"Container image must be set via ${CONTAINER_IMAGE.key} or provided in BOTH driver and executor job item templates " +
+              s"(found driver: ${driverImage.isDefined}, executor: ${executorImage.isDefined})"
+          )
+        }
+      case Some(_) => // Valid non-empty image provided via CLI
+    }
   }
 
   // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh
