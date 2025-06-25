@@ -1,0 +1,9 @@
+priority: 1.0
+namespace: default
+annotations:
+  armada/component: spark-executor
+  armada/template: spark-pi-executor
+labels:
+  app: spark-pi
+  component: executor
+  template-source: e2e-test

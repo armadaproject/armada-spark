@@ -88,12 +88,17 @@ Before submitting a pull request, please ensure that your code adheres to the pr
 
 ### Testing
 
-To run the tests, use the following command:
+To run the unit tests, use the following command:
 
 ```bash
 mvn test
 ```
 
+To run the E2E tests, run Armada using the [Operator Quickstart](https://github.com/armadaproject/armada-operator?tab=readme-ov-file#quickstart) guide, then execute:
+
+```bash
+scripts/test-e2e.sh
+```
 ### Linting
 
 To check the code for linting issues, use the following command:

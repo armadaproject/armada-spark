@@ -211,9 +211,17 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 - `spark.armada.executor.labels` - A comma-separated list of kubernetes labels
     (in key=value format) to be added to all Executor pods.
 - `spark.armada.runAsUser` - the numeric id of user to run job as, usually 185 for the spark user on the apache spark images.
-
 - `spark.executor.memory` - Amount of memory to use per executor process, in the same format as JVM memory
     strings with a size unit suffix ("k", "m", "g" or "t") (e.g. 512m, 2g).
+- `spark.armada.jobTemplate` - URL or file path to a job template YAML file. 
+    Supports local files (with or without file:// prefix) and HTTP/HTTPS URLs. 
+    The template should contain JobSubmitRequest configuration in YAML format.
+- `spark.armada.driver.jobItemTemplate` - URL or file path to a job item template YAML file for the driver. 
+    Supports local files (with or without file:// prefix) and HTTP/HTTPS URLs. 
+    The template should contain a JobSubmitRequestItem configuration in YAML format.
+- `spark.armada.executor.jobItemTemplate` - URL or file path to a job item template YAML file for the executors.
+    Supports local files (with or without file:// prefix) and HTTP/HTTPS URLs.
+    The template should contain a JobSubmitRequestItem configuration in YAML format.
 
 # Building `armada-spark`
 

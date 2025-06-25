@@ -1,0 +1,9 @@
+priority: 1.0
+namespace: default
+annotations:
+  armada/component: spark-driver
+  armada/template: spark-pi-driver
+labels:
+  app: spark-pi
+  component: driver
+  template-source: e2e-test

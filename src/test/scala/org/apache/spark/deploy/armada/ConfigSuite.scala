@@ -40,4 +40,64 @@ class ConfigSuite extends AnyFunSuite with TableDrivenPropertyChecks with Matche
       commaSeparatedLabelsToMap(labels) shouldEqual expected
     }
   }
+
+  test("isValidFilePath") {
+    import java.lang.reflect.Method
+
+    // Access the private method using reflection
+    val method: Method = Config.getClass.getDeclaredMethod("isValidFilePath", classOf[String])
+    method.setAccessible(true)
+
+    def callIsValidFilePath(path: String): Boolean = {
+      method.invoke(Config, path).asInstanceOf[Boolean]
+    }
+
+    val validPaths = Table(
+      "path",
+      // Absolute paths
+      "/absolute/path/to/template.yaml",
+      "/home/user/template.yaml",
+      "/etc/spark/config.yaml",
+
+      // Relative paths
+      "relative/path/to/template.yaml",
+      "config/template.yaml",
+      "./template.yaml",
+      "../config/template.yaml",
+      "template.yaml",
+
+      // File URIs
+      "file:///absolute/path/to/template.yaml",
+      "file:///home/user/template.yaml",
+      "FILE:///etc/spark/config.yaml",
+
+      // HTTP/HTTPS URLs
+      "http://config-server.example.com/spark-template.yaml",
+      "https://config-server.example.com/spark-template.yaml",
+      "HTTP://localhost:8080/template.yaml",
+      "HTTPS://server.com/config.yaml"
+    )
+
+    val invalidPaths = Table(
+      "path",
+      // Empty string
+      "",
+
+      // Invalid protocols
+      "ftp://server.com/template.yaml",
+      "ssh://server.com/template.yaml",
+      "hdfs://namenode/path/to/template.yaml",
+
+      // Malformed URIs
+      "://invalid/uri"
+    )
+
+    forAll(validPaths) { path =>
+      callIsValidFilePath(path) shouldBe true
+    }
+
+    forAll(invalidPaths) { path =>
+      callIsValidFilePath(path) shouldBe false
+    }
+  }
 }
