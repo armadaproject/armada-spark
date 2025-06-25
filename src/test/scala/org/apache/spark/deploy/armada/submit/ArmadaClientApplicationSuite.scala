@@ -167,7 +167,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     emptyImageException.getMessage should include("Empty container image is not allowed")
   }
 
-  test("validateArmadaJobConfig should accept gangUniformityLabel instead of nodeSelectors") {
+  test("validateArmadaJobConfig should correctly parse gangUniformityLabel configuration") {
     sparkConf.remove(Config.ARMADA_JOB_NODE_SELECTORS.key)
     sparkConf.set(Config.ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key, "zone")
 
@@ -877,7 +877,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.executorConnectionTimeout shouldBe 120.seconds
   }
 
-  test("resolveTemplateValues should merge template and runtime values") {
+  test("resolveJobConfig should merge template and runtime values") {
     val template = JobSubmitRequestItem(
       priority = 1.5,
       namespace = "template-namespace",
@@ -1115,7 +1115,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     resources.requests should contain key "cpu"
   }
 
-  test("createDriverJob should handle both template and non-template cases") {
+  test("createDriverJob should create driver job without templates") {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
       jobSetId = Some("test-job-set"),
@@ -1404,7 +1404,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     resolvedConfigWithTemplateImage.containerImage shouldBe "template-image:1.0"
   }
 
-  test("validateRequiredConfig should require both templates to have container image") {
+  test(
+    "validateRequiredConfig should require both templates to have container image when CLI image not provided"
+  ) {
     val driverTemplateWithImage = JobSubmitRequestItem(
       priority = 1.0,
       namespace = "template-namespace",
@@ -1491,4 +1493,24 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
     exception2.getMessage should include("BOTH driver and executor")
   }
+
+  test("missing CLI values should follow precedence rules with templates") {
+    val templateFile = createJobTemplateFile("template-queue", "template-job-set")
+    sparkConf.set(Config.ARMADA_JOB_TEMPLATE.key, templateFile.getAbsolutePath)
+
+    // Missing queue from CLI - should use template value
+    sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
+    sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "cli-job-set")
+    val configWithMissingQueue = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    configWithMissingQueue.queue shouldBe "template-queue"
+    configWithMissingQueue.jobSetId shouldBe "cli-job-set"
+
+    // Missing jobSetId from CLI - should use template value
+    sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "cli-queue")
+    sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
+    val configWithMissingJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    configWithMissingJobSetId.queue shouldBe "cli-queue"
+    configWithMissingJobSetId.jobSetId shouldBe "template-job-set"
+  }
+
 }
