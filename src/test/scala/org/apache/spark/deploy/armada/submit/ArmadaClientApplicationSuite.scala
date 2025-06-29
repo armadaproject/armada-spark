@@ -346,7 +346,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      template,
+      Some(template),
       0,
       resolvedConfig,
       armadaJobConfig,
@@ -496,7 +496,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      template,
+      Some(template),
       1,
       resolvedConfig,
       armadaJobConfig,
@@ -1037,7 +1037,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.services.head.ports should contain(7078)
   }
 
-  test("newExecutorJobItem should create valid executor job specification") {
+  test("mergeExecutorTemplate should create valid executor job specification when no template provided") {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
       jobSetId = Some("test-job-set"),
@@ -1065,25 +1065,37 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = "test-job-set",
       jobTemplate = None,
       driverJobItemTemplate = None,
-      executorJobItemTemplate = None,
+      executorJobItemTemplate = None, // No template provided
       cliConfig = cliConfig
     )
 
-    val result = armadaClientApp.newExecutorJobItem(
-      index = 1,
-      priority = 1.0,
+    val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
+      priority = 1.0,
+      containerImage = "spark:3.5.0",
+      armadaClusterUrl = "armada://localhost:50051",
+      executorConnectionTimeout = 300.seconds,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "executor"),
-      image = "spark:3.5.0",
+      nodeSelectors = Map.empty,
+      driverResources = armadaClientApp.ResolvedResourceConfig(None, None, None, None),
+      executorResources = armadaClientApp.ResolvedResourceConfig(
+        limitCores = Some("1"),
+        requestCores = Some("1"),
+        limitMemory = Some("1Gi"),
+        requestMemory = Some("1Gi")
+      )
+    )
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      template = None, // No template - will create blank one internally
+      index = 1,
+      resolvedConfig = resolvedConfig,
+      armadaJobConfig = armadaJobConfig,
       javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g")),
-      nodeUniformityLabel = Some("zone"),
       driverHostname = "driver-service",
       driverPort = 7078,
       volumes = Seq.empty,
-      nodeSelectors = Map.empty,
-      connectionTimeout = 300.seconds,
-      armadaJobConfig = armadaJobConfig,
       conf = sparkConf
     )
 
