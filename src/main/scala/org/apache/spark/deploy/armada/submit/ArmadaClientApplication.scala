@@ -711,6 +711,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(finalContainer))
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
 
     val finalServices = Seq(
       api.submit.ServiceConfig(
@@ -726,7 +727,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withAnnotations(resolvedConfig.annotations)
       .withPodSpec(finalPodSpec)
       .withServices(finalServices)
-      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
   }
 
   // Merges an executor job item template with runtime configuration.
