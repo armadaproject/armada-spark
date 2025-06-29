@@ -676,14 +676,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
-      template,
+      Some(template),
       resolvedConfig,
       armadaJobConfig,
       7078,
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq("--arg1", "--arg2")
+      Seq("--arg1", "--arg2"),
+      sparkConf
     )
 
     result.priority shouldBe 3.0
@@ -802,14 +803,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
-      template,
+      Some(template),
       resolvedConfig,
       armadaJobConfig,
       7078,
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq.empty[String]
+      Seq.empty[String],
+      sparkConf
     )
 
     result.podSpec should not be empty
@@ -930,7 +932,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.labels should contain("runtime-label" -> "runtime-value")
   }
 
-  test("newDriverJobItem should create valid driver job specification") {
+  test("mergeDriverTemplate should create valid driver job specification when no template provided") {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
       jobSetId = Some("test-job-set"),
@@ -957,25 +959,38 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       queue = "test-queue",
       jobSetId = "test-job-set",
       jobTemplate = None,
-      driverJobItemTemplate = None,
+      driverJobItemTemplate = None, // No template provided
       executorJobItemTemplate = None,
       cliConfig = cliConfig
     )
 
-    val result = armadaClientApp.newDriverJobItem(
-      master = "spark://driver:7077",
+    val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
       priority = 1.0,
+      containerImage = "spark:3.5.0",
+      armadaClusterUrl = "spark://driver:7077",
+      executorConnectionTimeout = 300.seconds,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "driver"),
-      driverImage = "spark:3.5.0",
+      nodeSelectors = Map("node-type" -> "compute"),
+      driverResources = armadaClientApp.ResolvedResourceConfig(
+        limitCores = Some("2"),
+        requestCores = Some("1"),
+        limitMemory = Some("2Gi"),
+        requestMemory = Some("1Gi")
+      ),
+      executorResources = armadaClientApp.ResolvedResourceConfig(None, None, None, None)
+    )
+
+    val result = armadaClientApp.mergeDriverTemplate(
+      template = None, // No template - will create blank one internally
+      resolvedConfig = resolvedConfig,
+      armadaJobConfig = armadaJobConfig,
       driverPort = 7078,
       mainClass = "org.example.SparkApp",
       volumes = Seq.empty,
       volumeMounts = Seq.empty,
-      nodeSelectors = Map("node-type" -> "compute"),
       additionalDriverArgs = Seq("--arg1", "value1"),
-      armadaJobConfig = armadaJobConfig,
       conf = sparkConf
     )
 
