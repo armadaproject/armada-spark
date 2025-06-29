@@ -346,7 +346,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      Some(template),
+      Some(template)
+
+      ,
       0,
       resolvedConfig,
       armadaJobConfig,
