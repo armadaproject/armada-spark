@@ -49,7 +49,8 @@ import org.apache.spark.deploy.armada.Config.{
   DEFAULT_MEM,
   DEFAULT_SPARK_EXECUTOR_CORES,
   DEFAULT_SPARK_EXECUTOR_MEMORY,
-  commaSeparatedLabelsToMap}
+  commaSeparatedLabelsToMap
+}
 import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
@@ -609,7 +610,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): String = {
     val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
     val driverJobId    = driverResponse.jobResponseItems.head.jobId
-    val error = if (driverResponse.jobResponseItems.head.error.nonEmpty) driverResponse.jobResponseItems.head.error else "none"
+    val error =
+      if (driverResponse.jobResponseItems.head.error.nonEmpty)
+        driverResponse.jobResponseItems.head.error
+      else "none"
     log(
       s"Submitted driver job with ID: $driverJobId, Error: $error"
     )
@@ -631,23 +635,23 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  /** Merges a driver job item template with runtime configuration.
-    * If no template is provided, creates a blank template first.
+  /** Merges a driver job item template with runtime configuration. If no template is provided,
+    * creates a blank template first.
     *
     * CLI configuration flags override template values. Some fields (containers, services,
     * restartPolicy, terminationGracePeriodSeconds) are always overridden to ensure correct Spark
     * behavior.
     */
   private[submit] def mergeDriverTemplate(
-    template: Option[api.submit.JobSubmitRequestItem],
-    resolvedConfig: ResolvedJobConfig,
-    armadaJobConfig: ArmadaJobConfig,
-    driverPort: Int,
-    mainClass: String,
-    volumes: Seq[Volume],
-    volumeMounts: Seq[VolumeMount],
-    additionalDriverArgs: Seq[String],
-    conf: SparkConf
+      template: Option[api.submit.JobSubmitRequestItem],
+      resolvedConfig: ResolvedJobConfig,
+      armadaJobConfig: ArmadaJobConfig,
+      driverPort: Int,
+      mainClass: String,
+      volumes: Seq[Volume],
+      volumeMounts: Seq[VolumeMount],
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
     val workingTemplate = getWorkingTemplate(template)
@@ -701,7 +705,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   // Create a blank template if none provided
   private def getWorkingTemplate(template: Option[JobSubmitRequestItem]): JobSubmitRequestItem = {
     template.getOrElse {
-      api.submit.JobSubmitRequestItem()
+      api.submit
+        .JobSubmitRequestItem()
         .withPriority(0.0)
         .withNamespace("default")
         .withLabels(Map.empty)
@@ -713,23 +718,23 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  /** Merges an executor job item template with runtime configuration.
-    * If no template is provided, creates a blank template first.
+  /** Merges an executor job item template with runtime configuration. If no template is provided,
+    * creates a blank template first.
     *
     * CLI configuration flags override template values. Some fields (containers, initContainers,
     * restartPolicy, terminationGracePeriodSeconds) are always overridden to ensure correct Spark
     * behavior.
     */
   private[submit] def mergeExecutorTemplate(
-    template: Option[api.submit.JobSubmitRequestItem],
-    index: Int,
-    resolvedConfig: ResolvedJobConfig,
-    armadaJobConfig: ArmadaJobConfig,
-    javaOptEnvVars: Seq[EnvVar],
-    driverHostname: String,
-    driverPort: Int,
-    volumes: Seq[Volume],
-    conf: SparkConf
+      template: Option[api.submit.JobSubmitRequestItem],
+      index: Int,
+      resolvedConfig: ResolvedJobConfig,
+      armadaJobConfig: ArmadaJobConfig,
+      javaOptEnvVars: Seq[EnvVar],
+      driverHostname: String,
+      driverPort: Int,
+      volumes: Seq[Volume],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
     // Create a blank template if none provided
