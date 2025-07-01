@@ -346,9 +346,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      Some(template)
-
-      ,
+      Some(template),
       0,
       resolvedConfig,
       armadaJobConfig,
@@ -934,7 +932,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.labels should contain("runtime-label" -> "runtime-value")
   }
 
-  test("mergeDriverTemplate should create valid driver job specification when no template provided") {
+  test(
+    "mergeDriverTemplate should create valid driver job specification when no template provided"
+  ) {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
       jobSetId = Some("test-job-set"),
@@ -1039,7 +1039,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.services.head.ports should contain(7078)
   }
 
-  test("mergeExecutorTemplate should create valid executor job specification when no template provided") {
+  test(
+    "mergeExecutorTemplate should create valid executor job specification when no template provided"
+  ) {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
       jobSetId = Some("test-job-set"),
