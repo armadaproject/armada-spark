@@ -120,6 +120,9 @@ private[spark] object ClientArguments {
 
 private[spark] object ArmadaClientApplication {
   private[submit] val DRIVER_PORT = 7078
+  private val DEFAULT_PRIORITY    = 0.0
+  private val DEFAULT_NAMESPACE   = "default"
+
 }
 
 /** Main class and entry point of application submission in KUBERNETES mode.
@@ -489,12 +492,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val resolvedPriority = resolveValue(
       cliConfig.priority,
       template.map(_.priority),
-      0.0
+      ArmadaClientApplication.DEFAULT_PRIORITY
     )
     val resolvedNamespace = resolveValue(
       cliConfig.namespace,
       template.map(_.namespace),
-      "default"
+      ArmadaClientApplication.DEFAULT_NAMESPACE
     )
 
     val containerImage = cliConfig.containerImage
@@ -707,8 +710,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     template.getOrElse {
       api.submit
         .JobSubmitRequestItem()
-        .withPriority(0.0)
-        .withNamespace("default")
+        .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
+        .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
         .withLabels(Map.empty)
         .withAnnotations(Map.empty)
         .withPodSpec(
