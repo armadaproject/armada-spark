@@ -987,7 +987,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       queue = "test-queue",
       jobSetId = "test-job-set",
       jobTemplate = None,
-      driverJobItemTemplate = None, // No template provided
+      driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig
     )
