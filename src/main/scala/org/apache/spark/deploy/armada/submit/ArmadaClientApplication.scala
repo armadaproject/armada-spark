@@ -318,7 +318,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors: Map[String, String],
       nodeUniformityLabel: Option[String],
       executorConnectionTimeout: Option[Duration],
-      runAsUser: Long,
+      runAsUser: Option[Long],
       driverResources: ResourceConfig,
       executorResources: ResourceConfig
   )
@@ -396,7 +396,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClusterUrl = Some(armadaClusterUrl),
       executorConnectionTimeout =
         Some(Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)),
-      runAsUser = runAsUser.get,
+      runAsUser = runAsUser,
       driverResources = driverResources,
       executorResources = executorResources
     )
@@ -504,7 +504,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
 
     val resolvedRunAsUser: Long = resolveValue(
-      Some(cliConfig.runAsUser),
+      cliConfig.runAsUser,
       extractRunAsUserFromTemplate(template),
       ArmadaClientApplication.DEFAULT_RUN_AS_USER
     )

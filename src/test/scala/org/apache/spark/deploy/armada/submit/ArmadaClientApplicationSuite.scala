@@ -37,6 +37,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val RUNTIME_PRIORITY           = 1.0
   private val TEMPLATE_PRIORITY          = 0.5
   private val EXECUTOR_TEMPLATE_PRIORITY = 2.5
+  private val RUNTIME_RUN_AS_USER        = 385
+  private val TEMPLATE_RUN_AS_USER       = 285
+  private val DEFAULT_RUN_AS_USER        = 185
 
   before {
     tempDir = Files.createTempDirectory("armada-client-test-")
@@ -113,6 +116,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     config.cliConfig.namespace shouldBe Some("test-namespace")
     config.cliConfig.priority shouldBe Some(RUNTIME_PRIORITY)
     config.cliConfig.containerImage shouldBe Some("spark:3.5.0")
+    config.cliConfig.runAsUser shouldBe None
     config.jobTemplate shouldBe None
     config.driverJobItemTemplate shouldBe None
     config.executorJobItemTemplate shouldBe None
@@ -311,6 +315,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map("node-type" -> "compute"),
       nodeUniformityLabel = Some("zone"),
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(
         limitCores = Some("1"),
         requestCores = Some("1"),
@@ -342,6 +347,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations =
         Map("runtime-annotation" -> "runtime-value", "template-annotation" -> "template-value"),
       labels = Map("runtime-label" -> "runtime-value", "template-label" -> "template-value"),
@@ -464,6 +470,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(
         limitCores = Some("1"),
         requestCores = Some("1"),
@@ -493,6 +500,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map.empty,
       labels = Map.empty,
       nodeSelectors = Map.empty,
@@ -566,6 +574,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -648,6 +657,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations =
         Map("runtime-annotation" -> "runtime-value", "template-annotation" -> "template-value"),
       labels = Map("runtime-label" -> "runtime-value", "template-label" -> "template-value"),
@@ -669,6 +679,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = Some("zone"),
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -774,6 +785,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map.empty,
       labels = Map.empty,
       nodeSelectors = Map.empty,
@@ -793,6 +805,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       armadaClusterUrl = Some("armada://localhost:50051"),
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
+      runAsUser = None,
       executorConnectionTimeout = Some(300.seconds),
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
@@ -862,6 +875,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       armadaClusterUrl = Some("armada://cli-url:50051"),
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
+      runAsUser = None,
       executorConnectionTimeout = Some(120.seconds),
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
@@ -902,6 +916,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       armadaClusterUrl = Some("armada://localhost:50051"),
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
+      runAsUser = None,
       executorConnectionTimeout = Some(300.seconds),
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
@@ -951,6 +966,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map("node-type" -> "compute"),
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(
         limitCores = Some("2"),
         requestCores = Some("1"),
@@ -975,6 +991,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "spark://driver:7077",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "driver"),
       nodeSelectors = Map("node-type" -> "compute"),
@@ -1056,6 +1073,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = Some("zone"),
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(
         limitCores = Some("1"),
@@ -1080,6 +1098,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "executor"),
       nodeSelectors = Map.empty,
@@ -1161,6 +1180,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -1171,6 +1191,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "driver"),
       nodeSelectors = Map.empty,
@@ -1247,6 +1268,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -1257,6 +1279,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
+      runAsUser = DEFAULT_RUN_AS_USER,
       annotations = Map("app" -> "spark-test"),
       labels = Map("component" -> "executor"),
       nodeSelectors = Map.empty,
@@ -1339,6 +1362,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         nodeSelectors = Map.empty,
         nodeUniformityLabel = None,
         executorConnectionTimeout = Some(300.seconds),
+        runAsUser = None,
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
         executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
       )
@@ -1408,6 +1432,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -1487,6 +1512,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = None,
       executorConnectionTimeout = Some(300.seconds),
+      runAsUser = None,
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
