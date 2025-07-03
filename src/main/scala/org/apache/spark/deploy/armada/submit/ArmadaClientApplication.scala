@@ -268,7 +268,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator,
       clientArguments,
       primaryResource,
-      confSeq)
+      confSeq
+    )
     val driverJobId =
       submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
 
@@ -574,7 +575,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       clientArguments: ClientArguments,
       primaryResource: Seq[String],
-      confSeq: Seq[String]): api.submit.JobSubmitRequestItem = {
+      confSeq: Seq[String]
+  ): api.submit.JobSubmitRequestItem = {
     val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     mergeDriverTemplate(
@@ -585,7 +587,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
-      driverArgs)
+      driverArgs
+    )
   }
 
   private[submit] def createExecutorJobs(
@@ -658,7 +661,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass: String,
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
-      additionalDriverArgs: Seq[String]): api.submit.JobSubmitRequestItem = {
+      additionalDriverArgs: Seq[String]
+  ): api.submit.JobSubmitRequestItem = {
 
     val workingTemplate = getWorkingTemplate(template)
 
@@ -1042,10 +1046,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       template: Option[api.submit.JobSubmitRequestItem]
   ): Option[Long] = {
     for {
-      t         <- template
-      podSpec   <- t.podSpec
+      t               <- template
+      podSpec         <- t.podSpec
       securityContext <- podSpec.securityContext
-      runAsUser     <- securityContext.runAsUser
+      runAsUser       <- securityContext.runAsUser
     } yield runAsUser
   }
 
