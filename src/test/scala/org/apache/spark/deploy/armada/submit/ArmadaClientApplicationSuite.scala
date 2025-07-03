@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import k8s.io.api.core.v1.generated.{EnvVar, PodSpec, Volume, VolumeMount}
+import k8s.io.api.core.v1.generated.{EnvVar, PodSecurityContext, PodSpec, Volume, VolumeMount}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
 import org.scalatest.BeforeAndAfter
@@ -221,6 +221,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     config.cliConfig.queue shouldBe Some("test-queue")
     config.cliConfig.jobSetId shouldBe Some("test-job-set")
   }
+
   test("mergeExecutorTemplate should merge template with runtime configuration") {
     val template: JobSubmitRequestItem = JobSubmitRequestItem(
       priority = TEMPLATE_PRIORITY,
@@ -283,6 +284,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
                 .withName("template-volume")
             )
           )
+          .withSecurityContext(new PodSecurityContext().withRunAsUser(TEMPLATE_RUN_AS_USER))
           .withContainers(
             Seq(
               k8s.io.api.core.v1.generated
@@ -315,7 +317,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map("node-type" -> "compute"),
       nodeUniformityLabel = Some("zone"),
       executorConnectionTimeout = Some(300.seconds),
-      runAsUser = None,
+      runAsUser = Some(RUNTIME_RUN_AS_USER),
       driverResources = armadaClientApp.ResourceConfig(
         limitCores = Some("1"),
         requestCores = Some("1"),
@@ -347,7 +349,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
-      runAsUser = DEFAULT_RUN_AS_USER,
+      runAsUser = RUNTIME_RUN_AS_USER,
       annotations =
         Map("runtime-annotation" -> "runtime-value", "template-annotation" -> "template-value"),
       labels = Map("runtime-label" -> "runtime-value", "template-label" -> "template-value"),
@@ -380,6 +382,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
+    podSpec.securityContext.get.runAsUser shouldBe Some(RUNTIME_RUN_AS_USER)
     podSpec.terminationGracePeriodSeconds shouldBe Some(0)
     podSpec.nodeSelector shouldBe Map("node-type" -> "compute")
 
@@ -632,6 +635,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
                 .withName("driver-template-volume")
             )
           )
+          .withSecurityContext(new PodSecurityContext().withRunAsUser(TEMPLATE_RUN_AS_USER))
           .withContainers(
             Seq(
               k8s.io.api.core.v1.generated
@@ -657,7 +661,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       containerImage = "spark:3.5.0",
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
-      runAsUser = DEFAULT_RUN_AS_USER,
+      runAsUser = RUNTIME_RUN_AS_USER,
       annotations =
         Map("runtime-annotation" -> "runtime-value", "template-annotation" -> "template-value"),
       labels = Map("runtime-label" -> "runtime-value", "template-label" -> "template-value"),
@@ -679,7 +683,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       nodeSelectors = Map.empty,
       nodeUniformityLabel = Some("zone"),
       executorConnectionTimeout = Some(300.seconds),
-      runAsUser = None,
+      runAsUser = Some(RUNTIME_RUN_AS_USER),
       driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
       executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
     )
@@ -714,6 +718,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
+    podSpec.securityContext.get.runAsUser shouldBe Some(RUNTIME_RUN_AS_USER)
     podSpec.terminationGracePeriodSeconds shouldBe Some(0)
     podSpec.nodeSelector shouldBe Map(
       "driver-node-type" -> "memory-optimized",
