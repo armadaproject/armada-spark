@@ -690,9 +690,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq("--arg1", "--arg2"),
-      sparkConf
-    )
+      Seq("--arg1", "--arg2"))
 
     result.priority shouldBe RUNTIME_PRIORITY
     result.namespace shouldBe "runtime-namespace"
@@ -817,9 +815,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq.empty[String],
-      sparkConf
-    )
+      Seq.empty[String])
 
     result.podSpec should not be empty
     val podSpec = result.podSpec.get
@@ -999,9 +995,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       mainClass = "org.example.SparkApp",
       volumes = Seq.empty,
       volumeMounts = Seq.empty,
-      additionalDriverArgs = Seq("--arg1", "value1"),
-      conf = sparkConf
-    )
+      additionalDriverArgs = Seq("--arg1", "value1"))
 
     result.priority shouldBe RUNTIME_PRIORITY
     result.namespace shouldBe "test-namespace"
