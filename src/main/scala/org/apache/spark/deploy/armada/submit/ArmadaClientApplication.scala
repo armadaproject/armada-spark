@@ -122,6 +122,7 @@ private[spark] object ArmadaClientApplication {
   private[submit] val DRIVER_PORT = 7078
   private val DEFAULT_PRIORITY    = 0.0
   private val DEFAULT_NAMESPACE   = "default"
+  private val DEFAULT_RUN_AS_USER = 185
 
 }
 
@@ -319,6 +320,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors: Map[String, String],
       nodeUniformityLabel: Option[String],
       executorConnectionTimeout: Option[Duration],
+      runAsUser: Long,
       driverResources: ResourceConfig,
       executorResources: ResourceConfig
   )
@@ -346,6 +348,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // Note: Don't filter empty strings here - validation should handle that later
     val queue          = conf.get(ARMADA_JOB_QUEUE)
     val jobSetId       = conf.get(ARMADA_JOB_SET_ID)
+    val runAsUser      = conf.get(ARMADA_RUN_AS_USER)
     val containerImage = conf.get(CONTAINER_IMAGE)
 
     val nodeSelectors       = conf.get(ARMADA_JOB_NODE_SELECTORS).map(commaSeparatedLabelsToMap)
@@ -395,6 +398,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClusterUrl = Some(armadaClusterUrl),
       executorConnectionTimeout =
         Some(Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)),
+      runAsUser = runAsUser.get,
       driverResources = driverResources,
       executorResources = executorResources
     )
@@ -449,6 +453,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       annotations: Map[String, String],
       labels: Map[String, String],
       nodeSelectors: Map[String, String],
+      runAsUser: Long,
       driverResources: ResolvedResourceConfig,
       executorResources: ResolvedResourceConfig
   )
@@ -500,6 +505,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       ArmadaClientApplication.DEFAULT_NAMESPACE
     )
 
+    val resolvedRunAsUser: Long = resolveValue(
+      Some(cliConfig.runAsUser),
+      extractRunAsUserFromTemplate(template),
+      ArmadaClientApplication.DEFAULT_RUN_AS_USER
+    )
+
     val containerImage = cliConfig.containerImage
       .orElse(extractContainerImageFromTemplate(template))
       .get // Safe to use .get because validation ensures container image exists
@@ -523,6 +534,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       annotations = mergedAnnotations,
       labels = mergedLabels,
       nodeSelectors = cliConfig.nodeSelectors,
+      runAsUser = resolvedRunAsUser,
       driverResources = ResolvedResourceConfig(
         cliConfig.driverResources.limitCores,
         cliConfig.driverResources.requestCores,
@@ -577,9 +589,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
-      driverArgs,
-      conf
-    )
+      driverArgs)
   }
 
   private[submit] def createExecutorJobs(
@@ -630,7 +640,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executors: Seq[api.submit.JobSubmitRequestItem]
   ): Seq[String] = {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
-
     executorsResponse.jobResponseItems.map { item =>
       val error = if (item.error.nonEmpty) item.error else "none"
       log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
@@ -653,9 +662,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass: String,
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
-      additionalDriverArgs: Seq[String],
-      conf: SparkConf
-  ): api.submit.JobSubmitRequestItem = {
+      additionalDriverArgs: Seq[String]): api.submit.JobSubmitRequestItem = {
 
     val workingTemplate = getWorkingTemplate(template)
 
@@ -687,7 +694,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(finalContainer))
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
-      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
 
     val finalServices = Seq(
       api.submit.ServiceConfig(
@@ -740,7 +747,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
-    // Create a blank template if none provided
     val workingTemplate = getWorkingTemplate(template)
 
     val resolvedTimeout = resolvedConfig.executorConnectionTimeout
@@ -783,7 +789,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(finalContainer))
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
-      .withSecurityContext(new PodSecurityContext().withRunAsUser(conf.get(ARMADA_RUN_AS_USER)))
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
 
     workingTemplate
       .withPriority(resolvedConfig.priority)
@@ -1034,6 +1040,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       container <- podSpec.containers.headOption
       image     <- container.image
     } yield image
+  }
+
+  private def extractRunAsUserFromTemplate(
+      template: Option[api.submit.JobSubmitRequestItem]
+  ): Option[Long] = {
+    for {
+      t         <- template
+      podSpec   <- t.podSpec
+      securityContext <- podSpec.securityContext
+      runAsUser     <- securityContext.runAsUser
+    } yield runAsUser
   }
 
   // Validates that container image is provided either via CLI or in both templates
