@@ -580,7 +580,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     mergeDriverTemplate(
-      armadaJobConfig.driverJobItemTemplate, // This can be None
+      armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
       ArmadaClientApplication.DRIVER_PORT,
@@ -730,10 +730,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   /** Merges an executor job item template with runtime configuration. If no template is provided,
     * creates a blank template first.
-    *
-    * CLI configuration flags override template values. Some fields (containers, initContainers,
-    * restartPolicy, terminationGracePeriodSeconds) are always overridden to ensure correct Spark
-    * behavior.
     */
   private[submit] def mergeExecutorTemplate(
       template: Option[api.submit.JobSubmitRequestItem],
