@@ -1202,9 +1202,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       configGenerator = configGenerator,
       clientArguments = clientArguments,
       primaryResource = Seq("app.jar"),
-      confSeq = Seq("--conf", "spark.executor.memory=1g"),
-      conf = sparkConf
-    )
+      confSeq = Seq("--conf", "spark.executor.memory=1g"))
 
     result.priority shouldBe RUNTIME_PRIORITY
     result.namespace shouldBe "test-namespace"

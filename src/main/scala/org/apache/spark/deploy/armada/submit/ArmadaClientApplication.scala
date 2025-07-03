@@ -268,9 +268,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator,
       clientArguments,
       primaryResource,
-      confSeq,
-      conf
-    )
+      confSeq)
     val driverJobId =
       submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
 
@@ -576,9 +574,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       clientArguments: ClientArguments,
       primaryResource: Seq[String],
-      confSeq: Seq[String],
-      conf: SparkConf
-  ): api.submit.JobSubmitRequestItem = {
+      confSeq: Seq[String]): api.submit.JobSubmitRequestItem = {
     val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     mergeDriverTemplate(
