@@ -623,7 +623,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
     val driverJobId    = driverResponse.jobResponseItems.head.jobId
     val error = Some(driverResponse.jobResponseItems.head.error)
-      .filter(_.nonEmpty).getOrElse("none")
+      .filter(_.nonEmpty)
+      .getOrElse("none")
     log(
       s"Submitted driver job with ID: $driverJobId, Error: $error"
     )
