@@ -638,7 +638,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Seq[String] = {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
-      val error = if (item.error.nonEmpty) item.error else "none"
+      val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
       log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
       item.jobId
     }
