@@ -137,7 +137,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication v1.2.1")
+    log("ArmadaClientApplication: starting.")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
