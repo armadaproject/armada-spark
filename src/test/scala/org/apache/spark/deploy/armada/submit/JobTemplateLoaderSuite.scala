@@ -19,6 +19,7 @@ package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
 import k8s.io.api.core.v1.generated.PodSpec
+import k8s.io.api.core.v1.generated.Pod
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -248,4 +249,10 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.namespace shouldBe "file-uri-namespace"
     result.labels should contain("source" -> "file-uri-test")
   }
+  test("test tmp file") {
+    val ydata  = JobTemplateLoader.loadFromFile("/tmp/test.yaml")
+    val result: Pod = JobTemplateLoader.unmarshal(ydata, classOf[Pod], "/tmp/test.yaml")
+    result.getMetadata.getNamespace  shouldBe  "default"
+  }
+
 }

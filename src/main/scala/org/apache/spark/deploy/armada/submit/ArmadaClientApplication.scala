@@ -57,6 +57,12 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
+import org.json4s.jackson.JsonMethods.{parse, pretty, render}
+import org.json4s.JsonDSL._
+import org.json4s.{DefaultFormats, Extraction, JValue}
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.JsonNode
+import io.fabric8.kubernetes.api.model.{Pod}
 
 import scala.collection.mutable
 import scala.concurrent.Await
@@ -136,8 +142,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // scalastyle:on println
   }
 
+  implicit val formats = DefaultFormats
+  private val objectMapper = new ObjectMapper()
+
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication v1.2.1")
+    log("ArmadaClientApplication: starting.")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -154,13 +163,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
-    val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
+    // val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
-    if (healthResp.status.isServing) {
-      log("Submit health good!")
-    } else {
-      log("Could not contact Armada!")
-    }
+    // if (healthResp.status.isServing) {
+    //   log("Submit health good!")
+    // } else {
+    //   log("Could not contact Armada!")
+    // }
 
     // # FIXME: Need to check how this is launched whether to submit a job or
     // to turn into driver / cluster manager mode.
@@ -695,6 +704,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
+
+//    log(s"Driver pod spec: ${pretty(render(Extraction.decompose(finalPodSpec)))}")
+
+    val jsonString = """{"containers":[{"image":"nginx:1.21","name":"nginx","ports":[{"containerPort":80,"name":"http"}],"resources":{"limits":{"cpu":"200m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}],"restartPolicy":"Always"}
+                       |""".stripMargin
 
     val finalServices = Seq(
       api.submit.ServiceConfig(
