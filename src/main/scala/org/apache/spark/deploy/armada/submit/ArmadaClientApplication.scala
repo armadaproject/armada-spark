@@ -17,40 +17,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
-  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
-  ARMADA_DRIVER_LIMIT_CORES,
-  ARMADA_DRIVER_LIMIT_MEMORY,
-  ARMADA_DRIVER_REQUEST_CORES,
-  ARMADA_DRIVER_REQUEST_MEMORY,
-  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
-  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
-  ARMADA_EXECUTOR_LIMIT_CORES,
-  ARMADA_EXECUTOR_LIMIT_MEMORY,
-  ARMADA_EXECUTOR_REQUEST_CORES,
-  ARMADA_EXECUTOR_REQUEST_MEMORY,
-  ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
-  ARMADA_JOB_NODE_SELECTORS,
-  ARMADA_JOB_QUEUE,
-  ARMADA_JOB_SET_ID,
-  ARMADA_JOB_TEMPLATE,
-  ARMADA_LOOKOUTURL,
-  ARMADA_RUN_AS_USER,
-  ARMADA_SERVER_INTERNAL_URL,
-  ARMADA_SPARK_DRIVER_LABELS,
-  ARMADA_SPARK_EXECUTOR_LABELS,
-  ARMADA_SPARK_JOB_NAMESPACE,
-  ARMADA_SPARK_JOB_PRIORITY,
-  ARMADA_SPARK_POD_LABELS,
-  CONTAINER_IMAGE,
-  DEFAULT_CORES,
-  DEFAULT_MEM,
-  DEFAULT_SPARK_EXECUTOR_CORES,
-  DEFAULT_SPARK_EXECUTOR_MEMORY,
-  commaSeparatedLabelsToMap
-}
+import org.apache.spark.deploy.armada.Config.{ARMADA_AUTH_TOKEN, ARMADA_DRIVER_JOB_ITEM_TEMPLATE, ARMADA_DRIVER_LIMIT_CORES, ARMADA_DRIVER_LIMIT_MEMORY, ARMADA_DRIVER_REQUEST_CORES, ARMADA_DRIVER_REQUEST_MEMORY, ARMADA_EXECUTOR_CONNECTION_TIMEOUT, ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE, ARMADA_EXECUTOR_LIMIT_CORES, ARMADA_EXECUTOR_LIMIT_MEMORY, ARMADA_EXECUTOR_REQUEST_CORES, ARMADA_EXECUTOR_REQUEST_MEMORY, ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, ARMADA_JOB_NODE_SELECTORS, ARMADA_JOB_QUEUE, ARMADA_JOB_SET_ID, ARMADA_JOB_TEMPLATE, ARMADA_LOOKOUTURL, ARMADA_RUN_AS_USER, ARMADA_SERVER_INTERNAL_URL, ARMADA_SPARK_DRIVER_LABELS, ARMADA_SPARK_EXECUTOR_LABELS, ARMADA_SPARK_JOB_NAMESPACE, ARMADA_SPARK_JOB_PRIORITY, ARMADA_SPARK_POD_LABELS, CONTAINER_IMAGE, DEFAULT_CORES, DEFAULT_MEM, DEFAULT_SPARK_EXECUTOR_CORES, DEFAULT_SPARK_EXECUTOR_MEMORY, commaSeparatedLabelsToMap}
 import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
@@ -62,8 +29,11 @@ import org.json4s.JsonDSL._
 import org.json4s.{DefaultFormats, Extraction, JValue}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-import io.fabric8.kubernetes.api.model.{Pod}
-
+import io.fabric8.kubernetes.api.model.Pod
+import io.fabric8.kubernetes.client.utils.Serialization
+import org.apache.spark.deploy.k8s.KubernetesDriverConf
+import org.apache.spark.deploy.k8s.submit.KubernetesDriverBuilder
+import org.apache.spark.deploy.k8s.submit.{PythonMainAppResource => KPMainAppResource}
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -160,6 +130,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
+    val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = sparkConf.clone(), appId = "",
+      mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"), mainClass = clientArguments.mainClass, appArgs = Array("100"), proxyUser = None), null)
+    println("gbjD: " + driverSpec)
+    val yamlString = Serialization.asYaml(driverSpec)
+    println("gbjyamlDriver: " + yamlString)
     val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)

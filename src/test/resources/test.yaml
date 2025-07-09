@@ -1,0 +1,110 @@
+---
+apiVersion: "v1"
+kind: "Pod"
+metadata:
+  annotations:
+    description: "Example pod with hostPath volume"
+    created-by: "fabric8-example"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+  labels:
+    app: "nginx"
+    version: "1.0"
+    environment: "production"
+  name: "example-pod"
+  namespace: "default"
+spec:
+  containers:
+  - env:
+    - name: "NGINX_PORT"
+      value: "80"
+    - name: "POD_NAME"
+      valueFrom:
+        fieldRef:
+          fieldPath: "metadata.name"
+    - name: "POD_IP"
+      valueFrom:
+        fieldRef:
+          fieldPath: "status.podIP"
+    image: "nginx:1.21"
+    imagePullPolicy: "IfNotPresent"
+    livenessProbe:
+      failureThreshold: 3
+      httpGet:
+        path: "/health"
+        port: 80
+        scheme: "HTTP"
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+    name: "nginx"
+    ports:
+    - containerPort: 80
+      name: "http"
+      protocol: "TCP"
+    - containerPort: 8080
+      name: "metrics"
+      protocol: "TCP"
+    readinessProbe:
+      httpGet:
+        path: "/ready"
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    volumeMounts:
+    - mountPath: "/usr/share/nginx/html"
+      name: "shared-data"
+      readOnly: false
+    - mountPath: "/etc/nginx/conf.d"
+      name: "config-volume"
+      readOnly: true
+  - args:
+    - "while true; do echo $(date): Processing logs >> /shared/logs/processor.log;\
+      \ sleep 30; done"
+    command:
+    - "sh"
+    - "-c"
+    image: "busybox:1.35"
+    imagePullPolicy: "IfNotPresent"
+    name: "log-processor"
+    volumeMounts:
+    - mountPath: "/shared/logs"
+      name: "shared-data"
+      readOnly: false
+      subPath: "logs"
+  hostname: "example-host"
+  initContainers:
+  - args:
+    - "echo 'Initializing...' && mkdir -p /shared/logs && echo 'Setup complete'"
+    command:
+    - "sh"
+    - "-c"
+    image: "alpine:3.15"
+    name: "init-setup"
+    volumeMounts:
+    - mountPath: "/shared"
+      name: "shared-data"
+  nodeSelector:
+    kubernetes.io/os: "linux"
+    node-type: "worker"
+  restartPolicy: "Always"
+  securityContext:
+    fsGroup: 2000
+    runAsGroup: 3000
+    runAsNonRoot: true
+    runAsUser: 1000
+  subdomain: "example-subdomain"
+  terminationGracePeriodSeconds: 30
+  volumes:
+  - hostPath:
+      path: "/host/shared-data"
+      type: "DirectoryOrCreate"
+    name: "shared-data"
+  - configMap:
+      defaultMode: 420
+      name: "app-config"
+    name: "config-volume"
+  - name: "secret-volume"
+    secret:
+      defaultMode: 256
+      secretName: "app-secret"

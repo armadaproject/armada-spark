@@ -54,4 +54,6 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.jobSetId="$JOBSET" \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
+    --conf spark.kubernetes.container.image=$IMAGE_NAME \
+    --conf spark.kubernetes.file.upload.path=/tmp \
     $FIRST_ARG  "${FINAL_ARGS[@]}"

@@ -26,13 +26,33 @@ import org.scalatest.matchers.should.Matchers
 
 import java.io.{File, FileWriter}
 import java.nio.file.{Files, Path}
+import io.fabric8.kubernetes.client.utils.Serialization
+import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.Config
+import org.apache.spark.deploy.k8s.KubernetesDriverConf
+import org.apache.spark.deploy.k8s.submit.KubernetesDriverBuilder
+import org.apache.spark.deploy.k8s.submit.{PythonMainAppResource => KPMainAppResource}
 
 class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
+  private var sparkConf: SparkConf       = _
 
   private var tempDir: Path = _
 
   before {
     tempDir = Files.createTempDirectory("job-template-loader-test-")
+
+    sparkConf = new SparkConf()
+      .set("spark.master", "armada://localhost:50051")
+      .set("spark.app.name", "test-app")
+      .set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
+      .set(Config.ARMADA_JOB_SET_ID.key, "test-job-set")
+      .set(Config.ARMADA_SPARK_JOB_NAMESPACE.key, "test-namespace")
+      .set(Config.ARMADA_SPARK_JOB_PRIORITY.key, 100.toString)
+      .set(Config.CONTAINER_IMAGE.key, "spark:3.5.0")
+      .set(Config.ARMADA_JOB_NODE_SELECTORS.key, "node-type=compute")
+      .set("spark.kubernetes.container.image", "hig1")
+      .set("spark.kubernetes.file.upload.path", "/tmp")
+
   }
 
   after {
@@ -255,4 +275,13 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.getMetadata.getNamespace  shouldBe  "default"
   }
 
+  test("driverSpec") {
+    val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = sparkConf.clone(), appId = "",
+      mainAppResource = KPMainAppResource("/tmp/test/pi.py"), mainClass = "org.apache.spark.deploy.PythonRunner", appArgs = Array("100"), proxyUser = None), null)
+    println("gbjD: " + driverSpec)
+    val yamlString = Serialization.asYaml(driverSpec.pod.container)
+    println("gbjyamlDriver: " + yamlString)
+    yamlString.length shouldBe 312
+
+  }
 }
