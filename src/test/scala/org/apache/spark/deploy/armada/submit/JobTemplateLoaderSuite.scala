@@ -20,6 +20,7 @@ package org.apache.spark.deploy.armada.submit
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
 import k8s.io.api.core.v1.generated.PodSpec
 import k8s.io.api.core.v1.generated.Pod
+import k8s.io.api.core.v1.generated.Container
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -27,12 +28,15 @@ import org.scalatest.matchers.should.Matchers
 import java.io.{File, FileWriter}
 import java.nio.file.{Files, Path}
 import io.fabric8.kubernetes.client.utils.Serialization
+import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.k8s.KubernetesDriverConf
+import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.deploy.k8s.submit.KubernetesDriverBuilder
 import org.apache.spark.deploy.k8s.submit.{PythonMainAppResource => KPMainAppResource}
-
+import org.apache.spark.SecurityManager
+import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
   private var sparkConf: SparkConf       = _
 
@@ -277,11 +281,27 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
 
   test("driverSpec") {
     val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = sparkConf.clone(), appId = "",
-      mainAppResource = KPMainAppResource("/tmp/test/pi.py"), mainClass = "org.apache.spark.deploy.PythonRunner", appArgs = Array("100"), proxyUser = None), null)
+      mainAppResource = KPMainAppResource("/tmp/test/pi.py"), mainClass = "org.apache.spark.deploy.PythonRunner", appArgs = Array("100"), proxyUser = None), new DefaultKubernetesClient())
     println("gbjD: " + driverSpec)
-    val yamlString = Serialization.asYaml(driverSpec.pod.container)
+    val yamlString = Serialization.asYaml(driverSpec.pod.pod)
     println("gbjyamlDriver: " + yamlString)
-    yamlString.length shouldBe 312
+    val result: Pod = JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
+    driverSpec.pod.container.setResources(null)
+    val containerString = Serialization.asYaml(driverSpec.pod.container)
+    val containerResult: Container = JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
+    containerResult.getImage shouldBe  "hig1"
+
+    val executorConf = new KubernetesExecutorConf(sparkConf = sparkConf.clone(), appId = "appId", executorId = "execId", driverPod = None, resourceProfileId = 1)
+    val executorSpec =  new KubernetesExecutorBuilder().buildFromFeatures(executorConf, new SecurityManager(sparkConf), new DefaultKubernetesClient(), new ResourceProfile(executorResources = null, taskResources = null))
+    val execPodString = Serialization.asYaml(executorSpec.pod.pod)
+    val execPod: Pod = JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
+    executorSpec.pod.container.setResources(null)
+    val execContainerString = Serialization.asYaml(executorSpec.pod.container)
+    val execContainer: Container = JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
+    execContainer.getImage shouldBe  "hig1"
 
   }
+
+
+
 }
