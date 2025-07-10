@@ -51,6 +51,7 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     // NOTE: armada-spark driver submits executors alongside driver.
     // No need to start them here.
+    logInfo("Armada Cluster Backend: starting")
     executorTracker.start()
   }
 

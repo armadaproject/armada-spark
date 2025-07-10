@@ -331,13 +331,12 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
-  val ARMADA_RUN_AS_USER: ConfigEntry[Long] =
+  val ARMADA_RUN_AS_USER: OptionalConfigEntry[Long] =
     ConfigBuilder("spark.armada.runAsUser")
       .doc("Specify the numeric id of the Unix/OS user running inside the docker container.")
       .version("1.0.0")
       .longConf
-      // 185 is the id of the "spark" user on most spark images
-      .createWithDefaultString("185")
+      .createOptional
 
   val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.auth.token")
