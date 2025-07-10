@@ -38,7 +38,7 @@ import org.apache.spark.SecurityManager
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
-  private var sparkConf: SparkConf       = _
+  private var sparkConf: SparkConf = _
 
   private var tempDir: Path = _
 
@@ -274,14 +274,23 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.labels should contain("source" -> "file-uri-test")
   }
   test("test tmp file") {
-    val ydata  = JobTemplateLoader.loadFromFile("/tmp/test.yaml")
+    val ydata       = JobTemplateLoader.loadFromFile("/tmp/test.yaml")
     val result: Pod = JobTemplateLoader.unmarshal(ydata, classOf[Pod], "/tmp/test.yaml")
-    result.getMetadata.getNamespace  shouldBe  "default"
+    result.getMetadata.getNamespace shouldBe "default"
   }
 
   test("driverSpec") {
-    val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = sparkConf.clone(), appId = "",
-      mainAppResource = KPMainAppResource("/tmp/test/pi.py"), mainClass = "org.apache.spark.deploy.PythonRunner", appArgs = Array("100"), proxyUser = None), new DefaultKubernetesClient())
+    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
+      new KubernetesDriverConf(
+        sparkConf = sparkConf.clone(),
+        appId = "",
+        mainAppResource = KPMainAppResource("/tmp/test/pi.py"),
+        mainClass = "org.apache.spark.deploy.PythonRunner",
+        appArgs = Array("100"),
+        proxyUser = None
+      ),
+      new DefaultKubernetesClient()
+    )
     println("gbjD: " + driverSpec)
     driverSpec.pod.pod.getSpec.setVolumes(null)
     driverSpec.pod.pod.setApiVersion(null)
@@ -291,21 +300,33 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     val result: PodSpec = JobTemplateLoader.unmarshal(yamlString, classOf[PodSpec], "driver")
     driverSpec.pod.container.setResources(null)
     val containerString = Serialization.asYaml(driverSpec.pod.container)
-    val containerResult: Container = JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
-    containerResult.getImage shouldBe  "hig1"
+    val containerResult: Container =
+      JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
+    containerResult.getImage shouldBe "hig1"
 
-    val executorConf = new KubernetesExecutorConf(sparkConf = sparkConf.clone(), appId = "appId", executorId = "execId", driverPod = None, resourceProfileId = 1)
-    val executorSpec =  new KubernetesExecutorBuilder().buildFromFeatures(executorConf, new SecurityManager(sparkConf), new DefaultKubernetesClient(), new ResourceProfile(executorResources = null, taskResources = null))
+    val executorConf = new KubernetesExecutorConf(
+      sparkConf = sparkConf.clone(),
+      appId = "appId",
+      executorId = "execId",
+      driverPod = None,
+      resourceProfileId = 1
+    )
+    val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
+      executorConf,
+      new SecurityManager(sparkConf),
+      new DefaultKubernetesClient(),
+      new ResourceProfile(executorResources = null, taskResources = null)
+    )
     executorSpec.pod.pod.getSpec.setVolumes(null)
     val execPodString = Serialization.asYaml(executorSpec.pod.pod.getSpec)
-    val execPod: PodSpec = JobTemplateLoader.unmarshal(execPodString, classOf[PodSpec], "executor pod")
+    val execPod: PodSpec =
+      JobTemplateLoader.unmarshal(execPodString, classOf[PodSpec], "executor pod")
     executorSpec.pod.container.setResources(null)
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
-    val execContainer: Container = JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
-    execContainer.getImage shouldBe  "hig1"
+    val execContainer: Container =
+      JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
+    execContainer.getImage shouldBe "hig1"
 
   }
-
-
 
 }

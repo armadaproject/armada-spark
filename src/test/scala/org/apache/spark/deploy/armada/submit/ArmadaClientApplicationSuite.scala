@@ -133,13 +133,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.set(Config.ARMADA_JOB_TEMPLATE.key, templateFile.getAbsolutePath)
 
     sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
-    val configWithTemplateQueue = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
+    val configWithTemplateQueue =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateQueue.queue shouldBe "template-queue"
     configWithTemplateQueue.jobSetId shouldBe "test-job-set"
 
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithTemplateJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
+    val configWithTemplateJobSetId =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateJobSetId.queue shouldBe "test-queue"
     configWithTemplateJobSetId.jobSetId shouldBe "template-job-set"
   }
@@ -1566,7 +1568,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Missing jobSetId from CLI - should use template value
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "cli-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithMissingJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
+    val configWithMissingJobSetId =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingJobSetId.queue shouldBe "cli-queue"
     configWithMissingJobSetId.jobSetId shouldBe "template-job-set"
   }

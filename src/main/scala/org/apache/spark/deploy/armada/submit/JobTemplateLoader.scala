@@ -111,7 +111,7 @@ private[spark] object JobTemplateLoader {
   }
 
   // Loads template content from a local file.
- def loadFromFile(filePath: String): String = {
+  def loadFromFile(filePath: String): String = {
     Try {
       val file = new File(filePath)
       if (!file.exists()) {
@@ -147,7 +147,7 @@ private[spark] object JobTemplateLoader {
     * @return
     *   Parsed template object
     */
- def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
+  def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
     Try {
       yamlMapper.readValue(content, clazz)
     } match {

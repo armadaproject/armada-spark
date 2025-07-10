@@ -17,7 +17,40 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import org.apache.spark.deploy.armada.Config.{ARMADA_AUTH_TOKEN, ARMADA_DRIVER_JOB_ITEM_TEMPLATE, ARMADA_DRIVER_LIMIT_CORES, ARMADA_DRIVER_LIMIT_MEMORY, ARMADA_DRIVER_REQUEST_CORES, ARMADA_DRIVER_REQUEST_MEMORY, ARMADA_EXECUTOR_CONNECTION_TIMEOUT, ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE, ARMADA_EXECUTOR_LIMIT_CORES, ARMADA_EXECUTOR_LIMIT_MEMORY, ARMADA_EXECUTOR_REQUEST_CORES, ARMADA_EXECUTOR_REQUEST_MEMORY, ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, ARMADA_JOB_NODE_SELECTORS, ARMADA_JOB_QUEUE, ARMADA_JOB_SET_ID, ARMADA_JOB_TEMPLATE, ARMADA_LOOKOUTURL, ARMADA_RUN_AS_USER, ARMADA_SERVER_INTERNAL_URL, ARMADA_SPARK_DRIVER_LABELS, ARMADA_SPARK_EXECUTOR_LABELS, ARMADA_SPARK_JOB_NAMESPACE, ARMADA_SPARK_JOB_PRIORITY, ARMADA_SPARK_POD_LABELS, CONTAINER_IMAGE, DEFAULT_CORES, DEFAULT_MEM, DEFAULT_SPARK_EXECUTOR_CORES, DEFAULT_SPARK_EXECUTOR_MEMORY, commaSeparatedLabelsToMap}
+import org.apache.spark.deploy.armada.Config.{
+  ARMADA_AUTH_TOKEN,
+  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
+  ARMADA_DRIVER_LIMIT_CORES,
+  ARMADA_DRIVER_LIMIT_MEMORY,
+  ARMADA_DRIVER_REQUEST_CORES,
+  ARMADA_DRIVER_REQUEST_MEMORY,
+  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
+  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
+  ARMADA_EXECUTOR_LIMIT_CORES,
+  ARMADA_EXECUTOR_LIMIT_MEMORY,
+  ARMADA_EXECUTOR_REQUEST_CORES,
+  ARMADA_EXECUTOR_REQUEST_MEMORY,
+  ARMADA_HEALTH_CHECK_TIMEOUT,
+  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
+  ARMADA_JOB_NODE_SELECTORS,
+  ARMADA_JOB_QUEUE,
+  ARMADA_JOB_SET_ID,
+  ARMADA_JOB_TEMPLATE,
+  ARMADA_LOOKOUTURL,
+  ARMADA_RUN_AS_USER,
+  ARMADA_SERVER_INTERNAL_URL,
+  ARMADA_SPARK_DRIVER_LABELS,
+  ARMADA_SPARK_EXECUTOR_LABELS,
+  ARMADA_SPARK_JOB_NAMESPACE,
+  ARMADA_SPARK_JOB_PRIORITY,
+  ARMADA_SPARK_POD_LABELS,
+  CONTAINER_IMAGE,
+  DEFAULT_CORES,
+  DEFAULT_MEM,
+  DEFAULT_SPARK_EXECUTOR_CORES,
+  DEFAULT_SPARK_EXECUTOR_MEMORY,
+  commaSeparatedLabelsToMap
+}
 import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
@@ -116,7 +149,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // scalastyle:on println
   }
 
-  implicit val formats = DefaultFormats
+  implicit val formats     = DefaultFormats
   private val objectMapper = new ObjectMapper()
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
@@ -134,8 +167,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
-    val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = sparkConf.clone(), appId = "",
-      mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"), mainClass = clientArguments.mainClass, appArgs = Array("100"), proxyUser = None), null)
+    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
+      new KubernetesDriverConf(
+        sparkConf = sparkConf.clone(),
+        appId = "",
+        mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"),
+        mainClass = clientArguments.mainClass,
+        appArgs = Array("100"),
+        proxyUser = None
+      ),
+      null
+    )
     println("gbjD: " + driverSpec)
     val yamlString = Serialization.asYaml(driverSpec)
     println("gbjyamlDriver: " + yamlString)
@@ -164,7 +206,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ()
   }
 
-      private[spark] def validateArmadaJobConfig(conf: SparkConf, clientArguments: ClientArguments = null): ArmadaJobConfig = {
+  private[spark] def validateArmadaJobConfig(
+      conf: SparkConf,
+      clientArguments: ClientArguments = null
+  ): ArmadaJobConfig = {
     val jobTemplate: Option[api.submit.JobSubmitRequest] = conf
       .get(ARMADA_JOB_TEMPLATE)
       .filter(_.nonEmpty)
@@ -200,7 +245,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .orElse(jobTemplate.map(_.jobSetId).filter(_.nonEmpty))
       .getOrElse(conf.getAppId)
 
-    val (driverPodSpec, driverContainer) = getDriverFeatureSteps(conf, clientArguments)
+    val (driverPodSpec, driverContainer)     = getDriverFeatureSteps(conf, clientArguments)
     val (executorPodSpec, executorContainer) = getExecutorFeatureSteps(conf, clientArguments)
     ArmadaJobConfig(
       queue = finalQueue,
@@ -213,29 +258,56 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverFeatureStepContainer = driverContainer,
       executorFeatureStepPodSpec = executorPodSpec,
       executorFeatureStepContainer = executorContainer
-
     )
   }
 
   private def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
-    val executorConf = new KubernetesExecutorConf(sparkConf = conf.clone(), appId = "appId", executorId = "execId", driverPod = None, resourceProfileId = 1)
-    val executorSpec =  new KubernetesExecutorBuilder().buildFromFeatures(executorConf, new SecurityManager(conf), new DefaultKubernetesClient(), new ResourceProfile(executorResources = null, taskResources = null))
+    val executorConf = new KubernetesExecutorConf(
+      sparkConf = conf.clone(),
+      appId = "appId",
+      executorId = "execId",
+      driverPod = None,
+      resourceProfileId = 1
+    )
+    val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
+      executorConf,
+      new SecurityManager(conf),
+      new DefaultKubernetesClient(),
+      new ResourceProfile(executorResources = null, taskResources = null)
+    )
     val execPodString = Serialization.asYaml(executorSpec.pod.pod)
-    val execPod: k8s.io.api.core.v1.generated.Pod = JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
+    val execPod: k8s.io.api.core.v1.generated.Pod =
+      JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
+
+
     executorSpec.pod.container.setResources(null)
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
-    val execContainer: k8s.io.api.core.v1.generated.Container = JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
+    val execContainer: k8s.io.api.core.v1.generated.Container =
+      JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
     (Some(execPod.getSpec), Some(execContainer))
   }
+
   private def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
-    println("gbjargs: " + clientArguments.driverArgs.toString)
-    val driverSpec =  new KubernetesDriverBuilder().buildFromFeatures(new KubernetesDriverConf(sparkConf = conf.clone(), appId = "",
-      mainAppResource = KPMainAppResource("spark-internal"), mainClass = clientArguments.mainClass, appArgs = Array("100"), proxyUser = None), new DefaultKubernetesClient())
+
+    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
+      new KubernetesDriverConf(
+        sparkConf = conf.clone(),
+        appId = "",
+        mainAppResource = KPMainAppResource("spark-internal"),
+        mainClass = clientArguments.mainClass,
+        appArgs = Array("100"),
+        proxyUser = None
+      ),
+      new DefaultKubernetesClient()
+    )
     val yamlString = Serialization.asYaml(driverSpec.pod.pod)
-    val pod: k8s.io.api.core.v1.generated.Pod = JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
+    val pod: k8s.io.api.core.v1.generated.Pod =
+      JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
+
     driverSpec.pod.container.setResources(null)
     val containerString = Serialization.asYaml(driverSpec.pod.container)
-    val container: k8s.io.api.core.v1.generated.Container = JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
+    val container: k8s.io.api.core.v1.generated.Container =
+      JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
     (Some(pod.getSpec), Some(container))
   }
 
@@ -587,7 +659,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverFeatureStepPodSpec: Option[PodSpec] = None,
       driverFeatureStepContainer: Option[Container] = None,
       executorFeatureStepPodSpec: Option[PodSpec] = None,
-      executorFeatureStepContainer: Option[Container] = None,
+      executorFeatureStepContainer: Option[Container] = None
   )
 
   private[submit] def createDriverJob(
@@ -720,7 +792,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
 //    log(s"Driver pod spec: ${pretty(render(Extraction.decompose(finalPodSpec)))}")
 
-    val jsonString = """{"containers":[{"image":"nginx:1.21","name":"nginx","ports":[{"containerPort":80,"name":"http"}],"resources":{"limits":{"cpu":"200m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}],"restartPolicy":"Always"}
+    val jsonString =
+      """{"containers":[{"image":"nginx:1.21","name":"nginx","ports":[{"containerPort":80,"name":"http"}],"resources":{"limits":{"cpu":"200m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}],"restartPolicy":"Always"}
                        |""".stripMargin
 
     val finalServices = Seq(
