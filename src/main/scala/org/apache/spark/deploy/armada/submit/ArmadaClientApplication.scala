@@ -280,7 +280,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
 
 
-    executorSpec.pod.container.setResources(null)
     executorSpec.pod.container.setVolumeMounts(null)
 
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
@@ -306,7 +305,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val pod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
 
-    driverSpec.pod.container.setResources(null)
     driverSpec.pod.container.setVolumeMounts(null)
 
     val containerString = Serialization.asYaml(driverSpec.pod.container)

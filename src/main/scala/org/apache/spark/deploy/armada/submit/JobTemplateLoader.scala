@@ -17,9 +17,12 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.core.{JsonParser, JsonProcessingException}
+import com.fasterxml.jackson.databind.{DeserializationContext, DeserializationFeature, JsonDeserializer, ObjectMapper}
+import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
 import java.io.File
 import java.net.{HttpURLConnection, URL}
@@ -41,8 +44,30 @@ private[spark] object JobTemplateLoader {
   private val yamlMapper: ObjectMapper = {
     val mapper = new ObjectMapper(new YAMLFactory())
     mapper.registerModule(DefaultScalaModule)
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
+    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
+    // Register custom deserializer for Quantity class
+    val module = new SimpleModule()
+    module.addDeserializer(classOf[Quantity], new QuantityDeserializer())
+    mapper.registerModule(module)
+
     mapper
+  }
+
+  /**
+   * Custom deserializer for Quantity objects.
+   * Handles converting string values like '1433Mi' into Quantity objects.
+   */
+  private class QuantityDeserializer extends JsonDeserializer[Quantity] {
+    @throws(classOf[JsonProcessingException])
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {
+      val value = p.getValueAsString
+      if (value == null || value.isEmpty) {
+        null
+      } else {
+        new Quantity(Option(value))
+      }
+    }
   }
 
   /** Loads a JobSubmitRequest template from the specified path.
