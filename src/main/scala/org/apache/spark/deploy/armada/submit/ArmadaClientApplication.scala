@@ -958,6 +958,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
 
     armadaJobConfig.driverFeatureStepContainer.get
+      .withArgs(
+        Seq(
+          "driver",
+          "--verbose",
+          "--master",
+          master,
+          "--class",
+          mainClass,
+          "--conf",
+          s"spark.driver.port=$port",
+          "--conf",
+          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
+        ) ++ additionalDriverArgs
+      )
       .withVolumeMounts(volumeMounts)
       .withResources(
         ResourceRequirements(
@@ -1039,6 +1053,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ) ++ nodeUniformityLabel
       .map(label => EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL").withValue(label))
     armadaJobConfig.executorFeatureStepContainer.get
+      .withEnv(envVars ++ javaOptEnvVars)
       .withResources(
         ResourceRequirements(
           requests = executorRequests,
