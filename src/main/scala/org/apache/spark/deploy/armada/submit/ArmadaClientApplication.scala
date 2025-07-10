@@ -17,63 +17,23 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
-  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
-  ARMADA_DRIVER_LIMIT_CORES,
-  ARMADA_DRIVER_LIMIT_MEMORY,
-  ARMADA_DRIVER_REQUEST_CORES,
-  ARMADA_DRIVER_REQUEST_MEMORY,
-  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
-  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
-  ARMADA_EXECUTOR_LIMIT_CORES,
-  ARMADA_EXECUTOR_LIMIT_MEMORY,
-  ARMADA_EXECUTOR_REQUEST_CORES,
-  ARMADA_EXECUTOR_REQUEST_MEMORY,
-  ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
-  ARMADA_JOB_NODE_SELECTORS,
-  ARMADA_JOB_QUEUE,
-  ARMADA_JOB_SET_ID,
-  ARMADA_JOB_TEMPLATE,
-  ARMADA_LOOKOUTURL,
-  ARMADA_RUN_AS_USER,
-  ARMADA_SERVER_INTERNAL_URL,
-  ARMADA_SPARK_DRIVER_LABELS,
-  ARMADA_SPARK_EXECUTOR_LABELS,
-  ARMADA_SPARK_JOB_NAMESPACE,
-  ARMADA_SPARK_JOB_PRIORITY,
-  ARMADA_SPARK_POD_LABELS,
-  CONTAINER_IMAGE,
-  DEFAULT_CORES,
-  DEFAULT_MEM,
-  DEFAULT_SPARK_EXECUTOR_CORES,
-  DEFAULT_SPARK_EXECUTOR_MEMORY,
-  commaSeparatedLabelsToMap
-}
 import io.armadaproject.armada.ArmadaClient
+import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import io.fabric8.kubernetes.client.utils.Serialization
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import org.apache.spark.SparkConf
+import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkApplication
+import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, PythonMainAppResource => KPMainAppResource}
+import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
+import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
-import org.json4s.jackson.JsonMethods.{parse, pretty, render}
-import org.json4s.JsonDSL._
-import org.json4s.{DefaultFormats, Extraction, JValue}
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.JsonNode
-import io.fabric8.kubernetes.client.utils.Serialization
-import org.apache.spark.deploy.k8s.submit.KubernetesDriverBuilder
-import org.apache.spark.deploy.k8s.submit.{PythonMainAppResource => KPMainAppResource}
+import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
+
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
-import org.apache.spark.SecurityManager
-import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 
 /** Encapsulates arguments to the submission client.
   *
@@ -149,9 +109,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // scalastyle:on println
   }
 
-  implicit val formats     = DefaultFormats
-  private val objectMapper = new ObjectMapper()
-
   override def start(args: Array[String], conf: SparkConf): Unit = {
     log("ArmadaClientApplication: starting.")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
@@ -167,30 +124,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"host is $host, port is $port")
 
-    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
-      new KubernetesDriverConf(
-        sparkConf = sparkConf.clone(),
-        appId = "",
-        mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"),
-        mainClass = clientArguments.mainClass,
-        appArgs = Array("100"),
-        proxyUser = None
-      ),
-      null
-    )
-    println("gbjD: " + driverSpec)
-    val yamlString = Serialization.asYaml(driverSpec)
-    println("gbjyamlDriver: " + yamlString)
     val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
-    // val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
+    val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
-    // if (healthResp.status.isServing) {
-    //   log("Submit health good!")
-    // } else {
-    //   log("Could not contact Armada!")
-    // }
+    if (healthResp.status.isServing) {
+      log("Submit health good!")
+    } else {
+      log("Could not contact Armada!")
+    }
 
     // # FIXME: Need to check how this is launched whether to submit a job or
     // to turn into driver / cluster manager mode.
@@ -280,6 +223,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
 
 
+    // TODO_GBJ: volumes not marshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     executorSpec.pod.container.setVolumeMounts(null)
 
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
@@ -305,12 +249,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val pod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
 
+    // TODO_GBJ: volumes not marshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     driverSpec.pod.container.setVolumeMounts(null)
 
     val containerString = Serialization.asYaml(driverSpec.pod.container)
     val container: k8s.io.api.core.v1.generated.Container = {
       JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
     }
+
+    // TODO_GBJ: spark-k8s supports uploading local files.  Investigate.
     val newArgs = container.args
       .map(arg => if (arg.contains("spark-upload"))
         "/opt/spark/examples/src/main/python/pi.py" else arg )
@@ -721,10 +668,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): String = {
     val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
     val driverJobId    = driverResponse.jobResponseItems.head.jobId
-    val error =
-      if (driverResponse.jobResponseItems.head.error.nonEmpty)
-        driverResponse.jobResponseItems.head.error
-      else "none"
+    val error = Some(driverResponse.jobResponseItems.head.error)
+      .filter(_.nonEmpty)
+      .getOrElse("none")
     log(
       s"Submitted driver job with ID: $driverJobId, Error: $error"
     )
@@ -739,7 +685,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Seq[String] = {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
-      val error = if (item.error.nonEmpty) item.error else "none"
+      val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
       log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
       item.jobId
     }
@@ -795,12 +741,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
-
-//    log(s"Driver pod spec: ${pretty(render(Extraction.decompose(finalPodSpec)))}")
-
-    val jsonString =
-      """{"containers":[{"image":"nginx:1.21","name":"nginx","ports":[{"containerPort":80,"name":"http"}],"resources":{"limits":{"cpu":"200m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}],"restartPolicy":"Always"}
-                       |""".stripMargin
 
     val finalServices = Seq(
       api.submit.ServiceConfig(

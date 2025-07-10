@@ -136,7 +136,7 @@ private[spark] object JobTemplateLoader {
   }
 
   // Loads template content from a local file.
-  def loadFromFile(filePath: String): String = {
+  private def loadFromFile(filePath: String): String = {
     Try {
       val file = new File(filePath)
       if (!file.exists()) {

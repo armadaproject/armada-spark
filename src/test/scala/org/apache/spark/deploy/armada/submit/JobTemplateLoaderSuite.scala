@@ -17,26 +17,21 @@
 
 package org.apache.spark.deploy.armada.submit
 
-import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
-import k8s.io.api.core.v1.generated.PodSpec
-import k8s.io.api.core.v1.generated.Pod
-import k8s.io.api.core.v1.generated.Container
+import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import io.fabric8.kubernetes.client.utils.Serialization
+import k8s.io.api.core.v1.generated.{Container, PodSpec}
+import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.deploy.armada.Config
+import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, PythonMainAppResource => KPMainAppResource}
+import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
+import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
 import java.io.{File, FileWriter}
 import java.nio.file.{Files, Path}
-import io.fabric8.kubernetes.client.utils.Serialization
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import org.apache.spark.SparkConf
-import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
-import org.apache.spark.deploy.k8s.submit.KubernetesDriverBuilder
-import org.apache.spark.deploy.k8s.submit.{PythonMainAppResource => KPMainAppResource}
-import org.apache.spark.SecurityManager
-import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
   private var sparkConf: SparkConf = _
 
@@ -272,11 +267,6 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.priority shouldBe 4.0
     result.namespace shouldBe "file-uri-namespace"
     result.labels should contain("source" -> "file-uri-test")
-  }
-  test("test tmp file") {
-    val ydata       = JobTemplateLoader.loadFromFile("/tmp/test.yaml")
-    val result: Pod = JobTemplateLoader.unmarshal(ydata, classOf[Pod], "/tmp/test.yaml")
-    result.getMetadata.getNamespace shouldBe "default"
   }
 
   test("driverSpec") {
