@@ -40,6 +40,12 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val RUNTIME_RUN_AS_USER        = 385
   private val TEMPLATE_RUN_AS_USER       = 285
   private val DEFAULT_RUN_AS_USER        = 185
+  private val clientArguments = ClientArguments(
+    mainAppResource = JavaMainAppResource(Some("app.jar")),
+    mainClass = "org.example.SparkApp",
+    driverArgs = Array("--input", "data.txt"),
+    proxyUser = None
+  )
 
   before {
     tempDir = Files.createTempDirectory("armada-client-test-")
@@ -109,7 +115,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("validateArmadaJobConfig should create config without templates") {
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.cliConfig.queue shouldBe Some("test-queue")
     config.cliConfig.jobSetId shouldBe Some("test-job-set")
@@ -127,13 +133,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.set(Config.ARMADA_JOB_TEMPLATE.key, templateFile.getAbsolutePath)
 
     sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
-    val configWithTemplateQueue = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithTemplateQueue = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateQueue.queue shouldBe "template-queue"
     configWithTemplateQueue.jobSetId shouldBe "test-job-set"
 
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithTemplateJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithTemplateJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateJobSetId.queue shouldBe "test-queue"
     configWithTemplateJobSetId.jobSetId shouldBe "template-job-set"
   }
@@ -142,34 +148,34 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
     sparkConf.set("spark.app.id", "test-app-id")
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     config.jobSetId shouldBe "test-app-id"
   }
 
   test("should validate required configuration values") {
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "")
     val emptyQueueException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyQueueException.getMessage should include("Queue name must be set")
 
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "")
     val emptyJobSetIdException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyJobSetIdException.getMessage should include("Empty jobSetId is not allowed")
 
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "test-job-set")
     sparkConf.remove(Config.CONTAINER_IMAGE.key)
     val missingImageException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     missingImageException.getMessage should include("Container image must be set")
 
     sparkConf.set(Config.CONTAINER_IMAGE.key, "")
     val emptyImageException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyImageException.getMessage should include("Empty container image is not allowed")
   }
@@ -178,7 +184,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.remove(Config.ARMADA_JOB_NODE_SELECTORS.key)
     sparkConf.set(Config.ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key, "zone")
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.cliConfig.nodeSelectors shouldBe Map.empty
     config.cliConfig.nodeUniformityLabel shouldBe Some("zone")
@@ -202,7 +208,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       executorTemplateFile.getAbsolutePath
     )
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.jobTemplate should not be empty
     config.jobTemplate.get.queue shouldBe "all-template-queue"
@@ -1012,7 +1018,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
-      template = None, // No template - will create blank one internally
+      template = None,
       resolvedConfig = resolvedConfig,
       armadaJobConfig = armadaJobConfig,
       driverPort = 7078,
@@ -1120,7 +1126,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      template = None, // No template - will create blank one internally
+      template = None,
       index = 1,
       resolvedConfig = resolvedConfig,
       armadaJobConfig = armadaJobConfig,
@@ -1214,13 +1220,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig
-    )
-
-    val clientArguments = ClientArguments(
-      mainAppResource = JavaMainAppResource(Some("app.jar")),
-      mainClass = "org.example.SparkApp",
-      driverArgs = Array("--input", "data.txt"),
-      proxyUser = None
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1375,13 +1374,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
         executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
       )
-    )
-
-    val clientArguments = ClientArguments(
-      mainAppResource = JavaMainAppResource(Some("app.jar")),
-      mainClass = "org.example.SparkApp",
-      driverArgs = Array(),
-      proxyUser = None
     )
 
     sparkConf.set("spark.executor.instances", "0")
@@ -1567,14 +1559,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Missing queue from CLI - should use template value
     sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "cli-job-set")
-    val configWithMissingQueue = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithMissingQueue = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingQueue.queue shouldBe "template-queue"
     configWithMissingQueue.jobSetId shouldBe "cli-job-set"
 
     // Missing jobSetId from CLI - should use template value
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "cli-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithMissingJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithMissingJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingJobSetId.queue shouldBe "cli-queue"
     configWithMissingJobSetId.jobSetId shouldBe "template-job-set"
   }

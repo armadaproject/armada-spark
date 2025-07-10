@@ -41,7 +41,7 @@ private[spark] object JobTemplateLoader {
   private val yamlMapper: ObjectMapper = {
     val mapper = new ObjectMapper(new YAMLFactory())
     mapper.registerModule(DefaultScalaModule)
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
     mapper
   }
 
