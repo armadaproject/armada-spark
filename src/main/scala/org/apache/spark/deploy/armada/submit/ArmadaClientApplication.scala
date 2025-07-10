@@ -281,6 +281,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
 
     executorSpec.pod.container.setResources(null)
+    executorSpec.pod.container.setVolumeMounts(null)
+
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
     val execContainer: k8s.io.api.core.v1.generated.Container =
       JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
@@ -293,7 +295,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
         appId = "",
-        mainAppResource = KPMainAppResource("spark-internal"),
+        mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"),
         mainClass = clientArguments.mainClass,
         appArgs = Array("100"),
         proxyUser = None
@@ -305,10 +307,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
 
     driverSpec.pod.container.setResources(null)
+    driverSpec.pod.container.setVolumeMounts(null)
+
     val containerString = Serialization.asYaml(driverSpec.pod.container)
-    val container: k8s.io.api.core.v1.generated.Container =
+    val container: k8s.io.api.core.v1.generated.Container = {
       JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
-    (Some(pod.getSpec), Some(container))
+    }
+    val newArgs = container.args
+      .map(arg => if (arg.contains("spark-upload"))
+        "/opt/spark/examples/src/main/python/pi.py" else arg )
+        (Some(pod.getSpec), Some(container.withArgs(newArgs)))
   }
 
   private[submit] def submitArmadaJob(
