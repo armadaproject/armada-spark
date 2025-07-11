@@ -238,7 +238,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  private def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
+  private[spark] def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
       appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
@@ -265,7 +265,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     (Some(execPod.getSpec), Some(execContainer))
   }
 
-  private def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
+  private[spark] def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
 
     val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
       new KubernetesDriverConf(
