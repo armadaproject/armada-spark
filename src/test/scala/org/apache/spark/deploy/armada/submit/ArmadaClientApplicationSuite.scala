@@ -772,7 +772,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports should have size 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
@@ -893,7 +893,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports should have size 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
@@ -1090,7 +1090,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports should have size 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     container.resources should not be empty
@@ -1295,7 +1295,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports should have size 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1

@@ -940,6 +940,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(volumeMounts)
+      .withEnv(envVars)
       .withResources(
         ResourceRequirements(
           requests = driverRequests,
