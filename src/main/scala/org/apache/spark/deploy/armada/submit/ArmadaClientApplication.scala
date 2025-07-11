@@ -256,7 +256,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
 
 
-    // TODO_GBJ: volumes not marshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
+    // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     executorSpec.pod.container.setVolumeMounts(null)
 
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
@@ -282,7 +282,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val pod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
 
-    // TODO_GBJ: volumes not marshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
+    // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     driverSpec.pod.container.setVolumeMounts(null)
 
     val containerString = Serialization.asYaml(driverSpec.pod.container)
