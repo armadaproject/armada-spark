@@ -24,10 +24,10 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
-import java.io.File
+import java.io.{File, InputStream}
 import java.net.{HttpURLConnection, URL}
 import scala.io.Source
-import scala.util.{Failure, Success, Try, Using}
+import scala.util.{Failure, Success, Try}
 
 /** Utility class for loading job templates from various sources.
   *
@@ -125,9 +125,15 @@ private[spark] object JobTemplateLoader {
       connection.setConnectTimeout(10000) // 10 seconds
       connection.setReadTimeout(30000)    // 30 seconds
 
-      Using(connection.getInputStream) { inputStream =>
+      var inputStream: InputStream = null
+      try {
+        inputStream = connection.getInputStream
         Source.fromInputStream(inputStream, "UTF-8").mkString
-      }.get
+      } finally {
+        if (inputStream != null) {
+          inputStream.close()
+        }
+      }
     } match {
       case Success(content) => content
       case Failure(exception) =>
@@ -149,9 +155,15 @@ private[spark] object JobTemplateLoader {
         throw new RuntimeException(s"Cannot read template file: $filePath")
       }
 
-      Using(Source.fromFile(file, "UTF-8")) { source =>
+      var source: Source = null
+      try {
+        source = Source.fromFile(file, "UTF-8")
         source.mkString
-      }.get
+      } finally {
+        if (source != null) {
+          source.close()
+        }
+      }
     } match {
       case Success(content) => content
       case Failure(exception) =>
