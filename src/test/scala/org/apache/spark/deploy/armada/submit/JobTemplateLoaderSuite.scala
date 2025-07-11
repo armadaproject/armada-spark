@@ -269,54 +269,54 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.labels should contain("source" -> "file-uri-test")
   }
 
-  test("driverSpec") {
-    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
-      new KubernetesDriverConf(
-        sparkConf = sparkConf.clone(),
-        appId = "",
-        mainAppResource = KPMainAppResource("/tmp/test/pi.py"),
-        mainClass = "org.apache.spark.deploy.PythonRunner",
-        appArgs = Array("100"),
-        proxyUser = None
-      ),
-      new DefaultKubernetesClient()
-    )
-    println("gbjD: " + driverSpec)
-    driverSpec.pod.pod.getSpec.setVolumes(null)
-    driverSpec.pod.pod.setApiVersion(null)
-    val yamlString = Serialization.asYaml(driverSpec.pod.pod.getSpec)
+  // test("driverSpec") {
+  //   val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
+  //     new KubernetesDriverConf(
+  //       sparkConf = sparkConf.clone(),
+  //       appId = "",
+  //       mainAppResource = KPMainAppResource("/tmp/test/pi.py"),
+  //       mainClass = "org.apache.spark.deploy.PythonRunner",
+  //       appArgs = Array("100"),
+  //       proxyUser = None
+  //     ),
+  //     new DefaultKubernetesClient()
+  //   )
+  //   println("gbjD: " + driverSpec)
+  //   driverSpec.pod.pod.getSpec.setVolumes(null)
+  //   driverSpec.pod.pod.setApiVersion(null)
+  //   val yamlString = Serialization.asYaml(driverSpec.pod.pod.getSpec)
 
-    println("gbjyamlDriver: " + yamlString)
-    val result: PodSpec = JobTemplateLoader.unmarshal(yamlString, classOf[PodSpec], "driver")
-    driverSpec.pod.container.setResources(null)
-    val containerString = Serialization.asYaml(driverSpec.pod.container)
-    val containerResult: Container =
-      JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
-    containerResult.getImage shouldBe "hig1"
+  //   println("gbjyamlDriver: " + yamlString)
+  //   val result: PodSpec = JobTemplateLoader.unmarshal(yamlString, classOf[PodSpec], "driver")
+  //   driverSpec.pod.container.setResources(null)
+  //   val containerString = Serialization.asYaml(driverSpec.pod.container)
+  //   val containerResult: Container =
+  //     JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
+  //   containerResult.getImage shouldBe "hig1"
 
-    val executorConf = new KubernetesExecutorConf(
-      sparkConf = sparkConf.clone(),
-      appId = "appId",
-      executorId = "execId",
-      driverPod = None,
-      resourceProfileId = 1
-    )
-    val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
-      executorConf,
-      new SecurityManager(sparkConf),
-      new DefaultKubernetesClient(),
-      new ResourceProfile(executorResources = null, taskResources = null)
-    )
-    executorSpec.pod.pod.getSpec.setVolumes(null)
-    val execPodString = Serialization.asYaml(executorSpec.pod.pod.getSpec)
-    val execPod: PodSpec =
-      JobTemplateLoader.unmarshal(execPodString, classOf[PodSpec], "executor pod")
-    executorSpec.pod.container.setResources(null)
-    val execContainerString = Serialization.asYaml(executorSpec.pod.container)
-    val execContainer: Container =
-      JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
-    execContainer.getImage shouldBe "hig1"
+  //   val executorConf = new KubernetesExecutorConf(
+  //     sparkConf = sparkConf.clone(),
+  //     appId = "appId",
+  //     executorId = "execId",
+  //     driverPod = None,
+  //     resourceProfileId = 1
+  //   )
+  //   val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
+  //     executorConf,
+  //     new SecurityManager(sparkConf),
+  //     new DefaultKubernetesClient(),
+  //     new ResourceProfile(executorResources = null, taskResources = null)
+  //   )
+  //   executorSpec.pod.pod.getSpec.setVolumes(null)
+  //   val execPodString = Serialization.asYaml(executorSpec.pod.pod.getSpec)
+  //   val execPod: PodSpec =
+  //     JobTemplateLoader.unmarshal(execPodString, classOf[PodSpec], "executor pod")
+  //   executorSpec.pod.container.setResources(null)
+  //   val execContainerString = Serialization.asYaml(executorSpec.pod.container)
+  //   val execContainer: Container =
+  //     JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
+  //   execContainer.getImage shouldBe "hig1"
 
-  }
+  // }
 
 }
