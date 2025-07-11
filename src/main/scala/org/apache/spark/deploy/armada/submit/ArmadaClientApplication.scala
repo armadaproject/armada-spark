@@ -242,7 +242,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
       appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
-      executorId = "",
+      executorId = "0",
       driverPod = None,
     )
     val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
@@ -742,9 +742,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       additionalDriverArgs: Seq[String]
   ): api.submit.JobSubmitRequestItem = {
 
-    val workingTemplate = getWorkingTemplate(template)
-    workingTemplate.withPodSpec(armadaJobConfig.driverFeatureStepPodSpec.get)
-
+    val workingTemplate = getWorkingTemplate(template, armadaJobConfig.driverFeatureStepPodSpec)
     val (templateVolumes, templateVolumeMounts) = extractTemplateVolumesAndMounts(workingTemplate)
     val mergedVolumes                           = templateVolumes ++ volumes
     val mergedVolumeMounts                      = templateVolumeMounts ++ volumeMounts
@@ -792,18 +790,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   // Create a blank template if none provided
-  private def getWorkingTemplate(template: Option[JobSubmitRequestItem]): JobSubmitRequestItem = {
+  private def getWorkingTemplate(template: Option[JobSubmitRequestItem], featureStepPodSpec: Option[PodSpec]): JobSubmitRequestItem = {
     template.getOrElse {
-      api.submit
-        .JobSubmitRequestItem()
-        .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
-        .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
-        .withLabels(Map.empty)
-        .withAnnotations(Map.empty)
-        .withPodSpec(
-          PodSpec()
-            .withNodeSelector(Map.empty)
-        )
+        api.submit
+          .JobSubmitRequestItem()
+          .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
+          .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
+          .withLabels(Map.empty)
+          .withAnnotations(Map.empty)
+          .withPodSpec(featureStepPodSpec.getOrElse(PodSpec().withNodeSelector(Map.empty))
+       )
     }
   }
 
@@ -822,8 +818,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
-    val workingTemplate = getWorkingTemplate(template)
-    workingTemplate.withPodSpec(armadaJobConfig.executorFeatureStepPodSpec.get)
+    val workingTemplate = getWorkingTemplate(template, armadaJobConfig.executorFeatureStepPodSpec)
 
     val resolvedTimeout = resolvedConfig.executorConnectionTimeout
     val finalInitContainer = newExecutorInitContainer(
@@ -874,6 +869,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withAnnotations(resolvedConfig.annotations)
       .withPodSpec(finalPodSpec)
   }
+
 
   private def newDriverContainer(
       master: String,

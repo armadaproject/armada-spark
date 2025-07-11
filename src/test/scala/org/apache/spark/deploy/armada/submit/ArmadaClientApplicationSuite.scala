@@ -59,6 +59,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .set(Config.ARMADA_SPARK_JOB_PRIORITY.key, RUNTIME_PRIORITY.toString)
       .set(Config.CONTAINER_IMAGE.key, "spark:3.5.0")
       .set(Config.ARMADA_JOB_NODE_SELECTORS.key, "node-type=compute")
+      .set("spark.kubernetes.container.image", "k8s_image")
   }
 
   after {
