@@ -58,7 +58,7 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, PythonMainAppResource => KPMainAppResource}
+import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, MainAppResource, JavaMainAppResource, PythonMainAppResource, RMainAppResource}
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
@@ -128,6 +128,7 @@ private[spark] object ArmadaClientApplication {
   private[submit] val DRIVER_PORT = 7078
   private val DEFAULT_PRIORITY    = 0.0
   private val DEFAULT_NAMESPACE   = "default"
+  private val DEFAULT_APP_ID      = "sparkApp"
   private val DEFAULT_RUN_AS_USER = 185
 
 }
@@ -240,7 +241,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
-      appId = conf.getAppId,
+      appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
       executorId = "",
       driverPod = None,
     )
@@ -269,8 +270,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
-        appId = conf.getAppId,
-        mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"),
+        appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
+        mainAppResource = clientArguments.mainAppResource,
         mainClass = clientArguments.mainClass,
         appArgs = clientArguments.driverArgs,
         proxyUser = clientArguments.proxyUser

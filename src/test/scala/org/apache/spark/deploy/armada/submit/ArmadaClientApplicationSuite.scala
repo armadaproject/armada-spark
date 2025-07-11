@@ -21,6 +21,7 @@ import api.submit.JobSubmitRequestItem
 import k8s.io.api.core.v1.generated.{EnvVar, PodSecurityContext, PodSpec, Volume, VolumeMount}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
+import org.apache.spark.deploy.k8s.submit.{MainAppResource, JavaMainAppResource}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
