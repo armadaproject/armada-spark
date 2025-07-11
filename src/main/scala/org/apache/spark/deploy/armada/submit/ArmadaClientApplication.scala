@@ -294,7 +294,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val newArgs = container.args
       .map(arg => if (arg.contains("spark-upload"))
         "/opt/spark/examples/src/main/python/pi.py" else arg )
-        (Some(pod.getSpec), Some(container.withArgs(newArgs)))
+    (Some(pod.getSpec), Some(container.withArgs(newArgs)))
   }
 
   private[submit] def submitArmadaJob(
