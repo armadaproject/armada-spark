@@ -240,16 +240,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
-      appId = "appId",
-      executorId = "execId",
+      appId = conf.getAppId,
+      executorId = "",
       driverPod = None,
-      resourceProfileId = 1
     )
     val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
       executorConf,
       new SecurityManager(conf),
       new DefaultKubernetesClient(),
-      new ResourceProfile(executorResources = null, taskResources = null)
+      ResourceProfile.getOrCreateDefaultProfile(conf)
     )
     val execPodString = Serialization.asYaml(executorSpec.pod.pod)
     val execPod: k8s.io.api.core.v1.generated.Pod =
@@ -270,11 +269,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
-        appId = "",
+        appId = conf.getAppId,
         mainAppResource = KPMainAppResource("/opt/spark/examples/src/main/python/pi.py"),
         mainClass = clientArguments.mainClass,
-        appArgs = Array("100"),
-        proxyUser = None
+        appArgs = clientArguments.driverArgs,
+        proxyUser = clientArguments.proxyUser
       ),
       new DefaultKubernetesClient()
     )
