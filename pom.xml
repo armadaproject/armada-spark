@@ -39,7 +39,8 @@
         <spotless.version>2.44.4</spotless.version>
         <scalafmt.version>3.9.5</scalafmt.version>
 
-        <!-- kubernetes-client.version is set in profiles based on scala.minor.version -->
+        <kubernetes-client.version>7.1.0</kubernetes-client.version>
+        <jackson.version>2.15.12</jackson.version>
         <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
         <!-- SPARK-36796 for JDK-17 test-->
         <extraJavaTestArgs>
@@ -192,36 +193,6 @@
     </dependencies>
 
     <profiles>
-        <!-- Profile for Scala 2.12: use kubernetes-client 5.12.2 -->
-        <profile>
-            <id>scala-2.12</id>
-            <activation>
-                <property>
-                    <name>scala.minor.version</name>
-                    <value>12</value>
-                </property>
-            </activation>
-            <properties>
-                <kubernetes-client.version>5.12.2</kubernetes-client.version>
-                <jackson.version>2.13.4</jackson.version>
-            </properties>
-        </profile>
-
-        <!-- Profile for other Scala versions: use kubernetes-client 7.1.0 -->
-        <profile>
-            <id>scala-other</id>
-            <activation>
-                <property>
-                    <name>scala.minor.version</name>
-                    <value>!12</value>
-                </property>
-            </activation>
-            <properties>
-                <kubernetes-client.version>7.1.0</kubernetes-client.version>
-                <jackson.version>2.15.2</jackson.version>
-            </properties>
-        </profile>
-
         <profile>
             <id>spark-4</id>
             <activation>
