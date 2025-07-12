@@ -19,7 +19,7 @@ then
     spark_patch=${spark/*./}
     scala_patch=${scala/*./}
 
-    if [ "$park_minor" == "3" ]; then
+    if [ "$scala_minor" == "12" ]; then
         kubernetes_client_version=5.12.2
         jackson_version=2.13.4
     else
