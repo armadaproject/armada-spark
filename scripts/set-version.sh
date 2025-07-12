@@ -19,6 +19,13 @@ then
     spark_patch=${spark/*./}
     scala_patch=${scala/*./}
 
+    if [ "$scala_minor" == "12" ]; then
+        kubernetes_client_version=5.12.2
+        jackson_version=2.13.4
+    else
+        kubernetes_client_version=7.1.0
+        jackson_version=2.15.2
+    fi
     echo "setting spark=$spark and scala=$scala"
     sed -i -E \
         -e "s%^(    <artifactId>)([^_]+)[_0-9.]+(</artifactId>)$%\1\2_${scala_compat}\3%" \
@@ -28,6 +35,8 @@ then
         -e "s%^(        <spark.major.version>).+(</spark.major.version>)$%\1${spark_major}\2%" \
         -e "s%^(        <spark.minor.version>).+(</spark.minor.version>)$%\1${spark_minor}\2%" \
         -e "s%^(        <spark.patch.version>).+(</spark.patch.version>)$%\1${spark_patch}\2%" \
+        -e "s%^(        <kubernetes-client.version>).+(</kubernetes-client.version>)$%\1${kubernetes_client_version}\2%" \
+        -e "s%^(        <jackson.version>).+(</jackson.version>)$%\1${jackson_version}\2%" \
         "$root/pom.xml"
 else
     echo "Provide the Spark and Scala version to set"
