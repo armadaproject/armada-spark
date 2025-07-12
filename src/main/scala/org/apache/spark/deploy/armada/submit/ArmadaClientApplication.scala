@@ -58,7 +58,13 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, MainAppResource, JavaMainAppResource, PythonMainAppResource, RMainAppResource}
+import org.apache.spark.deploy.k8s.submit.{
+  KubernetesDriverBuilder,
+  MainAppResource,
+  JavaMainAppResource,
+  PythonMainAppResource,
+  RMainAppResource
+}
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
@@ -243,7 +249,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       sparkConf = conf.clone(),
       appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
       executorId = "0",
-      driverPod = None,
+      driverPod = None
     )
     val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
       executorConf,
@@ -254,7 +260,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val execPodString = Serialization.asYaml(executorSpec.pod.pod)
     val execPod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
-
 
     // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     executorSpec.pod.container.setVolumeMounts(null)
@@ -292,8 +297,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // TODO_GBJ: spark-k8s supports uploading local files.  Investigate.
     val newArgs = container.args
-      .map(arg => if (arg.contains("spark-upload"))
-        "/opt/spark/examples/src/main/python/pi.py" else arg )
+      .map(arg =>
+        if (arg.contains("spark-upload"))
+          "/opt/spark/examples/src/main/python/pi.py"
+        else arg
+      )
     (Some(pod.getSpec), Some(container.withArgs(newArgs)))
   }
 
@@ -790,16 +798,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   // Create a blank template if none provided
-  private def getWorkingTemplate(template: Option[JobSubmitRequestItem], featureStepPodSpec: Option[PodSpec]): JobSubmitRequestItem = {
+  private def getWorkingTemplate(
+      template: Option[JobSubmitRequestItem],
+      featureStepPodSpec: Option[PodSpec]
+  ): JobSubmitRequestItem = {
     template.getOrElse {
-        api.submit
-          .JobSubmitRequestItem()
-          .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
-          .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
-          .withLabels(Map.empty)
-          .withAnnotations(Map.empty)
-          .withPodSpec(featureStepPodSpec.getOrElse(PodSpec().withNodeSelector(Map.empty))
-       )
+      api.submit
+        .JobSubmitRequestItem()
+        .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
+        .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
+        .withLabels(Map.empty)
+        .withAnnotations(Map.empty)
+        .withPodSpec(featureStepPodSpec.getOrElse(PodSpec().withNodeSelector(Map.empty)))
     }
   }
 
@@ -869,7 +879,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withAnnotations(resolvedConfig.annotations)
       .withPodSpec(finalPodSpec)
   }
-
 
   private def newDriverContainer(
       master: String,

@@ -22,7 +22,10 @@ import io.fabric8.kubernetes.client.utils.Serialization
 import k8s.io.api.core.v1.generated.{Container, PodSpec}
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.k8s.submit.{KubernetesDriverBuilder, PythonMainAppResource => KPMainAppResource}
+import org.apache.spark.deploy.k8s.submit.{
+  KubernetesDriverBuilder,
+  PythonMainAppResource => KPMainAppResource
+}
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
@@ -268,6 +271,5 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.namespace shouldBe "file-uri-namespace"
     result.labels should contain("source" -> "file-uri-test")
   }
-
 
 }

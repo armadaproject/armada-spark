@@ -18,7 +18,12 @@ package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
 import com.fasterxml.jackson.core.{JsonParser, JsonProcessingException}
-import com.fasterxml.jackson.databind.{DeserializationContext, DeserializationFeature, JsonDeserializer, ObjectMapper}
+import com.fasterxml.jackson.databind.{
+  DeserializationContext,
+  DeserializationFeature,
+  JsonDeserializer,
+  ObjectMapper
+}
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -54,10 +59,9 @@ private[spark] object JobTemplateLoader {
     mapper
   }
 
-  /**
-   * Custom deserializer for Quantity objects.
-   * Handles converting string values like '1433Mi' into Quantity objects.
-   */
+  /** Custom deserializer for Quantity objects. Handles converting string values like '1433Mi' into
+    * Quantity objects.
+    */
   private class QuantityDeserializer extends JsonDeserializer[Quantity] {
     @throws(classOf[JsonProcessingException])
     override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {

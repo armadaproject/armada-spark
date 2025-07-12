@@ -18,7 +18,14 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import k8s.io.api.core.v1.generated.{Container, EnvVar, PodSecurityContext, PodSpec, Volume, VolumeMount}
+import k8s.io.api.core.v1.generated.{
+  Container,
+  EnvVar,
+  PodSecurityContext,
+  PodSpec,
+  Volume,
+  VolumeMount
+}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
 import org.apache.spark.deploy.k8s.submit.{JavaMainAppResource, MainAppResource}
@@ -47,10 +54,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     driverArgs = Array("--input", "data.txt"),
     proxyUser = None
   )
-  private var executorPodSpec: Option[PodSpec] = _
-  private var driverPodSpec: Option[PodSpec] = _
+  private var executorPodSpec: Option[PodSpec]     = _
+  private var driverPodSpec: Option[PodSpec]       = _
   private var executorContainer: Option[Container] = _
-  private var driverContainer: Option[Container] = _
+  private var driverContainer: Option[Container]   = _
   before {
     tempDir = Files.createTempDirectory("armada-client-test-")
     sparkConf = new SparkConf()
@@ -1377,7 +1384,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
       podSpec.containers should have size 1
       val container = podSpec.containers.head
-    container.name shouldBe Some("spark-kubernetes-executor")
+      container.name shouldBe Some("spark-kubernetes-executor")
       container.image shouldBe Some("spark:3.5.0")
       container.args shouldBe Seq("executor")
 
