@@ -40,7 +40,7 @@
         <scalafmt.version>3.9.5</scalafmt.version>
 
         <kubernetes-client.version>7.1.0</kubernetes-client.version>
-        <jackson.version>2.15.12</jackson.version>
+        <jackson.version>2.15.2</jackson.version>
         <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
         <!-- SPARK-36796 for JDK-17 test-->
         <extraJavaTestArgs>
