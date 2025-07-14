@@ -1185,7 +1185,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     * @return
     *   ResourceRequirements if found in template, None otherwise
     */
-
   private def extractResourcesFromTemplate(
       template: Option[api.submit.JobSubmitRequestItem]
   ): Option[ResourceRequirements] = {

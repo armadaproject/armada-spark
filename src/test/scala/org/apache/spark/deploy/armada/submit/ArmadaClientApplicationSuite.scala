@@ -48,6 +48,21 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val RUNTIME_RUN_AS_USER        = 385
   private val TEMPLATE_RUN_AS_USER       = 285
   private val DEFAULT_RUN_AS_USER        = 185
+
+  // Constants for container and image names
+  private val EXECUTOR_CONTAINER_NAME    = "spark-kubernetes-executor"
+  private val DRIVER_CONTAINER_NAME      = "spark-kubernetes-driver"
+  private val DEFAULT_IMAGE_NAME         = "spark:3.5.0"
+  private val CUSTOM_IMAGE_NAME          = "custom-spark:latest"
+
+  // Constants for environment variables
+  private val SPARK_EXECUTOR_ID          = "SPARK_EXECUTOR_ID"
+  private val SPARK_DRIVER_URL           = "SPARK_DRIVER_URL"
+  private val SPARK_CONF_DIR             = "SPARK_CONF_DIR"
+  private val SPARK_CONF_DIR_VALUE       = "/opt/spark/conf"
+
+  // Constants for paths
+  private val PYTHON_EXAMPLE_PATH        = "/opt/spark/examples/src/main/python/pi.py"
   private val clientArguments = ClientArguments(
     mainAppResource = JavaMainAppResource(Some("app.jar")),
     mainClass = "org.example.SparkApp",
@@ -99,25 +114,25 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     // Verify basic Container properties
     execContainer.name should not be None
-    execContainer.name.get shouldBe "spark-kubernetes-executor"
+    execContainer.name.get shouldBe EXECUTOR_CONTAINER_NAME
     execContainer.image should not be None
-    execContainer.image.get shouldBe "spark:3.5.0"
+    execContainer.image.get shouldBe DEFAULT_IMAGE_NAME
 
     // Verify container has expected environment variables
     val envVarNames = execContainer.env.flatMap(_.name)
     envVarNames should contain allOf(
-      "SPARK_EXECUTOR_ID", 
-      "SPARK_DRIVER_URL"
+      SPARK_EXECUTOR_ID,
+      SPARK_DRIVER_URL
     )
 
     // Test with modified configuration
     val modifiedConf = sparkConf.clone()
-    modifiedConf.set("spark.kubernetes.container.image", "custom-spark:latest")
+    modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
     val (modPodSpec, modContainer) = armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)
 
     modContainer should not be None
     modContainer.get.image should not be None
-    modContainer.get.image.get shouldBe "custom-spark:latest"
+    modContainer.get.image.get shouldBe CUSTOM_IMAGE_NAME
   }
 
   test("getDriverFeatureSteps should return valid PodSpec and Container") {
@@ -133,27 +148,27 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     // Verify basic Container properties
     driverContainer.name should not be None
-    driverContainer.name.get shouldBe "spark-kubernetes-driver"
+    driverContainer.name.get shouldBe DRIVER_CONTAINER_NAME
     driverContainer.image should not be None
-    driverContainer.image.get shouldBe "spark:3.5.0"
+    driverContainer.image.get shouldBe DEFAULT_IMAGE_NAME
 
     // Verify container has expected arguments
     driverContainer.args should not be empty
 
     // Test with modified configuration
     val modifiedConf = sparkConf.clone()
-    modifiedConf.set("spark.kubernetes.container.image", "custom-spark:latest")
+    modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
     modifiedConf.set("spark.driver.memory", "4g")
     val (modPodSpec, modContainer) = armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
 
     modContainer should not be None
     modContainer.get.image should not be None
-    modContainer.get.image.get shouldBe "custom-spark:latest"
+    modContainer.get.image.get shouldBe CUSTOM_IMAGE_NAME
 
     // Verify args are modified for spark-upload paths
     val argsWithSparkUpload = modContainer.get.args.filter(_.contains("spark-upload"))
     if (argsWithSparkUpload.nonEmpty) {
-      argsWithSparkUpload.forall(_ == "/opt/spark/examples/src/main/python/pi.py") shouldBe true
+      argsWithSparkUpload.forall(_ == PYTHON_EXAMPLE_PATH) shouldBe true
     }
   }
 
