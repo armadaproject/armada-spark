@@ -131,11 +131,11 @@ private[spark] object ClientArguments {
 }
 
 private[spark] object ArmadaClientApplication {
-  private[submit] val DRIVER_PORT = 7078
-  private val DEFAULT_PRIORITY    = 0.0
-  private val DEFAULT_NAMESPACE   = "default"
+  private[submit] val DRIVER_PORT   = 7078
+  private val DEFAULT_PRIORITY      = 0.0
+  private val DEFAULT_NAMESPACE     = "default"
   private val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
-  private val DEFAULT_RUN_AS_USER = 185
+  private val DEFAULT_RUN_AS_USER   = 185
 
 }
 
@@ -275,7 +275,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
-        appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_APP_ID),
+        appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
         mainAppResource = clientArguments.mainAppResource,
         mainClass = clientArguments.mainClass,
         appArgs = clientArguments.driverArgs,
@@ -301,7 +301,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         if (arg.contains("spark-upload"))
           clientArguments.mainAppResource match {
             case PythonMainAppResource(resource) => resource
-            case _ => arg
+            case _                               => arg
           }
         else arg
       )
@@ -1025,7 +1025,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(podName),
       EnvVar()
         .withName("SPARK_APPLICATION_ID")
-        .withValue(conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)),
+        .withValue(
+          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+        ),
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue(sparkExecutorCores),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue(sparkExecutorMemory),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
@@ -1167,13 +1169,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }.toVector
   }
 
-
-  /** Merges two sequences of environment variables, with values from secondSeq taking precedence for duplicate names
-   *
-   * @param firstSeq  First sequence of environment variables
-   * @param secondSeq Second sequence of environment variables
-   * @return Merged sequence with duplicates resolved from secondSeq
-   */
+  /** Merges two sequences of environment variables, with values from secondSeq taking precedence
+    * for duplicate names
+    *
+    * @param firstSeq
+    *   First sequence of environment variables
+    * @param secondSeq
+    *   Second sequence of environment variables
+    * @return
+    *   Merged sequence with duplicates resolved from secondSeq
+    */
   private[spark] def mergeEnvVars(firstSeq: Seq[EnvVar], secondSeq: Seq[EnvVar]): Seq[EnvVar] = {
     val secondMap = secondSeq.map(env => env.name -> env).toMap
     firstSeq.map(env => secondMap.getOrElse(env.name, env)) ++

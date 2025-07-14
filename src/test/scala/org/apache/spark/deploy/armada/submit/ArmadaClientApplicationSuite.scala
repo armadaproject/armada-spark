@@ -50,19 +50,19 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val DEFAULT_RUN_AS_USER        = 185
 
   // Constants for container and image names
-  private val EXECUTOR_CONTAINER_NAME    = "spark-kubernetes-executor"
-  private val DRIVER_CONTAINER_NAME      = "spark-kubernetes-driver"
-  private val DEFAULT_IMAGE_NAME         = "spark:3.5.0"
-  private val CUSTOM_IMAGE_NAME          = "custom-spark:latest"
+  private val EXECUTOR_CONTAINER_NAME = "spark-kubernetes-executor"
+  private val DRIVER_CONTAINER_NAME   = "spark-kubernetes-driver"
+  private val DEFAULT_IMAGE_NAME      = "spark:3.5.0"
+  private val CUSTOM_IMAGE_NAME       = "custom-spark:latest"
 
   // Constants for environment variables
-  private val SPARK_EXECUTOR_ID          = "SPARK_EXECUTOR_ID"
-  private val SPARK_DRIVER_URL           = "SPARK_DRIVER_URL"
-  private val SPARK_CONF_DIR             = "SPARK_CONF_DIR"
-  private val SPARK_CONF_DIR_VALUE       = "/opt/spark/conf"
+  private val SPARK_EXECUTOR_ID    = "SPARK_EXECUTOR_ID"
+  private val SPARK_DRIVER_URL     = "SPARK_DRIVER_URL"
+  private val SPARK_CONF_DIR       = "SPARK_CONF_DIR"
+  private val SPARK_CONF_DIR_VALUE = "/opt/spark/conf"
 
   // Constants for paths
-  private val PYTHON_EXAMPLE_PATH        = "/opt/spark/examples/src/main/python/pi.py"
+  private val PYTHON_EXAMPLE_PATH = "/opt/spark/examples/src/main/python/pi.py"
   private val clientArguments = ClientArguments(
     mainAppResource = JavaMainAppResource(Some("app.jar")),
     mainClass = "org.example.SparkApp",
@@ -120,7 +120,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     // Verify container has expected environment variables
     val envVarNames = execContainer.env.flatMap(_.name)
-    envVarNames should contain allOf(
+    envVarNames should contain allOf (
       SPARK_EXECUTOR_ID,
       SPARK_DRIVER_URL
     )
@@ -128,7 +128,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Test with modified configuration
     val modifiedConf = sparkConf.clone()
     modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
-    val (modPodSpec, modContainer) = armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)
+    val (modPodSpec, modContainer) =
+      armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)
 
     modContainer should not be None
     modContainer.get.image should not be None
@@ -159,7 +160,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val modifiedConf = sparkConf.clone()
     modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
     modifiedConf.set("spark.driver.memory", "4g")
-    val (modPodSpec, modContainer) = armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
+    val (modPodSpec, modContainer) =
+      armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
 
     modContainer should not be None
     modContainer.get.image should not be None

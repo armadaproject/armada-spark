@@ -21,9 +21,8 @@ import k8s.io.api.core.v1.generated.EnvVar
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
-/**
- * Tests for the environment variable merging logic used in ArmadaClientApplication.
- */
+/** Tests for the environment variable merging logic used in ArmadaClientApplication.
+  */
 class EnvVarMergerSuite extends AnyFunSuite with Matchers {
   private val aca = new ArmadaClientApplication
 
@@ -36,7 +35,7 @@ class EnvVarMergerSuite extends AnyFunSuite with Matchers {
       EnvVar().withName("VAR3").withValue("value3"),
       EnvVar().withName("VAR4").withValue("value4")
     )
-    
+
     val result = aca.mergeEnvVars(firstSeq, secondSeq)
     result should contain theSameElementsAs (firstSeq ++ secondSeq)
   }
@@ -51,12 +50,12 @@ class EnvVarMergerSuite extends AnyFunSuite with Matchers {
       EnvVar().withName("VAR3").withValue("value3"),
       EnvVar().withName("COMMON").withValue("second-value")
     )
-    
+
     val result = aca.mergeEnvVars(firstSeq, secondSeq)
-    result should contain (EnvVar().withName("COMMON").withValue("second-value"))
-    result should contain (EnvVar().withName("VAR1").withValue("value1"))
-    result should contain (EnvVar().withName("VAR2").withValue("value2"))
-    result should contain (EnvVar().withName("VAR3").withValue("value3"))
+    result should contain(EnvVar().withName("COMMON").withValue("second-value"))
+    result should contain(EnvVar().withName("VAR1").withValue("value1"))
+    result should contain(EnvVar().withName("VAR2").withValue("value2"))
+    result should contain(EnvVar().withName("VAR3").withValue("value3"))
     result.size shouldBe 4
   }
 
@@ -66,7 +65,7 @@ class EnvVarMergerSuite extends AnyFunSuite with Matchers {
       EnvVar().withName("VAR1").withValue("value1"),
       EnvVar().withName("VAR2").withValue("value2")
     )
-    
+
     val result = aca.mergeEnvVars(emptySeq, nonEmptySeq)
     result should contain theSameElementsAs nonEmptySeq
   }
@@ -77,26 +76,28 @@ class EnvVarMergerSuite extends AnyFunSuite with Matchers {
       EnvVar().withName("VAR1").withValue("value1"),
       EnvVar().withName("VAR2").withValue("value2")
     )
-    
+
     val result = aca.mergeEnvVars(nonEmptySeq, emptySeq)
     result should contain theSameElementsAs nonEmptySeq
   }
 
   test("mergeEnvVars should handle both sequences empty") {
     val emptySeq = Seq.empty[EnvVar]
-    
+
     val result = aca.mergeEnvVars(emptySeq, emptySeq)
     result shouldBe empty
   }
 
   test("mergeEnvVars should handle complex environment variables with valueFrom") {
-    val source = k8s.io.api.core.v1.generated.EnvVarSource()
+    val source = k8s.io.api.core.v1.generated
+      .EnvVarSource()
       .withFieldRef(
-        k8s.io.api.core.v1.generated.ObjectFieldSelector()
+        k8s.io.api.core.v1.generated
+          .ObjectFieldSelector()
           .withApiVersion("v1")
           .withFieldPath("status.podIP")
       )
-    
+
     val firstSeq = Seq(
       EnvVar().withName("VAR1").withValue("value1"),
       EnvVar().withName("POD_IP").withValueFrom(source)
@@ -105,11 +106,11 @@ class EnvVarMergerSuite extends AnyFunSuite with Matchers {
       EnvVar().withName("VAR2").withValue("value2"),
       EnvVar().withName("POD_IP").withValue("fixed-ip")
     )
-    
+
     val result = aca.mergeEnvVars(firstSeq, secondSeq)
-    result should contain (EnvVar().withName("VAR1").withValue("value1"))
-    result should contain (EnvVar().withName("VAR2").withValue("value2"))
-    result should contain (EnvVar().withName("POD_IP").withValue("fixed-ip"))
+    result should contain(EnvVar().withName("VAR1").withValue("value1"))
+    result should contain(EnvVar().withName("VAR2").withValue("value2"))
+    result should contain(EnvVar().withName("POD_IP").withValue("fixed-ip"))
     result.size shouldBe 3
   }
 }
