@@ -299,7 +299,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val newArgs = container.args
       .map(arg =>
         if (arg.contains("spark-upload"))
-          "/opt/spark/examples/src/main/python/pi.py"
+          clientArguments.mainAppResource match {
+            case PythonMainAppResource(resource) => resource
+            case _ => arg
+          }
         else arg
       )
     (Some(pod.getSpec), Some(container.withArgs(newArgs)))
