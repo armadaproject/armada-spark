@@ -19,13 +19,19 @@ then
     spark_patch=${spark/*./}
     scala_patch=${scala/*./}
 
-    if [ "$spark_minor" == "3" ]; then
-        kubernetes_client_version=5.12.2
-        jackson_version=2.13.4
+    if [ "$spark_major" == "3" ]; then
+        if [ "$spark_minor" == "3" ]; then
+            kubernetes_client_version=5.12.2
+            jackson_version=2.13.4
+        else
+            kubernetes_client_version=6.7.2
+            jackson_version=2.15.2
+        fi
     else
-        kubernetes_client_version=6.7.2
+        kubernetes_client_version=7.1.0
         jackson_version=2.15.2
     fi
+
     echo "setting spark=$spark and scala=$scala"
     sed -i -E \
         -e "s%^(    <artifactId>)([^_]+)[_0-9.]+(</artifactId>)$%\1\2_${scala_compat}\3%" \
