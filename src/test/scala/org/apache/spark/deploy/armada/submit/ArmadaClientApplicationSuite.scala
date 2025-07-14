@@ -86,6 +86,77 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
   }
 
+  test("getExecutorFeatureSteps should return valid PodSpec and Container") {
+    // Test with default configuration
+    val (podSpec, container) = armadaClientApp.getExecutorFeatureSteps(sparkConf, clientArguments)
+
+    // Verify PodSpec
+    podSpec should not be None
+
+    // Verify Container
+    container should not be None
+    val execContainer = container.get
+
+    // Verify basic Container properties
+    execContainer.name should not be None
+    execContainer.name.get shouldBe "spark-kubernetes-executor"
+    execContainer.image should not be None
+    execContainer.image.get shouldBe "spark:3.5.0"
+
+    // Verify container has expected environment variables
+    val envVarNames = execContainer.env.flatMap(_.name)
+    envVarNames should contain allOf(
+      "SPARK_EXECUTOR_ID", 
+      "SPARK_DRIVER_URL"
+    )
+
+    // Test with modified configuration
+    val modifiedConf = sparkConf.clone()
+    modifiedConf.set("spark.kubernetes.container.image", "custom-spark:latest")
+    val (modPodSpec, modContainer) = armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)
+
+    modContainer should not be None
+    modContainer.get.image should not be None
+    modContainer.get.image.get shouldBe "custom-spark:latest"
+  }
+
+  test("getDriverFeatureSteps should return valid PodSpec and Container") {
+    // Test with default configuration
+    val (podSpec, container) = armadaClientApp.getDriverFeatureSteps(sparkConf, clientArguments)
+
+    // Verify PodSpec
+    podSpec should not be None
+
+    // Verify Container
+    container should not be None
+    val driverContainer = container.get
+
+    // Verify basic Container properties
+    driverContainer.name should not be None
+    driverContainer.name.get shouldBe "spark-kubernetes-driver"
+    driverContainer.image should not be None
+    driverContainer.image.get shouldBe "spark:3.5.0"
+
+    // Verify container has expected arguments
+    driverContainer.args should not be empty
+
+    // Test with modified configuration
+    val modifiedConf = sparkConf.clone()
+    modifiedConf.set("spark.kubernetes.container.image", "custom-spark:latest")
+    modifiedConf.set("spark.driver.memory", "4g")
+    val (modPodSpec, modContainer) = armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
+
+    modContainer should not be None
+    modContainer.get.image should not be None
+    modContainer.get.image.get shouldBe "custom-spark:latest"
+
+    // Verify args are modified for spark-upload paths
+    val argsWithSparkUpload = modContainer.get.args.filter(_.contains("spark-upload"))
+    if (argsWithSparkUpload.nonEmpty) {
+      argsWithSparkUpload.forall(_ == "/opt/spark/examples/src/main/python/pi.py") shouldBe true
+    }
+  }
+
   private def createJobTemplateFile(queue: String, jobSetId: String): File = {
     val templateContent =
       s"""queue: $queue
