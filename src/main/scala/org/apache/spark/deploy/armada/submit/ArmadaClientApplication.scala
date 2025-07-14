@@ -933,6 +933,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       }
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
 
+    val fsEnvVars = armadaJobConfig.driverFeatureStepContainer.get.env
     armadaJobConfig.driverFeatureStepContainer.get
       .withArgs(
         Seq(
@@ -949,7 +950,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(volumeMounts)
-      .withEnv(envVars)
+      .withEnv(mergeEnvVars(fsEnvVars, envVars))
       .withResources(
         ResourceRequirements(
           requests = driverRequests,
@@ -1029,8 +1030,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     ) ++ nodeUniformityLabel
       .map(label => EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL").withValue(label))
+    val fsEnvVars = armadaJobConfig.executorFeatureStepContainer.get.env
     armadaJobConfig.executorFeatureStepContainer.get
-      .withEnv(envVars ++ javaOptEnvVars)
+      .withEnv(mergeEnvVars(fsEnvVars, envVars ++ javaOptEnvVars))
       .withResources(
         ResourceRequirements(
           requests = executorRequests,
@@ -1163,6 +1165,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }.toVector
   }
 
+
+  /** Merges two sequences of environment variables, with values from secondSeq taking precedence for duplicate names
+   *
+   * @param firstSeq  First sequence of environment variables
+   * @param secondSeq Second sequence of environment variables
+   * @return Merged sequence with duplicates resolved from secondSeq
+   */
+  private[spark] def mergeEnvVars(firstSeq: Seq[EnvVar], secondSeq: Seq[EnvVar]): Seq[EnvVar] = {
+    val secondMap = secondSeq.map(env => env.name -> env).toMap
+    firstSeq.map(env => secondMap.getOrElse(env.name, env)) ++
+      secondSeq.filterNot(env => firstSeq.exists(_.name == env.name))
+  }
+
   /** Extracts resource values from a job item template's pod spec.
     *
     * @param template
@@ -1170,6 +1185,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     * @return
     *   ResourceRequirements if found in template, None otherwise
     */
+
   private def extractResourcesFromTemplate(
       template: Option[api.submit.JobSubmitRequestItem]
   ): Option[ResourceRequirements] = {
