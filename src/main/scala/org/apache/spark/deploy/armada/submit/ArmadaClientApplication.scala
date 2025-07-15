@@ -17,54 +17,15 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
-  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
-  ARMADA_DRIVER_LIMIT_CORES,
-  ARMADA_DRIVER_LIMIT_MEMORY,
-  ARMADA_DRIVER_REQUEST_CORES,
-  ARMADA_DRIVER_REQUEST_MEMORY,
-  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
-  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
-  ARMADA_EXECUTOR_LIMIT_CORES,
-  ARMADA_EXECUTOR_LIMIT_MEMORY,
-  ARMADA_EXECUTOR_REQUEST_CORES,
-  ARMADA_EXECUTOR_REQUEST_MEMORY,
-  ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
-  ARMADA_JOB_NODE_SELECTORS,
-  ARMADA_JOB_QUEUE,
-  ARMADA_JOB_SET_ID,
-  ARMADA_JOB_TEMPLATE,
-  ARMADA_LOOKOUTURL,
-  ARMADA_RUN_AS_USER,
-  ARMADA_SERVER_INTERNAL_URL,
-  ARMADA_SPARK_DRIVER_LABELS,
-  ARMADA_SPARK_EXECUTOR_LABELS,
-  ARMADA_SPARK_JOB_NAMESPACE,
-  ARMADA_SPARK_JOB_PRIORITY,
-  ARMADA_SPARK_POD_LABELS,
-  CONTAINER_IMAGE,
-  DEFAULT_CORES,
-  DEFAULT_MEM,
-  DEFAULT_SPARK_EXECUTOR_CORES,
-  DEFAULT_SPARK_EXECUTOR_MEMORY,
-  commaSeparatedLabelsToMap
-}
+import org.apache.spark.deploy.armada.Config.{ARMADA_AUTH_TOKEN, ARMADA_DRIVER_JOB_ITEM_TEMPLATE, ARMADA_DRIVER_LIMIT_CORES, ARMADA_DRIVER_LIMIT_MEMORY, ARMADA_DRIVER_REQUEST_CORES, ARMADA_DRIVER_REQUEST_MEMORY, ARMADA_EXECUTOR_CONNECTION_TIMEOUT, ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE, ARMADA_EXECUTOR_LIMIT_CORES, ARMADA_EXECUTOR_LIMIT_MEMORY, ARMADA_EXECUTOR_REQUEST_CORES, ARMADA_EXECUTOR_REQUEST_MEMORY, ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, ARMADA_JOB_NODE_SELECTORS, ARMADA_JOB_QUEUE, ARMADA_JOB_SET_ID, ARMADA_JOB_TEMPLATE, ARMADA_LOOKOUTURL, ARMADA_RUN_AS_USER, ARMADA_SERVER_INTERNAL_URL, ARMADA_SPARK_DRIVER_LABELS, ARMADA_SPARK_EXECUTOR_LABELS, ARMADA_SPARK_JOB_NAMESPACE, ARMADA_SPARK_JOB_PRIORITY, ARMADA_SPARK_POD_LABELS, CONTAINER_IMAGE, DEFAULT_CORES, DEFAULT_MEM, DEFAULT_SPARK_EXECUTOR_CORES, DEFAULT_SPARK_EXECUTOR_MEMORY, commaSeparatedLabelsToMap}
 import io.armadaproject.armada.ArmadaClient
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import io.fabric8.kubernetes.client.KubernetesClientBuilder
 import io.fabric8.kubernetes.client.utils.Serialization
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.k8s.submit.{
-  KubernetesDriverBuilder,
-  MainAppResource,
-  JavaMainAppResource,
-  PythonMainAppResource,
-  RMainAppResource
-}
+import org.apache.spark.deploy.k8s.submit.{JavaMainAppResource, KubernetesDriverBuilder, MainAppResource, PythonMainAppResource, RMainAppResource}
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
@@ -268,7 +229,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
       executorConf,
       new SecurityManager(conf),
-      new DefaultKubernetesClient(),
+      new KubernetesClientBuilder().build(),
       ResourceProfile.getOrCreateDefaultProfile(conf)
     )
 
@@ -314,7 +275,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         appArgs = clientArguments.driverArgs,
         proxyUser = clientArguments.proxyUser
       ),
-      new DefaultKubernetesClient()
+      new KubernetesClientBuilder().build()
     )
 
     // Convert the fs pod to our api
