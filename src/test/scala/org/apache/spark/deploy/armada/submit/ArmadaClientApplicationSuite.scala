@@ -176,17 +176,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
   test("getDriverFeatureSteps should correctly read spark k8s pod templates") {
     // Define test variables to be used in both template and assertions
-    val POD_NAME = "driver-pod-template"
-    val APP_LABEL = "spark-driver"
-    val CUSTOM_LABEL_KEY = "custom-label"
-    val CUSTOM_LABEL_VALUE = "custom-value"
-    val CONTAINER_NAME = "driver-container"
-    val TEMPLATE_IMAGE = "custom-spark:template"
-    val VOLUME_NAME = "test-volume"
-    val MOUNT_PATH = "/mnt/test"
-    val NODE_SELECTOR_KEY = "kubernetes.io/hostname"
-    val NODE_SELECTOR_VALUE = "worker-node-1"
-    val RESTART_POLICY = "Never"
+    val POD_NAME                 = "driver-pod-template"
+    val APP_LABEL                = "spark-driver"
+    val CUSTOM_LABEL_KEY         = "custom-label"
+    val CUSTOM_LABEL_VALUE       = "custom-value"
+    val CONTAINER_NAME           = "driver-container"
+    val TEMPLATE_IMAGE           = "custom-spark:template"
+    val VOLUME_NAME              = "test-volume"
+    val MOUNT_PATH               = "/mnt/test"
+    val NODE_SELECTOR_KEY        = "kubernetes.io/hostname"
+    val NODE_SELECTOR_VALUE      = "worker-node-1"
+    val RESTART_POLICY           = "Never"
     val TERMINATION_GRACE_PERIOD = 30
 
     // Create a pod template with specific properties using the defined variables

@@ -245,15 +245,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   /** Creates Kubernetes PodSpec and Container configurations for Spark executors.
-   *
-   * This method builds the executor specifications using Kubernetes feature steps.
-   * These use the fabric8 api which Armada doesn't support, so we then
-   * convert them to YAML, and then unmarshal them back to Kubernetes api used in Armada.
-   *
-   * @param conf The Spark configuration
-   * @param clientArguments The client arguments containing application details
-   * @return A tuple of (Some(PodSpec), Some(Container)) for the executor
-   */
+    *
+    * This method builds the executor specifications using Kubernetes feature steps. These use the
+    * fabric8 api which Armada doesn't support, so we then convert them to YAML, and then unmarshal
+    * them back to Kubernetes api used in Armada.
+    *
+    * @param conf
+    *   The Spark configuration
+    * @param clientArguments
+    *   The client arguments containing application details
+    * @return
+    *   A tuple of (Some(PodSpec), Some(Container)) for the executor
+    */
   private[spark] def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
     // Generate the feature step specs, (in the fabric8 api
     val executorConf = new KubernetesExecutorConf(
@@ -285,17 +288,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   /** Creates Kubernetes PodSpec and Container configurations for Spark drivers.
-   *
-   * This method builds the driver specifications using Kubernetes feature steps.
-   * These use the fabric8 api which Armada doesn't support, so we then
-   * convert them to YAML, and then unmarshal them back to Kubernetes api used in Armada.
-   * The volume mounts are set to null due to unmarshalling issues.
-   * For Python applications, it handles special processing of spark-upload paths.
-   *
-   * @param conf The Spark configuration
-   * @param clientArguments The client arguments containing application details
-   * @return A tuple of (Some(PodSpec), Some(Container)) for the driver
-   */
+    *
+    * This method builds the driver specifications using Kubernetes feature steps. These use the
+    * fabric8 api which Armada doesn't support, so we then convert them to YAML, and then unmarshal
+    * them back to Kubernetes api used in Armada. The volume mounts are set to null due to
+    * unmarshalling issues. For Python applications, it handles special processing of spark-upload
+    * paths.
+    *
+    * @param conf
+    *   The Spark configuration
+    * @param clientArguments
+    *   The client arguments containing application details
+    * @return
+    *   A tuple of (Some(PodSpec), Some(Container)) for the driver
+    */
   private[spark] def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
 
     // Generate the feature step specs, (in the fabric8 api
