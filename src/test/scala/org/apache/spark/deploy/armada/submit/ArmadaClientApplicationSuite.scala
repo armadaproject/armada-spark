@@ -28,7 +28,7 @@ import k8s.io.api.core.v1.generated.{
 }
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.k8s.submit.{JavaMainAppResource, MainAppResource}
+import org.apache.spark.deploy.k8s.submit.JavaMainAppResource
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -58,8 +58,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   // Constants for environment variables
   private val SPARK_EXECUTOR_ID    = "SPARK_EXECUTOR_ID"
   private val SPARK_DRIVER_URL     = "SPARK_DRIVER_URL"
-  private val SPARK_CONF_DIR       = "SPARK_CONF_DIR"
-  private val SPARK_CONF_DIR_VALUE = "/opt/spark/conf"
 
   // Constants for paths
   private val PYTHON_EXAMPLE_PATH = "/opt/spark/examples/src/main/python/pi.py"
@@ -128,8 +126,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Test with modified configuration
     val modifiedConf = sparkConf.clone()
     modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
-    val (modPodSpec, modContainer) =
-      armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)
+    val modContainer =
+      armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)._2
 
     modContainer should not be None
     modContainer.get.image should not be None
@@ -160,7 +158,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val modifiedConf = sparkConf.clone()
     modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
     modifiedConf.set("spark.driver.memory", "4g")
-    val (modPodSpec, modContainer) =
+    val (_, modContainer) =
       armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
 
     modContainer should not be None
