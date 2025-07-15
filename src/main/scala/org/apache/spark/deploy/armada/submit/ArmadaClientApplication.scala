@@ -244,7 +244,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
+  /** Creates Kubernetes PodSpec and Container configurations for Spark executors.
+   *
+   * This method builds the executor specifications using Kubernetes feature steps.
+   * These use the fabric8 api which Armada doesn't support, so we then
+   * convert them to YAML, and then unmarshal them back to Kubernetes api used in Armada.
+   *
+   * @param conf The Spark configuration
+   * @param clientArguments The client arguments containing application details
+   * @return A tuple of (Some(PodSpec), Some(Container)) for the executor
+   */
   private[spark] def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
+    // Generate the feature step specs, (in the fabric8 api
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
       appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
@@ -257,6 +268,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       new DefaultKubernetesClient(),
       ResourceProfile.getOrCreateDefaultProfile(conf)
     )
+
+    // Convert the fs pod to our api
     val execPodString = Serialization.asYaml(executorSpec.pod.pod)
     val execPod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
@@ -264,14 +277,28 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     executorSpec.pod.container.setVolumeMounts(null)
 
+    // Convert the fs container to our api
     val execContainerString = Serialization.asYaml(executorSpec.pod.container)
     val execContainer: k8s.io.api.core.v1.generated.Container =
       JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
     (Some(execPod.getSpec), Some(execContainer))
   }
 
+  /** Creates Kubernetes PodSpec and Container configurations for Spark drivers.
+   *
+   * This method builds the driver specifications using Kubernetes feature steps.
+   * These use the fabric8 api which Armada doesn't support, so we then
+   * convert them to YAML, and then unmarshal them back to Kubernetes api used in Armada.
+   * The volume mounts are set to null due to unmarshalling issues.
+   * For Python applications, it handles special processing of spark-upload paths.
+   *
+   * @param conf The Spark configuration
+   * @param clientArguments The client arguments containing application details
+   * @return A tuple of (Some(PodSpec), Some(Container)) for the driver
+   */
   private[spark] def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
 
+    // Generate the feature step specs, (in the fabric8 api
     val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
@@ -283,6 +310,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       ),
       new DefaultKubernetesClient()
     )
+
+    // Convert the fs pod to our api
     val yamlString = Serialization.asYaml(driverSpec.pod.pod)
     val pod: k8s.io.api.core.v1.generated.Pod =
       JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
@@ -290,12 +319,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
     driverSpec.pod.container.setVolumeMounts(null)
 
+    // Convert the fs container to our api
     val containerString = Serialization.asYaml(driverSpec.pod.container)
     val container: k8s.io.api.core.v1.generated.Container = {
       JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
     }
 
-    // TODO_GBJ: spark-k8s supports uploading local files.  Investigate.
+    // TODO_GBJ: spark-k8s supports uploading local files, but armada doesn't seem to.
+    // For example, it tries to upload: /opt/spark/examples/src/main/python/pi.py
+    // to something like: /tmp/spark-upload-47a261f4-4277-4484-b04e-2994b41f01dd/pi.py
+
+    // We need to investigate further.  For now, just revert the upload directory to
+    // the initial app resource.
     val newArgs = container.args
       .map(arg =>
         if (arg.contains("spark-upload"))
