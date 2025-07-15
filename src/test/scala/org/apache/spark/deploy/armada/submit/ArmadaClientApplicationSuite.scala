@@ -56,8 +56,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val CUSTOM_IMAGE_NAME       = "custom-spark:latest"
 
   // Constants for environment variables
-  private val SPARK_EXECUTOR_ID    = "SPARK_EXECUTOR_ID"
-  private val SPARK_DRIVER_URL     = "SPARK_DRIVER_URL"
+  private val SPARK_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
+  private val SPARK_DRIVER_URL  = "SPARK_DRIVER_URL"
 
   // Constants for paths
   private val PYTHON_EXAMPLE_PATH = "/opt/spark/examples/src/main/python/pi.py"

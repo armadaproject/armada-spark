@@ -252,12 +252,12 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
 
   test("should correctly deserialize Quantity values") {
     // Define expected resource values
-    val expectedRequestCpu = "500m"
-    val expectedRequestMemory = "1Gi"
+    val expectedRequestCpu     = "500m"
+    val expectedRequestMemory  = "1Gi"
     val expectedRequestStorage = "2Gi"
-    val expectedLimitCpu = "2"
-    val expectedLimitMemory = "4Gi"
-    val expectedLimitGpu = "1"
+    val expectedLimitCpu       = "2"
+    val expectedLimitMemory    = "4Gi"
+    val expectedLimitGpu       = "1"
 
     val yamlContent =
       s"""priority: 1.0
@@ -277,7 +277,7 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |""".stripMargin
 
     val templateFile = createTemplateFile("quantity-test.yaml", yamlContent)
-    val result = JobTemplateLoader.loadJobItemTemplate(templateFile.getAbsolutePath)
+    val result       = JobTemplateLoader.loadJobItemTemplate(templateFile.getAbsolutePath)
 
     // Verify podSpec is not empty
     result.podSpec should not be empty
