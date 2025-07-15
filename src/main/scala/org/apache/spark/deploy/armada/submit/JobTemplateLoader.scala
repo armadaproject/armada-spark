@@ -65,12 +65,10 @@ private[spark] object JobTemplateLoader {
   private class QuantityDeserializer extends JsonDeserializer[Quantity] {
     @throws(classOf[JsonProcessingException])
     override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {
-      val value = p.getValueAsString
-      if (value == null || value.isEmpty) {
-        null
-      } else {
-        new Quantity(Option(value))
-      }
+      Some(p.getValueAsString)
+        .filter(s => s != null && !s.isEmpty)
+        .map(s => new Quantity(Option(s)))
+        .orNull
     }
   }
 

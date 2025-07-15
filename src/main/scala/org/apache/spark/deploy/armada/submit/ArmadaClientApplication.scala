@@ -801,7 +801,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val finalContainer = newDriverContainer(
       resolvedConfig.armadaClusterUrl,
-      resolvedConfig.containerImage,
       driverPort,
       mainClass,
       mergedVolumeMounts,
@@ -886,7 +885,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val baseContainer = newExecutorContainer(
       index,
-      resolvedConfig.containerImage,
       driverHostname,
       driverPort,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
@@ -926,7 +924,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private def newDriverContainer(
       master: String,
-      image: String,
       port: Int,
       mainClass: String,
       volumeMounts: Seq[VolumeMount],
@@ -1005,7 +1002,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private def newExecutorContainer(
       index: Int,
-      image: String,
       driverHostname: String,
       driverPort: Int,
       nodeUniformityLabel: Option[String],
