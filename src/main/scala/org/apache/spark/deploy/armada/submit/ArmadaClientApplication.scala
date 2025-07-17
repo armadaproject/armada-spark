@@ -258,7 +258,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   A tuple of (Some(PodSpec), Some(Container)) for the executor
     */
   private[spark] def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
-    // Generate the feature step specs, (in the fabric8 api
+    // Generate the feature step specs (in the fabric8 api)
     val executorConf = new KubernetesExecutorConf(
       sparkConf = conf.clone(),
       appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
@@ -1217,9 +1217,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   Merged sequence with duplicates resolved from secondSeq
     */
   private[spark] def mergeEnvVars(firstSeq: Seq[EnvVar], secondSeq: Seq[EnvVar]): Seq[EnvVar] = {
-    val secondMap = secondSeq.map(env => env.name -> env).toMap
-    firstSeq.map(env => secondMap.getOrElse(env.name, env)) ++
-      secondSeq.filterNot(env => firstSeq.exists(_.name == env.name))
+    var index: EnvVar => (String, EnvVar) = env => env.name -> env
+    val merged = secondSeq.map(index).toMap ++ firstSeq.map(index).toMap
+    merged.values.toSeq
   }
 
   /** Extracts resource values from a job item template's pod spec.

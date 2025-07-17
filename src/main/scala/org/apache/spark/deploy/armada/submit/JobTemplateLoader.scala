@@ -127,14 +127,11 @@ private[spark] object JobTemplateLoader {
       connection.setConnectTimeout(10000) // 10 seconds
       connection.setReadTimeout(30000)    // 30 seconds
 
-      var inputStream: InputStream = null
+      val inputStream: InputStream = connection.getInputStream
       try {
-        inputStream = connection.getInputStream
         Source.fromInputStream(inputStream, "UTF-8").mkString
       } finally {
-        if (inputStream != null) {
-          inputStream.close()
-        }
+        inputStream.close()
       }
     } match {
       case Success(content) => content
@@ -157,14 +154,11 @@ private[spark] object JobTemplateLoader {
         throw new RuntimeException(s"Cannot read template file: $filePath")
       }
 
-      var source: Source = null
+      val source: Source = Source.fromFile(file, "UTF-8")
       try {
-        source = Source.fromFile(file, "UTF-8")
         source.mkString
       } finally {
-        if (source != null) {
-          source.close()
-        }
+        source.close()
       }
     } match {
       case Success(content) => content
