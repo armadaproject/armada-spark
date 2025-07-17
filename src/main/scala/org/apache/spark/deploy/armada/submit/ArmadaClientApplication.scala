@@ -1217,8 +1217,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   Merged sequence with duplicates resolved from secondSeq
     */
   private[spark] def mergeEnvVars(firstSeq: Seq[EnvVar], secondSeq: Seq[EnvVar]): Seq[EnvVar] = {
-    var index: EnvVar => (String, EnvVar) = env => env.name -> env
-    val merged = secondSeq.map(index).toMap ++ firstSeq.map(index).toMap
+    val index: EnvVar => (String, EnvVar) = env => env.getName -> env
+    val merged = firstSeq.map(index).toMap ++ secondSeq.map(index).toMap
     merged.values.toSeq
   }
 
