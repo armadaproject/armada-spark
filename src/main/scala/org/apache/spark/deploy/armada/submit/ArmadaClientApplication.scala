@@ -1218,7 +1218,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     */
   private[spark] def mergeEnvVars(firstSeq: Seq[EnvVar], secondSeq: Seq[EnvVar]): Seq[EnvVar] = {
     val index: EnvVar => (String, EnvVar) = env => env.getName -> env
-    val merged = firstSeq.map(index).toMap ++ secondSeq.map(index).toMap
+    val merged                            = firstSeq.map(index).toMap ++ secondSeq.map(index).toMap
     merged.values.toSeq
   }
 
