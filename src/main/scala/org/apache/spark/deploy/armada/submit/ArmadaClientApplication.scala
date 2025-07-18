@@ -66,6 +66,7 @@ import org.apache.spark.deploy.k8s.submit.{
   RMainAppResource
 }
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
+import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
@@ -476,6 +477,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val jobSetId       = conf.get(ARMADA_JOB_SET_ID)
     val runAsUser      = conf.get(ARMADA_RUN_AS_USER)
     val containerImage = conf.get(CONTAINER_IMAGE)
+    containerImage.foreach { image =>
+      conf.set(KUBERNETES_CONTAINER_IMAGE.key, image)
+    }
 
     val nodeSelectors       = conf.get(ARMADA_JOB_NODE_SELECTORS).map(commaSeparatedLabelsToMap)
     val gangUniformityLabel = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY)
