@@ -164,7 +164,7 @@ run-test() {
   DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
   EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
 
-  if ! grep -q "BasicExecutorFeatureStep: Decommissioning not enabled" submitArmadaSpark.log; then err "Job failed"; exit 1; fi
+  if ! grep -q "BasicExecutorFeatureStep: Decommissioning not enabled" submitArmadaSpark.log; then err "Job failed: feature steps not run"; exit 1; fi
 
   if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
     echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
