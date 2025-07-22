@@ -18,9 +18,17 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import k8s.io.api.core.v1.generated.{EnvVar, PodSecurityContext, PodSpec, Volume, VolumeMount}
+import k8s.io.api.core.v1.generated.{
+  Container,
+  EnvVar,
+  PodSecurityContext,
+  PodSpec,
+  Volume,
+  VolumeMount
+}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
+import org.apache.spark.deploy.k8s.submit.JavaMainAppResource
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -41,6 +49,28 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val TEMPLATE_RUN_AS_USER       = 285
   private val DEFAULT_RUN_AS_USER        = 185
 
+  // Constants for container and image names
+  private val EXECUTOR_CONTAINER_NAME = "spark-kubernetes-executor"
+  private val DRIVER_CONTAINER_NAME   = "spark-kubernetes-driver"
+  private val DEFAULT_IMAGE_NAME      = "spark:3.5.0"
+  private val CUSTOM_IMAGE_NAME       = "custom-spark:latest"
+
+  // Constants for environment variables
+  private val SPARK_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
+  private val SPARK_DRIVER_URL  = "SPARK_DRIVER_URL"
+
+  // Constants for paths
+  private val PYTHON_EXAMPLE_PATH = "/opt/spark/examples/src/main/python/pi.py"
+  private val clientArguments = ClientArguments(
+    mainAppResource = JavaMainAppResource(Some("app.jar")),
+    mainClass = "org.example.SparkApp",
+    driverArgs = Array("--input", "data.txt"),
+    proxyUser = None
+  )
+  private var executorPodSpec: Option[PodSpec]     = _
+  private var driverPodSpec: Option[PodSpec]       = _
+  private var executorContainer: Option[Container] = _
+  private var driverContainer: Option[Container]   = _
   before {
     tempDir = Files.createTempDirectory("armada-client-test-")
     sparkConf = new SparkConf()
@@ -50,8 +80,16 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .set(Config.ARMADA_JOB_SET_ID.key, "test-job-set")
       .set(Config.ARMADA_SPARK_JOB_NAMESPACE.key, "test-namespace")
       .set(Config.ARMADA_SPARK_JOB_PRIORITY.key, RUNTIME_PRIORITY.toString)
-      .set(Config.CONTAINER_IMAGE.key, "spark:3.5.0")
+      .set(Config.CONTAINER_IMAGE.key, DEFAULT_IMAGE_NAME)
       .set(Config.ARMADA_JOB_NODE_SELECTORS.key, "node-type=compute")
+      .set("spark.kubernetes.container.image", DEFAULT_IMAGE_NAME)
+    val execSpecs = armadaClientApp.getExecutorFeatureSteps(sparkConf, clientArguments)
+    executorPodSpec = execSpecs._1
+    executorContainer = execSpecs._2
+    val driverSpecs = armadaClientApp.getDriverFeatureSteps(sparkConf, clientArguments)
+    driverPodSpec = driverSpecs._1
+    driverContainer = driverSpecs._2
+
   }
 
   after {
@@ -59,6 +97,171 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       tempDir.toFile.listFiles().foreach(_.delete())
       Files.deleteIfExists(tempDir)
     }
+  }
+
+  test("getExecutorFeatureSteps should return valid PodSpec and Container") {
+    // Test with default configuration
+    val (podSpec, container) = armadaClientApp.getExecutorFeatureSteps(sparkConf, clientArguments)
+
+    // Verify PodSpec
+    podSpec should not be None
+
+    // Verify Container
+    container should not be None
+    val execContainer = container.get
+
+    // Verify basic Container properties
+    execContainer.name should not be None
+    execContainer.name.get shouldBe EXECUTOR_CONTAINER_NAME
+    execContainer.image should not be None
+    execContainer.image.get shouldBe DEFAULT_IMAGE_NAME
+
+    // Verify container has expected environment variables
+    val envVarNames = execContainer.env.flatMap(_.name)
+    envVarNames should contain allOf (
+      SPARK_EXECUTOR_ID,
+      SPARK_DRIVER_URL
+    )
+
+    // Test with modified configuration
+    val modifiedConf = sparkConf.clone()
+    modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
+    val modContainer =
+      armadaClientApp.getExecutorFeatureSteps(modifiedConf, clientArguments)._2
+
+    modContainer should not be None
+    modContainer.get.image should not be None
+    modContainer.get.image.get shouldBe CUSTOM_IMAGE_NAME
+  }
+
+  test("getDriverFeatureSteps should return valid PodSpec and Container") {
+    // Test with default configuration
+    val (podSpec, container) = armadaClientApp.getDriverFeatureSteps(sparkConf, clientArguments)
+
+    // Verify PodSpec
+    podSpec should not be None
+
+    // Verify Container
+    container should not be None
+    val driverContainer = container.get
+
+    // Verify basic Container properties
+    driverContainer.name should not be None
+    driverContainer.name.get shouldBe DRIVER_CONTAINER_NAME
+    driverContainer.image should not be None
+    driverContainer.image.get shouldBe DEFAULT_IMAGE_NAME
+
+    // Verify container has expected arguments
+    driverContainer.args should not be empty
+
+    // Test with modified configuration
+    val modifiedConf = sparkConf.clone()
+    modifiedConf.set("spark.kubernetes.container.image", CUSTOM_IMAGE_NAME)
+    modifiedConf.set("spark.driver.memory", "4g")
+    val (_, modContainer) =
+      armadaClientApp.getDriverFeatureSteps(modifiedConf, clientArguments)
+
+    modContainer should not be None
+    modContainer.get.image should not be None
+    modContainer.get.image.get shouldBe CUSTOM_IMAGE_NAME
+
+    // Verify args are modified for spark-upload paths
+    val argsWithSparkUpload = modContainer.get.args.filter(_.contains("spark-upload"))
+    if (argsWithSparkUpload.nonEmpty) {
+      argsWithSparkUpload.forall(_ == PYTHON_EXAMPLE_PATH) shouldBe true
+    }
+  }
+
+  test("getDriverFeatureSteps should correctly read spark k8s pod templates") {
+    // Define test variables to be used in both template and assertions
+    val POD_NAME                 = "driver-pod-template"
+    val APP_LABEL                = "spark-driver"
+    val CUSTOM_LABEL_KEY         = "custom-label"
+    val CUSTOM_LABEL_VALUE       = "custom-value"
+    val CONTAINER_NAME           = "driver-container"
+    val TEMPLATE_IMAGE           = "custom-spark:template"
+    val VOLUME_NAME              = "test-volume"
+    val MOUNT_PATH               = "/mnt/test"
+    val NODE_SELECTOR_KEY        = "kubernetes.io/hostname"
+    val NODE_SELECTOR_VALUE      = "worker-node-1"
+    val RESTART_POLICY           = "Never"
+    val TERMINATION_GRACE_PERIOD = 30
+
+    // Create a pod template with specific properties using the defined variables
+    val podTemplateContent =
+      s"""apiVersion: v1
+        |kind: Pod
+        |metadata:
+        |  name: $POD_NAME
+        |  labels:
+        |    app: $APP_LABEL
+        |    $CUSTOM_LABEL_KEY: $CUSTOM_LABEL_VALUE
+        |spec:
+        |  containers:
+        |  - name: $CONTAINER_NAME
+        |    image: $TEMPLATE_IMAGE
+        |    volumeMounts:
+        |    - name: $VOLUME_NAME
+        |      mountPath: $MOUNT_PATH
+        |  volumes:
+        |  - name: $VOLUME_NAME
+        |    emptyDir: {}
+        |  nodeSelector:
+        |    $NODE_SELECTOR_KEY: $NODE_SELECTOR_VALUE
+        |  restartPolicy: $RESTART_POLICY
+        |  terminationGracePeriodSeconds: $TERMINATION_GRACE_PERIOD
+        |""".stripMargin
+
+    val templateFile = createPodTemplateFile("driver-pod-template.yaml", podTemplateContent)
+
+    // Set the pod template in the SparkConf
+    val templateConf = sparkConf.clone()
+    templateConf.set("spark.kubernetes.driver.podTemplateFile", templateFile.getAbsolutePath)
+
+    // Call getDriverFeatureSteps with the template configuration
+    val (podSpec, container) = armadaClientApp.getDriverFeatureSteps(templateConf, clientArguments)
+
+    // Verify that the pod spec contains the expected properties from the template
+    podSpec should not be None
+    val driverPodSpec = podSpec.get
+
+    // Verify node selector from template
+    driverPodSpec.nodeSelector should contain(NODE_SELECTOR_KEY -> NODE_SELECTOR_VALUE)
+
+    // Verify restart policy from template
+    driverPodSpec.restartPolicy shouldBe Some(RESTART_POLICY)
+
+    // Verify termination grace period from template
+    driverPodSpec.terminationGracePeriodSeconds shouldBe Some(TERMINATION_GRACE_PERIOD)
+
+    // Verify volumes from template
+    val volumeNames = driverPodSpec.volumes.map(_.name.getOrElse("")).toSet
+    volumeNames should contain(VOLUME_NAME)
+
+    // Verify container
+    container should not be None
+    val driverContainer = container.get
+
+    // The container name comes from the pod template
+    driverContainer.name.get shouldBe CONTAINER_NAME
+
+    // The image should be from the SparkConf, not the template
+    driverContainer.image.get shouldBe DEFAULT_IMAGE_NAME
+
+    // Verify volume mounts
+    // Note: In getDriverFeatureSteps, volume mounts are set to null due to unmarshalling issues
+    // So we can't verify them here
+  }
+
+  private def createPodTemplateFile(filename: String, content: String): File = {
+    val file   = tempDir.resolve(filename).toFile
+    val writer = new FileWriter(file)
+    try {
+      writer.write(content)
+    } finally {
+      writer.close()
+    }
+    file
   }
 
   private def createJobTemplateFile(queue: String, jobSetId: String): File = {
@@ -109,13 +312,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("validateArmadaJobConfig should create config without templates") {
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.cliConfig.queue shouldBe Some("test-queue")
     config.cliConfig.jobSetId shouldBe Some("test-job-set")
     config.cliConfig.namespace shouldBe Some("test-namespace")
     config.cliConfig.priority shouldBe Some(RUNTIME_PRIORITY)
-    config.cliConfig.containerImage shouldBe Some("spark:3.5.0")
+    config.cliConfig.containerImage shouldBe Some(DEFAULT_IMAGE_NAME)
     config.cliConfig.runAsUser shouldBe None
     config.jobTemplate shouldBe None
     config.driverJobItemTemplate shouldBe None
@@ -127,13 +330,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.set(Config.ARMADA_JOB_TEMPLATE.key, templateFile.getAbsolutePath)
 
     sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
-    val configWithTemplateQueue = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithTemplateQueue =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateQueue.queue shouldBe "template-queue"
     configWithTemplateQueue.jobSetId shouldBe "test-job-set"
 
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithTemplateJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithTemplateJobSetId =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithTemplateJobSetId.queue shouldBe "test-queue"
     configWithTemplateJobSetId.jobSetId shouldBe "template-job-set"
   }
@@ -142,34 +347,34 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
     sparkConf.set("spark.app.id", "test-app-id")
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     config.jobSetId shouldBe "test-app-id"
   }
 
   test("should validate required configuration values") {
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "")
     val emptyQueueException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyQueueException.getMessage should include("Queue name must be set")
 
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "")
     val emptyJobSetIdException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyJobSetIdException.getMessage should include("Empty jobSetId is not allowed")
 
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "test-job-set")
     sparkConf.remove(Config.CONTAINER_IMAGE.key)
     val missingImageException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     missingImageException.getMessage should include("Container image must be set")
 
     sparkConf.set(Config.CONTAINER_IMAGE.key, "")
     val emptyImageException = intercept[IllegalArgumentException] {
-      armadaClientApp.validateArmadaJobConfig(sparkConf)
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     }
     emptyImageException.getMessage should include("Empty container image is not allowed")
   }
@@ -178,7 +383,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     sparkConf.remove(Config.ARMADA_JOB_NODE_SELECTORS.key)
     sparkConf.set(Config.ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key, "zone")
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.cliConfig.nodeSelectors shouldBe Map.empty
     config.cliConfig.nodeUniformityLabel shouldBe Some("zone")
@@ -202,7 +407,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       executorTemplateFile.getAbsolutePath
     )
 
-    val config = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val config = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
 
     config.jobTemplate should not be empty
     config.jobTemplate.get.queue shouldBe "all-template-queue"
@@ -309,7 +514,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("runtime-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -338,7 +543,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
@@ -346,7 +555,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "runtime-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = RUNTIME_RUN_AS_USER,
@@ -394,9 +603,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("executor")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(EXECUTOR_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args shouldBe Seq("executor")
 
     container.env should not be empty
@@ -465,7 +673,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("runtime-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -494,13 +702,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "runtime-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -540,9 +752,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("executor")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(EXECUTOR_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args shouldBe Seq("executor")
 
     container.env should not be empty
@@ -569,7 +780,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("test-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -658,7 +869,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "runtime-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = RUNTIME_RUN_AS_USER,
@@ -675,7 +886,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("runtime-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -694,7 +905,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -727,9 +942,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("driver")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(DRIVER_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args should contain("driver")
     container.args should contain("--class")
     container.args should contain("org.example.TestClass")
@@ -743,7 +957,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports.size should be >= 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
@@ -788,7 +1002,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "runtime-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -804,7 +1018,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("runtime-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -823,7 +1037,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -846,9 +1064,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("driver")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(DRIVER_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args should contain("driver")
     container.args should contain("--class")
     container.args should contain("org.example.TestClass")
@@ -861,7 +1078,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports.size should be >= 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
@@ -875,7 +1092,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("cli-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -898,7 +1115,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     result.namespace shouldBe "cli-namespace"
     result.priority shouldBe RUNTIME_PRIORITY
-    result.containerImage shouldBe "spark:3.5.0"
+    result.containerImage shouldBe DEFAULT_IMAGE_NAME
     result.armadaClusterUrl shouldBe "armada://cli-url:50051"
     result.executorConnectionTimeout shouldBe 120.seconds
   }
@@ -916,7 +1133,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("runtime-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -935,7 +1152,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val runtimeAnnotations = Map("runtime-key" -> "runtime-value")
@@ -965,7 +1186,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("test-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -989,13 +1210,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "spark://driver:7077",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -1035,9 +1260,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("driver")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(DRIVER_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args should contain("driver")
     container.args should contain("--class")
     container.args should contain("org.example.SparkApp")
@@ -1051,7 +1275,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports.size should be >= 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     container.resources should not be empty
@@ -1073,7 +1297,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("test-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -1097,13 +1321,17 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None, // No template provided
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -1150,9 +1378,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("executor")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(EXECUTOR_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
     container.args shouldBe Seq("executor")
 
     container.env should not be empty
@@ -1180,7 +1407,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("test-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -1196,7 +1423,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -1213,14 +1440,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
-    )
-
-    val clientArguments = ClientArguments(
-      mainAppResource = JavaMainAppResource(Some("app.jar")),
-      mainClass = "org.example.SparkApp",
-      driverArgs = Array("--input", "data.txt"),
-      proxyUser = None
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1245,9 +1469,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.containers should have size 1
     val container = podSpec.containers.head
-    container.name shouldBe Some("driver")
-    container.image shouldBe Some("spark:3.5.0")
-    container.command shouldBe Seq("/opt/entrypoint.sh")
+    container.name shouldBe Some(DRIVER_CONTAINER_NAME)
+    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
 
     container.env should not be empty
     val envVars = container.env
@@ -1257,7 +1480,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     container.ports should not be empty
-    container.ports should have size 1
+    container.ports.size should be >= 3
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
@@ -1269,7 +1492,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobSetId = Some("test-job-set"),
       namespace = Some("test-namespace"),
       priority = Some(RUNTIME_PRIORITY),
-      containerImage = Some("spark:3.5.0"),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
       podLabels = Map.empty,
       driverLabels = Map.empty,
       executorLabels = Map.empty,
@@ -1285,7 +1508,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
       namespace = "test-namespace",
       priority = RUNTIME_PRIORITY,
-      containerImage = "spark:3.5.0",
+      containerImage = DEFAULT_IMAGE_NAME,
       armadaClusterUrl = "armada://localhost:50051",
       executorConnectionTimeout = 300.seconds,
       runAsUser = DEFAULT_RUN_AS_USER,
@@ -1302,7 +1525,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1335,9 +1562,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
       podSpec.containers should have size 1
       val container = podSpec.containers.head
-      container.name shouldBe Some("executor")
-      container.image shouldBe Some("spark:3.5.0")
-      container.command shouldBe Seq("/opt/entrypoint.sh")
+      container.name shouldBe Some(EXECUTOR_CONTAINER_NAME)
+      container.image shouldBe Some(DEFAULT_IMAGE_NAME)
       container.args shouldBe Seq("executor")
 
       val envVars = container.env
@@ -1358,12 +1584,16 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
+      driverFeatureStepContainer = driverContainer,
+      executorFeatureStepContainer = executorContainer,
+      driverFeatureStepPodSpec = driverPodSpec,
+      executorFeatureStepPodSpec = executorPodSpec,
       cliConfig = armadaClientApp.CLIConfig(
         queue = Some("test-queue"),
         jobSetId = Some("test-job-set"),
         namespace = Some("test-namespace"),
         priority = Some(RUNTIME_PRIORITY),
-        containerImage = Some("spark:3.5.0"),
+        containerImage = Some(DEFAULT_IMAGE_NAME),
         podLabels = Map.empty,
         driverLabels = Map.empty,
         executorLabels = Map.empty,
@@ -1375,13 +1605,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
         executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
       )
-    )
-
-    val clientArguments = ClientArguments(
-      mainAppResource = JavaMainAppResource(Some("app.jar")),
-      mainClass = "org.example.SparkApp",
-      driverArgs = Array(),
-      proxyUser = None
     )
 
     sparkConf.set("spark.executor.instances", "0")
@@ -1567,14 +1790,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Missing queue from CLI - should use template value
     sparkConf.remove(Config.ARMADA_JOB_QUEUE.key)
     sparkConf.set(Config.ARMADA_JOB_SET_ID.key, "cli-job-set")
-    val configWithMissingQueue = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithMissingQueue = armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingQueue.queue shouldBe "template-queue"
     configWithMissingQueue.jobSetId shouldBe "cli-job-set"
 
     // Missing jobSetId from CLI - should use template value
     sparkConf.set(Config.ARMADA_JOB_QUEUE.key, "cli-queue")
     sparkConf.remove(Config.ARMADA_JOB_SET_ID.key)
-    val configWithMissingJobSetId = armadaClientApp.validateArmadaJobConfig(sparkConf)
+    val configWithMissingJobSetId =
+      armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingJobSetId.queue shouldBe "cli-queue"
     configWithMissingJobSetId.jobSetId shouldBe "template-job-set"
   }

@@ -40,6 +40,7 @@ object ArmadaUtils {
 
   val initContainerCommand: String =
     """
+          echo "starting to connect to driver $SPARK_DRIVER_HOST"
           start_time=$(date +%s);
           timeout=$SPARK_EXECUTOR_CONNECTION_TIMEOUT;
           while ! nc -z $SPARK_DRIVER_HOST $SPARK_DRIVER_PORT; do
@@ -52,6 +53,7 @@ object ArmadaUtils {
             echo "waiting for driver...";
             sleep 1;
           done
+          echo "driver $SPARK_DRIVER_HOST found"
         """.stripMargin.trim
 
   def getExecutorRange(numberOfExecutors: Int): Range = {

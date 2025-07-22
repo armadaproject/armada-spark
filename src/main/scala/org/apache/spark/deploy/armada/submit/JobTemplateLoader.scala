@@ -17,14 +17,22 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.core.{JsonParser, JsonProcessingException}
+import com.fasterxml.jackson.databind.{
+  DeserializationContext,
+  DeserializationFeature,
+  JsonDeserializer,
+  ObjectMapper
+}
+import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 
-import java.io.File
+import java.io.{File, InputStream}
 import java.net.{HttpURLConnection, URL}
 import scala.io.Source
-import scala.util.{Failure, Success, Try, Using}
+import scala.util.{Failure, Success, Try}
 
 /** Utility class for loading job templates from various sources.
   *
@@ -42,7 +50,26 @@ private[spark] object JobTemplateLoader {
     val mapper = new ObjectMapper(new YAMLFactory())
     mapper.registerModule(DefaultScalaModule)
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
+    // Register custom deserializer for Quantity class
+    val module = new SimpleModule()
+    module.addDeserializer(classOf[Quantity], new QuantityDeserializer())
+    mapper.registerModule(module)
+
     mapper
+  }
+
+  /** Custom deserializer for Quantity objects. Handles converting string values like '1433Mi' into
+    * Quantity objects.
+    */
+  private class QuantityDeserializer extends JsonDeserializer[Quantity] {
+    @throws(classOf[JsonProcessingException])
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {
+      Some(p.getValueAsString)
+        .filter(s => s != null && !s.isEmpty)
+        .map(s => new Quantity(Option(s)))
+        .orNull
+    }
   }
 
   /** Loads a JobSubmitRequest template from the specified path.
@@ -100,9 +127,12 @@ private[spark] object JobTemplateLoader {
       connection.setConnectTimeout(10000) // 10 seconds
       connection.setReadTimeout(30000)    // 30 seconds
 
-      Using(connection.getInputStream) { inputStream =>
+      val inputStream: InputStream = connection.getInputStream
+      try {
         Source.fromInputStream(inputStream, "UTF-8").mkString
-      }.get
+      } finally {
+        inputStream.close()
+      }
     } match {
       case Success(content) => content
       case Failure(exception) =>
@@ -124,9 +154,12 @@ private[spark] object JobTemplateLoader {
         throw new RuntimeException(s"Cannot read template file: $filePath")
       }
 
-      Using(Source.fromFile(file, "UTF-8")) { source =>
+      val source: Source = Source.fromFile(file, "UTF-8")
+      try {
         source.mkString
-      }.get
+      } finally {
+        source.close()
+      }
     } match {
       case Success(content) => content
       case Failure(exception) =>
@@ -147,7 +180,7 @@ private[spark] object JobTemplateLoader {
     * @return
     *   Parsed template object
     */
-  private def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
+  def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
     Try {
       yamlMapper.readValue(content, clazz)
     } match {

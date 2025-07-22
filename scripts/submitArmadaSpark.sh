@@ -42,6 +42,9 @@ else
     AUTH_ARG=""
 fi
 
+# Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
+DISABLE_CONFIG_MAP=true
+
 # Run Armada Spark via docker image
 docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
@@ -54,4 +57,7 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.jobSetId="$JOBSET" \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
+    --conf spark.kubernetes.file.upload.path=/tmp \
+    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
+    --conf spark.local.dir=/tmp \
     $FIRST_ARG  "${FINAL_ARGS[@]}"

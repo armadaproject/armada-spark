@@ -39,7 +39,8 @@
         <spotless.version>2.44.4</spotless.version>
         <scalafmt.version>3.9.5</scalafmt.version>
 
-        <kubernetes-client.version>7.1.0</kubernetes-client.version>
+        <kubernetes-client.version>6.7.2</kubernetes-client.version>
+        <jackson.version>2.15.2</jackson.version>
         <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
         <!-- SPARK-36796 for JDK-17 test-->
         <extraJavaTestArgs>
@@ -123,6 +124,11 @@
     </repositories>
     <dependencies>
         <dependency>
+          <groupId>io.fabric8</groupId>
+          <artifactId>kubernetes-client</artifactId>
+          <version>${kubernetes-client.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
@@ -136,6 +142,12 @@
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-kubernetes_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -166,17 +178,17 @@
         <dependency>
           <groupId>com.fasterxml.jackson.core</groupId>
           <artifactId>jackson-databind</artifactId>
-          <version>2.15.2</version>
+          <version>${jackson.version}</version>
         </dependency>
         <dependency>
           <groupId>com.fasterxml.jackson.dataformat</groupId>
           <artifactId>jackson-dataformat-yaml</artifactId>
-          <version>2.15.2</version>
+          <version>${jackson.version}</version>
         </dependency>
         <dependency>
           <groupId>com.fasterxml.jackson.module</groupId>
           <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
-          <version>2.15.2</version>
+          <version>${jackson.version}</version>
         </dependency>
     </dependencies>
 

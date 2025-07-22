@@ -19,6 +19,7 @@ package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
 import k8s.io.api.core.v1.generated.PodSpec
+import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -247,5 +248,60 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.priority shouldBe 4.0
     result.namespace shouldBe "file-uri-namespace"
     result.labels should contain("source" -> "file-uri-test")
+  }
+
+  test("should correctly deserialize Quantity values") {
+    // Define expected resource values
+    val expectedRequestCpu     = "500m"
+    val expectedRequestMemory  = "1Gi"
+    val expectedRequestStorage = "2Gi"
+    val expectedLimitCpu       = "2"
+    val expectedLimitMemory    = "4Gi"
+    val expectedLimitGpu       = "1"
+
+    val yamlContent =
+      s"""priority: 1.0
+        |namespace: default
+        |podSpec:
+        |  containers:
+        |    - name: test-container
+        |      resources:
+        |        requests:
+        |          cpu: $expectedRequestCpu
+        |          memory: $expectedRequestMemory
+        |          ephemeral-storage: $expectedRequestStorage
+        |        limits:
+        |          cpu: "$expectedLimitCpu"
+        |          memory: $expectedLimitMemory
+        |          nvidia.com/gpu: "$expectedLimitGpu"
+        |""".stripMargin
+
+    val templateFile = createTemplateFile("quantity-test.yaml", yamlContent)
+    val result       = JobTemplateLoader.loadJobItemTemplate(templateFile.getAbsolutePath)
+
+    // Verify podSpec is not empty
+    result.podSpec should not be empty
+
+    // Get the container resources
+    val container = result.podSpec.get.containers.head
+    container.resources should not be empty
+    val resources = container.resources.get
+
+    // Verify requests
+    resources.requests should contain key "cpu"
+    resources.requests should contain key "memory"
+    resources.requests should contain key "ephemeral-storage"
+
+    // Verify limits
+    resources.limits should contain key "cpu"
+    resources.limits should contain key "memory"
+    resources.limits should contain key "nvidia.com/gpu"
+
+    resources.requests("cpu").getString shouldBe expectedRequestCpu
+    resources.requests("memory").getString shouldBe expectedRequestMemory
+    resources.requests("ephemeral-storage").getString shouldBe expectedRequestStorage
+    resources.limits("cpu").getString shouldBe expectedLimitCpu
+    resources.limits("memory").getString shouldBe expectedLimitMemory
+    resources.limits("nvidia.com/gpu").getString shouldBe expectedLimitGpu
   }
 }
