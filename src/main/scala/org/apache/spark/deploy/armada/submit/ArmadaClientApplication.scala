@@ -704,6 +704,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorFeatureStepContainer: Option[Container] = None
   )
 
+  private def removeAuthToken(seq: Seq[String]): Seq[String] = {
+    seq.grouped(2).toSeq.filter(!_(1).contains("auth.token")).flatten
+    }
+
   private[submit] def createDriverJob(
       armadaJobConfig: ArmadaJobConfig,
       resolvedConfig: ResolvedJobConfig,
@@ -712,7 +716,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       primaryResource: Seq[String],
       confSeq: Seq[String]
   ): api.submit.JobSubmitRequestItem = {
-    val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
+    val driverArgs = removeAuthToken(confSeq ++ primaryResource ++ clientArguments.driverArgs)
 
     mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
