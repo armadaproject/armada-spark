@@ -716,7 +716,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       primaryResource: Seq[String],
       confSeq: Seq[String]
   ): api.submit.JobSubmitRequestItem = {
-    val driverArgs = removeAuthToken(confSeq ++ primaryResource ++ clientArguments.driverArgs)
+    val driverArgs = removeAuthToken(confSeq) ++ primaryResource ++ clientArguments.driverArgs
 
     mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
