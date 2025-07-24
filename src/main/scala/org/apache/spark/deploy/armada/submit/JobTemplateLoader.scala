@@ -85,23 +85,12 @@ private[spark] object JobTemplateLoader {
       val node = p.getCodec.readTree(p).asInstanceOf[JsonNode]
 
       // Extract the key field
-      val key = if (node.has("key")) {
-        Option(node.get("key").asText())
-      } else {
-        None
-      }
+      val key = Option(node.get("key")).map(_.asText())
 
       // Extract the name field (which might be elided)
-      val localObjectRef = if (node.has("name")) {
-        val nameValue = node.get("name").asText()
-        if (nameValue != null && nameValue.nonEmpty) {
-          Option(new LocalObjectReference(Option(nameValue)))
-        } else {
-          None
-        }
-      } else {
-        None
-      }
+      val localObjectRef = Option(node.get("name"))
+        .filter(n => Option(n.asText()).exists(_.nonEmpty))
+        .map(n => new LocalObjectReference(Option(n.asText())))
 
       // Create a new SecretKeySelector with the extracted fields
       new SecretKeySelector(localObjectRef, key)
