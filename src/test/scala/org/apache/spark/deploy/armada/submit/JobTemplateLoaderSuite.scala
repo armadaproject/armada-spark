@@ -321,7 +321,8 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |              key: secret-key
         |""".stripMargin
 
-    val completeFile = createTemplateFile("complete-secret-key-selector.yaml", yamlWithCompleteSecretKeySelector)
+    val completeFile =
+      createTemplateFile("complete-secret-key-selector.yaml", yamlWithCompleteSecretKeySelector)
     // This should not throw an exception
     val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
 
@@ -346,7 +347,8 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |              key: secret-key
         |""".stripMargin
 
-    val elidedNameFile = createTemplateFile("elided-name-secret-key-selector.yaml", yamlWithElidedName)
+    val elidedNameFile =
+      createTemplateFile("elided-name-secret-key-selector.yaml", yamlWithElidedName)
     // This should not throw an exception
     val elidedNameResult = JobTemplateLoader.loadJobItemTemplate(elidedNameFile.getAbsolutePath)
 
@@ -397,7 +399,8 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |              name: my-secret
         |""".stripMargin
 
-    val missingKeyFile = createTemplateFile("missing-key-secret-key-selector.yaml", yamlWithMissingKey)
+    val missingKeyFile =
+      createTemplateFile("missing-key-secret-key-selector.yaml", yamlWithMissingKey)
     // This should not throw an exception
     val missingKeyResult = JobTemplateLoader.loadJobItemTemplate(missingKeyFile.getAbsolutePath)
 

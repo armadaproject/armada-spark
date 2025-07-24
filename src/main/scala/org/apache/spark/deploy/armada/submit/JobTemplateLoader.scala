@@ -75,8 +75,8 @@ private[spark] object JobTemplateLoader {
     }
   }
 
-  /** Custom deserializer for SecretKeySelector objects. Handles the case where the localObjectReference
-    * (name field) is elided.
+  /** Custom deserializer for SecretKeySelector objects. Handles the case where the
+    * localObjectReference (name field) is elided.
     */
   private class SecretKeySelectorDeserializer extends JsonDeserializer[SecretKeySelector] {
     @throws(classOf[JsonProcessingException])
