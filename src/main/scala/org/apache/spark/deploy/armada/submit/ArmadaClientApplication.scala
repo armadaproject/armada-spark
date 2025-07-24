@@ -706,7 +706,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private def removeAuthToken(seq: Seq[String]): Seq[String] = {
     seq.grouped(2).toSeq.filter(!_(1).contains("auth.token")).flatten
-    }
+  }
 
   private[submit] def createDriverJob(
       armadaJobConfig: ArmadaJobConfig,
