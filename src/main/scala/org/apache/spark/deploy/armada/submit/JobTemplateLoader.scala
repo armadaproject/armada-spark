@@ -76,7 +76,7 @@ private[spark] object JobTemplateLoader {
   }
 
   /** Custom deserializer for SecretKeySelector objects. Handles the case where the
-    * localObjectReference (name field) is elided.
+    * localObjectReference is elided.
     */
   private class SecretKeySelectorDeserializer extends JsonDeserializer[SecretKeySelector] {
     @throws(classOf[JsonProcessingException])
@@ -87,7 +87,7 @@ private[spark] object JobTemplateLoader {
       // Extract the key field
       val key = Option(node.get("key")).map(_.asText())
 
-      // Extract the name field (which might be elided)
+      // Extract the localObjectReference (which might be elided)
       val localObjectRef = Option(node.get("name"))
         .filter(n => Option(n.asText()).exists(_.nonEmpty))
         .map(n => new LocalObjectReference(Option(n.asText())))

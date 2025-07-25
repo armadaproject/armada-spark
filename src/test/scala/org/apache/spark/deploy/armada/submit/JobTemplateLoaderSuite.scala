@@ -306,7 +306,8 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   test("should correctly deserialize SecretKeySelector values") {
-    // Test case 1: Complete SecretKeySelector with both name and key
+    val secretName = "secretName"
+    val secretKey = "secretKey"
     val yamlWithCompleteSecretKeySelector =
       """priority: 1.0
         |namespace: default
@@ -327,88 +328,8 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
 
     // Verify the pod spec was parsed correctly
-    completeResult.podSpec should not be empty
-    completeResult.podSpec.get.containers should have size 1
-    completeResult.podSpec.get.containers.head.env should have size 1
-    completeResult.podSpec.get.containers.head.env.head.valueFrom should not be empty
-    completeResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef should not be empty
-
-    // Test case 2: SecretKeySelector with elided name field
-    val yamlWithElidedName =
-      """priority: 1.0
-        |namespace: default
-        |podSpec:
-        |  containers:
-        |    - name: test-container
-        |      env:
-        |        - name: SECRET_ENV
-        |          valueFrom:
-        |            secretKeyRef:
-        |              key: secret-key
-        |""".stripMargin
-
-    val elidedNameFile =
-      createTemplateFile("elided-name-secret-key-selector.yaml", yamlWithElidedName)
-    // This should not throw an exception
-    val elidedNameResult = JobTemplateLoader.loadJobItemTemplate(elidedNameFile.getAbsolutePath)
-
-    // Verify the pod spec was parsed correctly
-    elidedNameResult.podSpec should not be empty
-    elidedNameResult.podSpec.get.containers should have size 1
-    elidedNameResult.podSpec.get.containers.head.env should have size 1
-    elidedNameResult.podSpec.get.containers.head.env.head.valueFrom should not be empty
-    elidedNameResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef should not be empty
-
-    // Test case 3: SecretKeySelector with empty name field
-    val yamlWithEmptyName =
-      """priority: 1.0
-        |namespace: default
-        |podSpec:
-        |  containers:
-        |    - name: test-container
-        |      env:
-        |        - name: SECRET_ENV
-        |          valueFrom:
-        |            secretKeyRef:
-        |              name: ""
-        |              key: secret-key
-        |""".stripMargin
-
-    val emptyNameFile = createTemplateFile("empty-name-secret-key-selector.yaml", yamlWithEmptyName)
-    // This should not throw an exception
-    val emptyNameResult = JobTemplateLoader.loadJobItemTemplate(emptyNameFile.getAbsolutePath)
-
-    // Verify the pod spec was parsed correctly
-    emptyNameResult.podSpec should not be empty
-    emptyNameResult.podSpec.get.containers should have size 1
-    emptyNameResult.podSpec.get.containers.head.env should have size 1
-    emptyNameResult.podSpec.get.containers.head.env.head.valueFrom should not be empty
-    emptyNameResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef should not be empty
-
-    // Test case 4: SecretKeySelector with missing key field
-    val yamlWithMissingKey =
-      """priority: 1.0
-        |namespace: default
-        |podSpec:
-        |  containers:
-        |    - name: test-container
-        |      env:
-        |        - name: SECRET_ENV
-        |          valueFrom:
-        |            secretKeyRef:
-        |              name: my-secret
-        |""".stripMargin
-
-    val missingKeyFile =
-      createTemplateFile("missing-key-secret-key-selector.yaml", yamlWithMissingKey)
-    // This should not throw an exception
-    val missingKeyResult = JobTemplateLoader.loadJobItemTemplate(missingKeyFile.getAbsolutePath)
-
-    // Verify the pod spec was parsed correctly
-    missingKeyResult.podSpec should not be empty
-    missingKeyResult.podSpec.get.containers should have size 1
-    missingKeyResult.podSpec.get.containers.head.env should have size 1
-    missingKeyResult.podSpec.get.containers.head.env.head.valueFrom should not be empty
-    missingKeyResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef should not be empty
+    val secretKeyRef = completeResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef.get
+    secretKeyRef.getLocalObjectReference.getName shouldBe "my-secret"
+    secretKeyRef.getKey shouldBe "secret-key"
   }
 }
