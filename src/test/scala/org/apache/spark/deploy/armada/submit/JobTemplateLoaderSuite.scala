@@ -307,7 +307,7 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
 
   test("should correctly deserialize SecretKeySelector with elided LocalObjectReference ") {
     val secretName = "secretName"
-    val secretKey = "secretKey"
+    val secretKey  = "secretKey"
     val yamlWithCompleteSecretKeySelector =
       s"""priority: 1.0
         |namespace: default
@@ -327,10 +327,10 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
 
     val secretKeyRef = for {
-      podSpec <- completeResult.podSpec
-      container <- podSpec.containers.headOption
-      env <- container.env.headOption
-      valueFrom <- env.valueFrom
+      podSpec      <- completeResult.podSpec
+      container    <- podSpec.containers.headOption
+      env          <- container.env.headOption
+      valueFrom    <- env.valueFrom
       secretKeyRef <- valueFrom.secretKeyRef
     } yield secretKeyRef
 
