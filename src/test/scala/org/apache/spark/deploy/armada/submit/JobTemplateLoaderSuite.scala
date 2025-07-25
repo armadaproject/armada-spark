@@ -305,11 +305,11 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     resources.limits("nvidia.com/gpu").getString shouldBe expectedLimitGpu
   }
 
-  test("should correctly deserialize SecretKeySelector values") {
+  test("should correctly deserialize SecretKeySelector with elided LocalObjectReference ") {
     val secretName = "secretName"
     val secretKey = "secretKey"
     val yamlWithCompleteSecretKeySelector =
-      """priority: 1.0
+      s"""priority: 1.0
         |namespace: default
         |podSpec:
         |  containers:
@@ -318,18 +318,23 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |        - name: SECRET_ENV
         |          valueFrom:
         |            secretKeyRef:
-        |              name: my-secret
-        |              key: secret-key
+        |              name: $secretName
+        |              key: $secretKey
         |""".stripMargin
 
     val completeFile =
       createTemplateFile("complete-secret-key-selector.yaml", yamlWithCompleteSecretKeySelector)
-    // This should not throw an exception
     val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
 
-    // Verify the pod spec was parsed correctly
-    val secretKeyRef = completeResult.podSpec.get.containers.head.env.head.valueFrom.get.secretKeyRef.get
-    secretKeyRef.getLocalObjectReference.getName shouldBe "my-secret"
-    secretKeyRef.getKey shouldBe "secret-key"
+    val secretKeyRef = for {
+      podSpec <- completeResult.podSpec
+      container <- podSpec.containers.headOption
+      env <- container.env.headOption
+      valueFrom <- env.valueFrom
+      secretKeyRef <- valueFrom.secretKeyRef
+    } yield secretKeyRef
+
+    secretKeyRef.get.getLocalObjectReference.getName shouldBe secretName
+    secretKeyRef.get.getKey shouldBe secretKey
   }
 }
