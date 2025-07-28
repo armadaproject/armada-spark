@@ -41,6 +41,29 @@ class ConfigSuite extends AnyFunSuite with TableDrivenPropertyChecks with Matche
     }
   }
 
+  test("commaSeparatedAnnotationsToMap") {
+    val testCases = Table(
+      // columns
+      ("annotations", "expected"),
+      // rows
+      ("", Map.empty[String, String]),
+      (
+        "nginx.ingress.kubernetes.io/rewrite-target=/",
+        Map("nginx.ingress.kubernetes.io/rewrite-target" -> "/")
+      ),
+      ("key1=value1,key2=value2", Map("key1" -> "value1", "key2" -> "value2")),
+      (
+        "app.kubernetes.io/name=spark,app.kubernetes.io/version=3.5.0",
+        Map("app.kubernetes.io/name" -> "spark", "app.kubernetes.io/version" -> "3.5.0")
+      ),
+      (" key1=value1 , key2 = value2 ", Map("key1" -> "value1", "key2" -> "value2"))
+    )
+
+    forAll(testCases) { (annotations, expected) =>
+      commaSeparatedAnnotationsToMap(annotations) shouldEqual expected
+    }
+  }
+
   test("isValidFilePath") {
     import java.lang.reflect.Method
 

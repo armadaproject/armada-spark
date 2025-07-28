@@ -86,6 +86,23 @@ podSpec:
           nvidia.com/gpu: 1
 ```
 
+#### Expose Driver UI
+
+To expose the Spark driver UI, you can add an ingress configuration in the driver template:
+
+```yaml
+priority: 100
+namespace: spark-drivers
+labels:
+  component: spark-driver
+  app: data-processing
+ingress:
+  annotations:
+    kubernetes.io/rewrite-target: /
+  tlsEnabled: true
+  certName: spark-driver-tls
+```
+
 ### Executor Template (Armada JobSubmitRequestItem API)
 
 ```yaml

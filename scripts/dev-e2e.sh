@@ -158,36 +158,38 @@ init-cluster() {
 }
 
 run-test() {
-  echo Running $1 test $2 $3 $4
-  PATH="$scripts:$AOHOME/bin/tooling/:$PATH" JOBSET="$JOBSET" "$scripts/submitArmadaSpark.sh" $2 $3 $4 2>&1 | \
-    tee submitArmadaSpark.log
-  DRIVER_JOBID=$(grep '^Submitted driver job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
-  EXECUTOR_JOBIDS=$(grep '^Submitted executor job with ID:' submitArmadaSpark.log | awk '{print $6}' | sed -e 's/,$//')
-
-  if ! grep -q "BasicExecutorFeatureStep: Decommissioning not enabled" submitArmadaSpark.log; then err "Job failed: feature steps not run"; exit 1; fi
-
-  if [ "${GITHUB_ACTIONS:-false}" == "true" ]; then
-    echo "jobid=$DRIVER_JOBID" >> "$GITHUB_OUTPUT"
+  echo "Running Scala E2E test suite..."
+  
+  # Add armadactl to PATH so the e2e framework can access it
+  PATH="$scripts:$AOHOME/bin/tooling/:$PATH"
+  export PATH
+  
+  # Change to armada-spark directory
+  cd "$scripts/.."
+  
+  # Run the Scala E2E test suite
+  mvn scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
+    -Dcontainer.image="$IMAGE_NAME" \
+    -Dscala.version="$SCALA_VERSION" \
+    -Dspark.version="$SPARK_VERSION" \
+    -Darmada.queue="$ARMADA_QUEUE" \
+    -Darmada.master="armada://localhost:30002" \
+    -Darmada.lookout.url="http://localhost:30000" 2>&1 | \
+    tee e2e-test.log
+  
+  TEST_EXIT_CODE=${PIPESTATUS[0]}
+  
+  if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+    err "E2E tests failed with exit code $TEST_EXIT_CODE"
+    exit $TEST_EXIT_CODE
   fi
-
+  
+  log "E2E tests completed successfully"
+  
   if [ "$JOB_DETAILS" = 1 ]; then
-    sleep 10   # wait a moment for Armada to schedule & run the job
-
-    timeout 5m "$scripts"/armadactl watch "$ARMADA_QUEUE" "$JOBSET" --exit-if-inactive 2>&1 | \
-      tee armadactl.watch.log | log_group "Watching Driver Job"
-
-    if grep "Job failed:" armadactl.watch.log; then err "Job failed"; exit 1; fi
-
-    curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
-      --json "{\"jobId\":\"$DRIVER_JOBID\"}" | jq | log_group "Driver Job Spec  $DRIVER_JOBID"
-
-    for exec_jobid in $EXECUTOR_JOBIDS; do
-      curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" \
-          --json "{\"jobId\":\"$exec_jobid\"}" | jq | log_group "Executor Job Spec  $exec_jobid"
-    done
-
+    # Show pod details for debugging
     kubectl get pods -A 2>&1 | log_group "pods"
-
+    
     kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
     do
       (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
@@ -198,7 +200,7 @@ run-test() {
 
 main() {
     init-cluster
-    run-test scala -c "local:///opt/spark/extraFiles/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar" $ITERATION_COUNT
+    run-test
 }
 
 main
