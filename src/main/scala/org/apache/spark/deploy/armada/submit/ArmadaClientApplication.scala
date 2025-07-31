@@ -166,20 +166,39 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments: ClientArguments,
       sparkConf: SparkConf
   ): Unit = {
+    log("[RUN] Starting Armada job submission")
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
+    log(s"[RUN] Queue: '${armadaJobConfig.queue}', JobSetId: '${armadaJobConfig.jobSetId}'")
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
-    log(s"host is $host, port is $port")
+    log(s"[RUN] Armada connection - host: $host, port: $port")
+
+    // Log environment info for CI debugging
+    if (sys.env.get("CI").contains("true") || sys.env.get("GITHUB_ACTIONS").contains("true")) {
+      log(
+        s"[RUN] Running in CI environment (CI=${sys.env.get("CI")}, GITHUB_ACTIONS=${sys.env.get("GITHUB_ACTIONS")})"
+      )
+    }
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
-    val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
+
+    log(s"[RUN] Checking Armada health with timeout: $healthTimeout")
+    val healthResp =
+      try {
+        Await.result(armadaClient.submitHealth(), healthTimeout)
+      } catch {
+        case e: Exception =>
+          log(s"[RUN] Health check failed: ${e.getClass.getName}: ${e.getMessage}")
+          throw e
+      }
 
     if (healthResp.status.isServing) {
-      log("Submit health good!")
+      log("[RUN] Submit health good!")
     } else {
-      log("Could not contact Armada!")
+      log("[RUN] Could not contact Armada!")
+      throw new RuntimeException("Armada health check failed - service not serving")
     }
 
     // # FIXME: Need to check how this is launched whether to submit a job or
@@ -362,9 +381,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
+    log(s"[SUBMIT-JOB] Starting job submission process")
+    log(s"[SUBMIT-JOB] Queue: '${armadaJobConfig.queue}' (from config)")
+    log(s"[SUBMIT-JOB] JobSetId: '${armadaJobConfig.jobSetId}'")
 
     val primaryResource = extractPrimaryResource(clientArguments.mainAppResource)
     val executorCount   = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
+    log(s"[SUBMIT-JOB] Primary resource: $primaryResource")
+    log(s"[SUBMIT-JOB] Executor count: $executorCount")
 
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -824,13 +849,37 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       driver: api.submit.JobSubmitRequestItem
   ): String = {
-    val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
-    val driverJobId    = driverResponse.jobResponseItems.head.jobId
+    log(
+      s"[SUBMIT-DRIVER] Submitting driver job to queue: '$queue' (length: ${queue.length}), jobSetId: '$jobSetId'"
+    )
+    // Log container image if available
+    val containerImage = for {
+      podSpec   <- driver.podSpec
+      container <- podSpec.containers.headOption
+      image     <- container.image
+    } yield image
+    containerImage.foreach(image => log(s"[SUBMIT-DRIVER] Driver container image: $image"))
+
+    val driverResponse =
+      try {
+        armadaClient.submitJobs(queue, jobSetId, Seq(driver))
+      } catch {
+        case e: Exception =>
+          log(
+            s"[SUBMIT-DRIVER] ERROR: Failed to submit driver job: ${e.getClass.getName}: ${e.getMessage}"
+          )
+          if (e.getMessage != null && e.getMessage.contains("could not find queue")) {
+            log(s"[SUBMIT-DRIVER] Queue '$queue' not found. This might be a timing issue in CI.")
+          }
+          throw e
+      }
+
+    val driverJobId = driverResponse.jobResponseItems.head.jobId
     val error = Some(driverResponse.jobResponseItems.head.error)
       .filter(_.nonEmpty)
       .getOrElse("none")
     log(
-      s"Submitted driver job with ID: $driverJobId, Error: $error"
+      s"[SUBMIT-DRIVER] Submitted driver job with ID: $driverJobId, Error: $error"
     )
     driverJobId
   }
@@ -841,10 +890,27 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       executors: Seq[api.submit.JobSubmitRequestItem]
   ): Seq[String] = {
-    val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
+    log(
+      s"[SUBMIT-EXECUTOR] Submitting ${executors.size} executor(s) to queue: '$queue', jobSetId: '$jobSetId'"
+    )
+
+    val executorsResponse =
+      try {
+        armadaClient.submitJobs(queue, jobSetId, executors)
+      } catch {
+        case e: Exception =>
+          log(
+            s"[SUBMIT-EXECUTOR] ERROR: Failed to submit executor jobs: ${e.getClass.getName}: ${e.getMessage}"
+          )
+          if (e.getMessage != null && e.getMessage.contains("could not find queue")) {
+            log(s"[SUBMIT-EXECUTOR] Queue '$queue' not found. This might be a timing issue in CI.")
+          }
+          throw e
+      }
+
     executorsResponse.jobResponseItems.map { item =>
       val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      log(s"[SUBMIT-EXECUTOR] Submitted executor job with ID: ${item.jobId}, Error: $error")
       item.jobId
     }
   }

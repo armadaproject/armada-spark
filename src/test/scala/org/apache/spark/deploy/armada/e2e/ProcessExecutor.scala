@@ -63,6 +63,14 @@ object ProcessExecutor {
       case Success(result) if result.timedOut =>
         throw new TimeoutException(s"Process timed out after $timeout: ${command.mkString(" ")}")
       case Success(result) =>
+        println(s"[PROCESS] Command failed: ${command.take(3).mkString(" ")}...")
+        println(s"[PROCESS] Exit code: ${result.exitCode}")
+        if (result.stdout.nonEmpty) {
+          println(s"[PROCESS] Stdout: ${result.stdout.take(1000)}")
+        }
+        if (result.stderr.nonEmpty) {
+          println(s"[PROCESS] Stderr: ${result.stderr.take(1000)}")
+        }
         throw new ProcessExecutionException(
           s"Process failed with exit code ${result.exitCode}",
           result

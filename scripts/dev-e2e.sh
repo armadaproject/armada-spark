@@ -117,6 +117,19 @@ init-cluster() {
     fetch-armadactl 2>&1 | log_group "Fetching armadactl"
   fi
 
+  # Verify armadactl version
+  echo "Verifying armadactl version..."
+  "$scripts"/armadactl version
+
+  # Log environment details for debugging
+  echo "Environment details:"
+  echo "- Hostname: $(hostname)"
+  echo "- User: $(whoami)"
+  echo "- Working directory: $(pwd)"
+  echo "- Docker info: $(docker info --format 'Server Version: {{.ServerVersion}}')"
+  echo "- Network interfaces:"
+  ip addr show | grep -E "^[0-9]+:|inet " || ifconfig | grep -E "^[a-z0-9]+:|inet "
+
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
@@ -142,8 +155,6 @@ init-cluster() {
     log "Armada is available"
   fi
 
-  armadactl-retry create queue "$ARMADA_QUEUE" 2>&1 | log_group "Creating $ARMADA_QUEUE queue"
-
   mkdir -p "$scripts/.tmp"
 
   TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
@@ -159,38 +170,39 @@ init-cluster() {
 
 run-test() {
   echo "Running Scala E2E test suite..."
-  
+
   # Add armadactl to PATH so the e2e framework can access it
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH"
   export PATH
-  
+
   # Change to armada-spark directory
   cd "$scripts/.."
-  
+
   # Run the Scala E2E test suite
   mvn scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
     -Dcontainer.image="$IMAGE_NAME" \
     -Dscala.version="$SCALA_VERSION" \
+    -Dscala.binary.version="$SCALA_BIN_VERSION" \
     -Dspark.version="$SPARK_VERSION" \
     -Darmada.queue="$ARMADA_QUEUE" \
     -Darmada.master="armada://localhost:30002" \
     -Darmada.lookout.url="http://localhost:30000" \
     -Darmadactl.path="$scripts/armadactl" 2>&1 | \
     tee e2e-test.log
-  
+
   TEST_EXIT_CODE=${PIPESTATUS[0]}
-  
+
   if [ "$TEST_EXIT_CODE" -ne 0 ]; then
     err "E2E tests failed with exit code $TEST_EXIT_CODE"
     exit $TEST_EXIT_CODE
   fi
-  
+
   log "E2E tests completed successfully"
-  
+
   if [ "$JOB_DETAILS" = 1 ]; then
     # Show pod details for debugging
     kubectl get pods -A 2>&1 | log_group "pods"
-    
+
     kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
     do
       (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
