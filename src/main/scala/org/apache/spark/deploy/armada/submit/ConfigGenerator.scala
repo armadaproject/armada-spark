@@ -38,7 +38,7 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
 
   private val confFiles = getConfFiles
   private def getConfFiles: Array[File] = {
-    val VALID_FILE_NAME_REGEX = "([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]"
+    val VALID_FILE_NAME_REGEX = "([\\w][-\\w.]*)?[\\w]"
     confDir
       .map(new File(_))
       .filter(_.isDirectory)
