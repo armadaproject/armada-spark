@@ -43,19 +43,19 @@ fetch-armadactl() {
 
   if [ "$os" = "Darwin" ]; then
     dl_os='darwin'
+    dl_arch='all'  # Darwin releases use 'all' for universal binaries
   elif [ "$os" = "Linux" ]; then
     dl_os='linux'
+    if [ "$arch" = 'arm64' ]; then
+      dl_arch='arm64'
+    elif [ "$arch" = 'x86_64' ]; then
+      dl_arch='amd64'
+    else
+      err "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
+      exit 1
+    fi
   else
     err "fetch-armadactl(): sorry, operating system $os not supported; exiting now"
-    exit 1
-  fi
-
-  if [ "$arch" = 'arm64' ]; then
-    dl_arch='arm64'
-  elif [ "$arch" = 'x86_64' ]; then
-    dl_arch='amd64'
-  else
-    err "fetch-armadactl(): sorry, architecture $arch not supported; exiting now"
     exit 1
   fi
 
@@ -101,7 +101,7 @@ start-armada() {
 }
 
 init-cluster() {
-  if ! (echo "$IMAGE_NAME" | grep -Pq '^\w+:\w+$'); then
+  if ! (echo "$IMAGE_NAME" | grep -Eq '^[[:alnum:]_]+:[[:alnum:]_]+$'); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
     exit 1
@@ -174,7 +174,8 @@ run-test() {
     -Dspark.version="$SPARK_VERSION" \
     -Darmada.queue="$ARMADA_QUEUE" \
     -Darmada.master="armada://localhost:30002" \
-    -Darmada.lookout.url="http://localhost:30000" 2>&1 | \
+    -Darmada.lookout.url="http://localhost:30000" \
+    -Darmadactl.path="$scripts/armadactl" 2>&1 | \
     tee e2e-test.log
   
   TEST_EXIT_CODE=${PIPESTATUS[0]}

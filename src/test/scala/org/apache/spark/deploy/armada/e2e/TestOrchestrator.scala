@@ -104,13 +104,7 @@ class TestOrchestrator(
     val context = TestContext(name)
     val testJobSetId =
       s"e2e-${name.toLowerCase.replaceAll("[^a-z0-9]", "-")}-${System.currentTimeMillis()}"
-    // Use exact queue name if it looks like it was passed as a system property (no suffix)
-    // Otherwise append suffix for test isolation
-    val queueName = if (config.baseQueueName == "test" || config.baseQueueName.contains("-")) {
-      config.baseQueueName
-    } else {
-      s"${config.baseQueueName}-${context.queueSuffix}"
-    }
+    val queueName = s"${config.baseQueueName}-${context.queueSuffix}"
 
     println(s"* Starting E2E Test: $name")
     println(s"** Test ID: ${context.testId}")

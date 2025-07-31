@@ -200,9 +200,32 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
   }
 
   /** Builds armadactl command with proper arguments. Splits subCommand by spaces and appends
-    * armadaUrl flag.
+    * armadaUrl flag. Tries to find armadactl in PATH or uses system property.
     */
   private def buildCommand(subCommand: String): Seq[String] = {
-    Seq("armadactl") ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadaUrl)
+    val armadactlCmd = resolveArmadactlPath.getOrElse {
+      throw new RuntimeException("armadactl not found in system properties or PATH")
+    }
+    Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadaUrl)
+  }
+
+  /** Resolves the path to `armadactl`:
+    *   - Uses `armadactl.path` system property if set.
+    *   - Otherwise searches for `armadactl` in `$PATH`.
+    *
+    * @return
+    *   Some(path) if found, None otherwise.
+    */
+  private def resolveArmadactlPath: Option[String] = {
+    sys.props
+      .get("armadactl.path")
+      .orElse {
+        val pathSep  = java.io.File.pathSeparator
+        val pathDirs = sys.env.get("PATH").map(_.split(pathSep)).getOrElse(Array.empty)
+        pathDirs
+          .map(dir => new java.io.File(dir, "armadactl"))
+          .find(_.exists())
+          .map(_.getAbsolutePath)
+      }
   }
 }
