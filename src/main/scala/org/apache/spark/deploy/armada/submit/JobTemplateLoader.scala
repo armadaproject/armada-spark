@@ -22,12 +22,14 @@ import com.fasterxml.jackson.databind.{
   DeserializationContext,
   DeserializationFeature,
   JsonDeserializer,
+  JsonNode,
   ObjectMapper
 }
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
+import k8s.io.api.core.v1.generated.{LocalObjectReference, SecretKeySelector}
 
 import java.io.{File, InputStream}
 import java.net.{HttpURLConnection, URL}
@@ -51,9 +53,10 @@ private[spark] object JobTemplateLoader {
     mapper.registerModule(DefaultScalaModule)
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    // Register custom deserializer for Quantity class
+    // Register custom deserializers
     val module = new SimpleModule()
     module.addDeserializer(classOf[Quantity], new QuantityDeserializer())
+    module.addDeserializer(classOf[SecretKeySelector], new SecretKeySelectorDeserializer())
     mapper.registerModule(module)
 
     mapper
@@ -66,9 +69,31 @@ private[spark] object JobTemplateLoader {
     @throws(classOf[JsonProcessingException])
     override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {
       Some(p.getValueAsString)
-        .filter(s => s != null && !s.isEmpty)
+        .filter(s => s != null && s.nonEmpty)
         .map(s => new Quantity(Option(s)))
         .orNull
+    }
+  }
+
+  /** Custom deserializer for SecretKeySelector objects. Handles the case where the
+    * localObjectReference is elided.
+    */
+  private class SecretKeySelectorDeserializer extends JsonDeserializer[SecretKeySelector] {
+    @throws(classOf[JsonProcessingException])
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): SecretKeySelector = {
+      // Use the codec to read the JSON as a tree
+      val node = p.getCodec.readTree(p).asInstanceOf[JsonNode]
+
+      // Extract the key field
+      val key = Option(node.get("key")).map(_.asText())
+
+      // Extract the localObjectReference (which might be elided)
+      val localObjectRef = Option(node.get("name"))
+        .filter(n => Option(n.asText()).exists(_.nonEmpty))
+        .map(n => new LocalObjectReference(Option(n.asText())))
+
+      // Create a new SecretKeySelector with the extracted fields
+      new SecretKeySelector(localObjectRef, key)
     }
   }
 
