@@ -53,40 +53,6 @@ class ArmadaSparkE2E
 
     val props = loadProperties()
 
-    // Debug logging - print all system properties related to versions
-    println(s"[VERSION DEBUG] === Version Detection Debug ===")
-    println(s"[VERSION DEBUG] Environment variables:")
-    println(s"[VERSION DEBUG]   SPARK_VERSION = ${sys.env.get("SPARK_VERSION")}")
-    println(s"[VERSION DEBUG]   SCALA_VERSION = ${sys.env.get("SCALA_VERSION")}")
-    println(s"[VERSION DEBUG]   SPARK_BIN_VERSION = ${sys.env.get("SPARK_BIN_VERSION")}")
-    println(s"[VERSION DEBUG]   SCALA_BIN_VERSION = ${sys.env.get("SCALA_BIN_VERSION")}")
-
-    println(s"[VERSION DEBUG] System properties:")
-    sys.props
-      .filter { case (k, _) => k.contains("version") || k.contains("spark") || k.contains("scala") }
-      .foreach { case (k, v) => println(s"[VERSION DEBUG]   $k = $v") }
-
-    println(s"[VERSION DEBUG] Direct system property access:")
-    println(s"[VERSION DEBUG]   sys.props.get('spark.version') = ${sys.props.get("spark.version")}")
-    println(s"[VERSION DEBUG]   sys.props.get('scala.version') = ${sys.props.get("scala.version")}")
-    println(
-      s"[VERSION DEBUG]   sys.props.get('scala.binary.version') = ${sys.props.get("scala.binary.version")}"
-    )
-
-    println(s"[VERSION DEBUG] Props after loading:")
-    println(
-      s"[VERSION DEBUG]   props.getProperty('spark.version') = ${props.getProperty("spark.version")}"
-    )
-    println(
-      s"[VERSION DEBUG]   props.getProperty('scala.version') = ${props.getProperty("scala.version")}"
-    )
-    println(
-      s"[VERSION DEBUG]   props.getProperty('spark.binary.version') = ${props.getProperty("spark.binary.version")}"
-    )
-    println(
-      s"[VERSION DEBUG]   props.getProperty('scala.binary.version') = ${props.getProperty("scala.binary.version")}"
-    )
-
     // Get Scala binary version - either from system property or derive from full version
     // This should be "2.12" or "2.13", not the full version like "2.12.15"
     val scalaBinaryVersion = props.getProperty("scala.binary.version") match {
@@ -97,10 +63,6 @@ class ArmadaSparkE2E
     }
 
     val finalSparkVersion = props.getProperty("spark.version", "3.5.5")
-    println(s"[VERSION DEBUG] Final versions to use:")
-    println(s"[VERSION DEBUG]   scalaBinaryVersion = $scalaBinaryVersion")
-    println(s"[VERSION DEBUG]   finalSparkVersion = $finalSparkVersion")
-    println(s"[VERSION DEBUG] === End Version Debug ===")
 
     baseConfig = TestConfig(
       baseQueueName = props.getProperty("armada.queue", baseQueueName),
@@ -132,27 +94,15 @@ class ArmadaSparkE2E
       )
 
       try {
-        // Try to create a test queue
-        val createResult = armadaClient.ensureQueue(testQueueName).futureValue
-        info(s"[CLUSTER-CHECK] Queue creation succeeded")
+        armadaClient.ensureQueueExists(testQueueName).futureValue
+        info(s"[CLUSTER-CHECK] Queue creation and verification succeeded - cluster is ready!")
+        clusterReady = true
 
-        // Verify the queue exists
-        Thread.sleep(2000) // Give it 2 seconds to propagate
-        val queueCheck = armadaClient.getQueue(testQueueName).futureValue
-
-        if (queueCheck.isDefined) {
-          info(s"[CLUSTER-CHECK] Queue verification succeeded - cluster is ready!")
-          clusterReady = true
-
-          // Clean up test queue
-          try {
-            armadaClient.deleteQueue(testQueueName).futureValue
-            info(s"[CLUSTER-CHECK] Test queue cleaned up")
-          } catch {
-            case _: Exception => // Ignore cleanup failures
-          }
-        } else {
-          throw new Exception("Queue created but not visible")
+        try {
+          armadaClient.deleteQueue(testQueueName).futureValue
+          info(s"[CLUSTER-CHECK] Test queue cleaned up")
+        } catch {
+          case _: Exception => // Ignore cleanup failures
         }
       } catch {
         case ex: Exception =>
@@ -182,22 +132,12 @@ class ArmadaSparkE2E
   }
 
   test("Basic SparkPi job", E2ETest) {
-    println("[TEST-BASIC] Starting basic SparkPi test")
     val config = baseConfig.copy(
       sparkConfs = Map("spark.armada.pod.labels" -> "test-type=basic")
     )
-    println(s"[TEST-BASIC] Config: $config")
 
-    try {
-      val result = orchestrator.runTest("basic-spark-pi", config).futureValue
-      result.status shouldBe JobSetStatus.Success
-    } catch {
-      case ex: Exception =>
-        println(s"[TEST-BASIC] Test failed with exception: ${ex.getClass.getName}")
-        println(s"[TEST-BASIC] Message: ${ex.getMessage}")
-        ex.printStackTrace()
-        throw ex
-    }
+    val result = orchestrator.runTest("basic-spark-pi", config).futureValue
+    result.status shouldBe JobSetStatus.Success
   }
 
   test("SparkPi job with node selectors", E2ETest) {
@@ -286,36 +226,28 @@ class ArmadaSparkE2E
     }
 
     // Check system properties first, then environment variables
-    // This matches how init.sh and other scripts work
     def getPropertyOrEnv(propName: String, envName: String): Option[String] = {
       sys.props.get(propName).orElse(sys.env.get(envName))
     }
 
+    // Helper to set property if it exists in either system properties or environment variables
+    def set(property: String, envvar: String): Unit = {
+      getPropertyOrEnv(property, envvar).foreach(
+        props.setProperty(property, _)
+      )
+    }
+
     // Set properties using the same precedence as the scripts
-    getPropertyOrEnv("container.image", "IMAGE_NAME").foreach(
-      props.setProperty("container.image", _)
-    )
-    getPropertyOrEnv("armada.master", "ARMADA_MASTER").foreach(
-      props.setProperty("armada.master", _)
-    )
-    getPropertyOrEnv("armada.lookout.url", "ARMADA_LOOKOUT_URL").foreach(
-      props.setProperty("armada.lookout.url", _)
-    )
-    getPropertyOrEnv("scala.version", "SCALA_VERSION").foreach(
-      props.setProperty("scala.version", _)
-    )
-    getPropertyOrEnv("spark.version", "SPARK_VERSION").foreach(
-      props.setProperty("spark.version", _)
-    )
-    getPropertyOrEnv("armada.queue", "ARMADA_QUEUE").foreach(props.setProperty("armada.queue", _))
+    set("container.image", "IMAGE_NAME")
+    set("armada.master", "ARMADA_MASTER")
+    set("armada.lookout.url", "ARMADA_LOOKOUT_URL")
+    set("scala.version", "SCALA_VERSION")
+    set("spark.version", "SPARK_VERSION")
+    set("armada.queue", "ARMADA_QUEUE")
 
     // Also check for binary versions
-    getPropertyOrEnv("scala.binary.version", "SCALA_BIN_VERSION").foreach(
-      props.setProperty("scala.binary.version", _)
-    )
-    getPropertyOrEnv("spark.binary.version", "SPARK_BIN_VERSION").foreach(
-      props.setProperty("spark.binary.version", _)
-    )
+    set("scala.binary.version", "SCALA_BIN_VERSION")
+    set("spark.binary.version", "SPARK_BIN_VERSION")
 
     props
   }

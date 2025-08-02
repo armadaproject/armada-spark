@@ -54,14 +54,10 @@ object Retry {
     Future(operation).recoverWith {
       case error if attempt < config.maxAttempts =>
         val delay = calculateDelay(config, attempt)
-        println(
-          s"[RETRY] Attempt $attempt failed: ${error.getMessage}, retrying in ${delay.toMillis}ms"
-        )
         Future {
           Thread.sleep(delay.toMillis)
         }.flatMap(_ => attemptWithBackoff(operation, config, attempt + 1))
       case finalError =>
-        println(s"[RETRY] Final attempt $attempt failed: ${finalError.getMessage}")
         Future.failed(finalError)
     }
   }

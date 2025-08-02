@@ -64,7 +64,7 @@ class ArmadaClientE2ESuite extends AnyFunSuite with Matchers with ScalaFutures {
     val testQueue = s"ensure-test-${UUID.randomUUID().toString.take(8)}"
 
     val result = for {
-      _     <- client.ensureQueue(testQueue)
+      _     <- client.ensureQueueExists(testQueue)
       queue <- client.getQueue(testQueue)
     } yield {
       queue shouldBe defined

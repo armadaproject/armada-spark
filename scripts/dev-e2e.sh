@@ -117,18 +117,6 @@ init-cluster() {
     fetch-armadactl 2>&1 | log_group "Fetching armadactl"
   fi
 
-  # Verify armadactl version
-  echo "Verifying armadactl version..."
-  "$scripts"/armadactl version
-
-  # Log environment details for debugging
-  echo "Environment details:"
-  echo "- Hostname: $(hostname)"
-  echo "- User: $(whoami)"
-  echo "- Working directory: $(pwd)"
-  echo "- Docker info: $(docker info --format 'Server Version: {{.ServerVersion}}')"
-  echo "- Network interfaces:"
-  ip addr show | grep -E "^[0-9]+:|inet " || ifconfig | grep -E "^[a-z0-9]+:|inet "
 
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
