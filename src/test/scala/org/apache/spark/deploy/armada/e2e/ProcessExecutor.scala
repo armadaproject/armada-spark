@@ -31,7 +31,9 @@ case class ProcessResult(
 )
 
 object ProcessExecutor {
-  def execute(command: Seq[String], timeout: Duration): ProcessResult = {
+
+  /** Execute command and always return ProcessResult, even on failure */
+  def executeWithResult(command: Seq[String], timeout: Duration): ProcessResult = {
     val stdout = new StringBuilder
     val stderr = new StringBuilder
 
@@ -40,45 +42,35 @@ object ProcessExecutor {
       line => stderr.append(line).append("\n")
     )
 
-    @volatile var timedOut = false
-    val process            = Process(command).run(processLogger)
+    val process = Process(command).run(processLogger)
 
-    Try {
-      import ExecutionContext.Implicits.global
-      val exitCodeFuture = Future(blocking(process.exitValue()))
+    import ExecutionContext.Implicits.global
+    val exitCodeFuture = Future(blocking(process.exitValue()))
 
-      Try(concurrent.Await.result(exitCodeFuture, timeout)) match {
-        case Success(exitCode) =>
-          ProcessResult(exitCode, stdout.toString.trim, stderr.toString.trim)
-        case Failure(_: TimeoutException) =>
-          timedOut = true
-          process.destroy()
-          process.exitValue() // Wait for termination
-          ProcessResult(-1, stdout.toString.trim, stderr.toString.trim, timedOut = true)
-        case Failure(ex) =>
-          throw ex
-      }
-    } match {
-      case Success(result) if result.exitCode == 0 => result
-      case Success(result) if result.timedOut =>
-        throw new TimeoutException(s"Process timed out after $timeout: ${command.mkString(" ")}")
-      case Success(result) =>
-        println(s"[PROCESS] Command failed: ${command.take(3).mkString(" ")}...")
-        println(s"[PROCESS] Exit code: ${result.exitCode}")
-        if (result.stdout.nonEmpty) {
-          println(s"[PROCESS] Stdout: ${result.stdout.take(1000)}")
-        }
-        if (result.stderr.nonEmpty) {
-          println(s"[PROCESS] Stderr: ${result.stderr.take(1000)}")
-        }
-        throw new ProcessExecutionException(
-          s"Process failed with exit code ${result.exitCode}",
-          result
-        )
+    Try(concurrent.Await.result(exitCodeFuture, timeout)) match {
+      case Success(exitCode) =>
+        ProcessResult(exitCode, stdout.toString.trim, stderr.toString.trim)
+      case Failure(_: TimeoutException) =>
+        process.destroy()
+        process.exitValue() // Wait for termination
+        ProcessResult(-1, stdout.toString.trim, stderr.toString.trim, timedOut = true)
       case Failure(ex) =>
         Try(process.destroy())
         throw ex
     }
+  }
+
+  /** Execute command and throw exception on non-zero exit code or timeout */
+  def execute(command: Seq[String], timeout: Duration): ProcessResult = {
+    val result = executeWithResult(command, timeout)
+    if (result.timedOut) {
+      throw new TimeoutException(s"Process timed out after $timeout: ${command.mkString(" ")}")
+    } else if (result.exitCode != 0) {
+      throw new RuntimeException(
+        s"Process failed with exit code ${result.exitCode}\nstderr: ${result.stderr}"
+      )
+    }
+    result
   }
 
   def executeAsync(command: Seq[String]): ProcessHandle = {
@@ -123,8 +115,3 @@ case class ProcessHandle(
 
   def isAlive: Boolean = Try(process.exitValue()).isFailure
 }
-
-class ProcessExecutionException(
-    message: String,
-    val result: ProcessResult
-) extends Exception(s"$message\nstderr: ${result.stderr}")

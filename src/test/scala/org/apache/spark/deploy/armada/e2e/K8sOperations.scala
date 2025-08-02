@@ -20,6 +20,7 @@ package org.apache.spark.deploy.armada.e2e
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 import scala.util.Try
+import java.util.concurrent.TimeoutException
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import scala.collection.mutable.ArrayBuffer

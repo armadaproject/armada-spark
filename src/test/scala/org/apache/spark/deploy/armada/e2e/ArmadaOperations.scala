@@ -24,7 +24,9 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.concurrent.duration._
+import TestConstants._
 import scala.util.{Failure, Success, Try}
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Abstraction for Armada operations used in E2E testing.
   *
@@ -52,7 +54,7 @@ trait ArmadaOperations {
     * @param name
     *   Queue name to ensure exists
     */
-  def ensureQueue(name: String)(implicit ec: ExecutionContext): Future[Unit]
+  def ensureQueueExists(name: String)(implicit ec: ExecutionContext): Future[Unit]
 
   /** Deletes a queue if supported by Armada.
     * @param name
@@ -95,8 +97,9 @@ object JobSetStatus {
   *   Armada server URL (default: "localhost:30002")
   */
 class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperations {
-  private val processTimeout = 30.seconds
-  private val retryConfig    = RetryConfig(maxAttempts = 3, initialDelay = 1.second)
+  private val processTimeout = DefaultProcessTimeout
+  private val retryConfig =
+    RetryConfig(maxAttempts = DefaultMaxRetries, initialDelay = DefaultRetryDelay)
 
   private val yamlMapper = {
     val mapper = new ObjectMapper(new YAMLFactory())
@@ -106,25 +109,9 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
   }
 
   override def createQueue(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
-    println(s"[QUEUE] Creating queue: $name")
     Retry.withBackoff(retryConfig) {
       val cmd = buildCommand(s"create queue $name")
-      println(s"[QUEUE] Executing: ${cmd.mkString(" ")}")
-      val result = ProcessExecutor.execute(cmd, processTimeout)
-      println(s"[QUEUE] Create queue result - exitCode: ${result.exitCode}")
-      if (result.stdout.nonEmpty) {
-        println(s"[QUEUE] stdout: ${result.stdout}")
-      }
-      if (result.stderr.nonEmpty) {
-        println(s"[QUEUE] stderr: ${result.stderr}")
-      }
-
-      // Check if creation actually succeeded
-      if (result.exitCode != 0) {
-        throw new RuntimeException(
-          s"Failed to create queue $name: exit code ${result.exitCode}, stderr: ${result.stderr}"
-        )
-      }
+      ProcessExecutor.execute(cmd, processTimeout)
       ()
     }
   }
@@ -146,45 +133,48 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
   /** Ensures queue exists by checking first, creating if needed, then polling until ready. This
     * handles eventual consistency in distributed systems.
     */
-  override def ensureQueue(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
-    println(s"[QUEUE] Ensuring queue exists: $name")
-    println(s"[QUEUE] Using Armada URL: $armadaUrl")
+  override def ensureQueueExists(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
     getQueue(name)
       .flatMap {
         case Some(_) =>
           println(s"[QUEUE] Queue $name already exists")
           Future.successful(())
         case None =>
-          println(s"[QUEUE] Queue $name does not exist, creating it")
+          println(s"[QUEUE] Creating queue $name...")
           createQueue(name)
             .flatMap { _ =>
-              println(s"[QUEUE] Queue $name created successfully, polling until visible")
-              // Poll until queue is visible (handles eventual consistency)
+              println(s"[QUEUE] Polling for queue $name to become visible...")
+              // Poll until queue is visible - we need multiple successful checks
+              // to ensure the queue is stable and fully propagated
+              val successCount      = new AtomicInteger(0)
+              val requiredSuccesses = 3
+
               Retry.pollUntil(
                 condition = {
                   val exists = getQueueSync(name).isDefined
-                  if (exists) println(s"[QUEUE] Queue $name is now visible")
-                  else println(s"[QUEUE] Queue $name not yet visible, will retry")
-                  exists
+                  if (exists) {
+                    val count = successCount.incrementAndGet()
+                    println(s"[QUEUE] Queue $name visible (check $count/$requiredSuccesses)")
+                    if (count >= requiredSuccesses) {
+                      true
+                    } else {
+                      // Continue checking even though it exists
+                      Thread.sleep(2000) // Wait 2 seconds between successful checks
+                      false
+                    }
+                  } else {
+                    successCount.set(0) // Reset if we fail to see it
+                    false
+                  }
                 },
-                timeout = 30.seconds,
-                pollInterval = 2.seconds
+                timeout = QueueCreationTimeout,
+                pollInterval = QueuePollInterval
               )
             }
-            .recover { case ex =>
-              println(s"[QUEUE] ERROR: Failed to ensure queue $name: ${ex.getMessage}")
-              if (ex.getMessage != null && ex.getMessage.contains("connection refused")) {
-                println(s"[QUEUE] Connection refused - Armada may not be ready at $armadaUrl")
-              }
-              throw ex
+            .map { _ =>
+              println(s"[QUEUE] Queue $name is ready")
+              ()
             }
-      }
-      .recover { case ex =>
-        println(s"[QUEUE] ERROR in ensureQueue for $name: ${ex.getMessage}")
-        if (ex.getMessage != null && ex.getMessage.contains("connection refused")) {
-          println(s"[QUEUE] Connection refused - Armada may not be ready at $armadaUrl")
-        }
-        throw ex
       }
   }
 
@@ -213,39 +203,43 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
     // Use slightly less than the provided timeout to allow for command overhead
     val watchTimeout = (timeout.toSeconds - 10).seconds.max(30.seconds)
 
-    println(s"[WATCH] Starting job monitoring for jobSetId=$jobSetId in queue=$queue")
-    println(
-      s"[WATCH] Total timeout: ${timeout.toSeconds}s, Watch timeout: ${watchTimeout.toSeconds}s"
-    )
-
     val watchFuture = Future {
       val cmd = buildCommand(s"watch $queue $jobSetId --exit-if-inactive")
-      println(s"[WATCH] Executing command: ${cmd.mkString(" ")}")
 
       val startTime = System.currentTimeMillis()
       val handle    = ProcessExecutor.executeAsync(cmd)
-      val result    = handle.waitFor(watchTimeout)(ec)
-      val elapsed   = (System.currentTimeMillis() - startTime) / 1000
 
-      println(
-        s"[WATCH] Command completed after ${elapsed}s - exitCode=${result.exitCode}, timedOut=${result.timedOut}"
-      )
-      if (result.stdout.nonEmpty) {
-        println(s"[WATCH] Stdout (last 500 chars): ...${result.stdout.takeRight(500)}")
-      }
-      if (result.stderr.nonEmpty) {
-        println(s"[WATCH] Stderr: ${result.stderr}")
-      }
+      // Start a background thread for periodic updates with proper termination
+      @volatile var shouldStop = false
+      val updateThread = new Thread(() => {
+        while (!shouldStop && handle.isAlive) {
+          Thread.sleep(PodStatusUpdateInterval.toMillis)
+          if (!shouldStop && handle.isAlive) {
+            val elapsed = (System.currentTimeMillis() - startTime) / 1000
+            // Log progress periodically for long-running jobs
+            if (elapsed % ProgressLogInterval.toSeconds == 0 && elapsed > 0) {
+              println(s"Still monitoring job - elapsed: ${elapsed}s")
+            }
+          }
+        }
+      })
+      updateThread.setDaemon(true)
+      updateThread.start()
 
-      if (result.timedOut) {
-        println(s"[WATCH] Watch command timed out after ${watchTimeout.toSeconds}s")
-        None // Watch timed out
-      } else if (result.exitCode == 0) {
-        println(s"[WATCH] Job completed successfully")
-        Some(JobSetStatus.Success)
-      } else {
-        println(s"[WATCH] Job failed with exit code ${result.exitCode}")
-        Some(JobSetStatus.Failed)
+      try {
+        val result  = handle.waitFor(watchTimeout)(ec)
+        val elapsed = (System.currentTimeMillis() - startTime) / 1000
+
+        if (result.timedOut) {
+          None // Watch timed out
+        } else if (result.exitCode == 0) {
+          Some(JobSetStatus.Success)
+        } else {
+          Some(JobSetStatus.Failed)
+        }
+      } finally {
+        shouldStop = true
+        updateThread.interrupt() // Ensure thread stops
       }
     }
 
@@ -254,7 +248,6 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
         status
       case None =>
         // If watch times out, return Timeout status
-        println(s"[WATCH] Watch timed out for jobSetId=$jobSetId, returning Timeout status")
         JobSetStatus.Timeout
     }
   }
@@ -269,7 +262,15 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
         processTimeout
       )
       yamlMapper.readValue(result.stdout, classOf[Queue])
-    }.toOption
+    } match {
+      case Success(queue) => Some(queue)
+      case Failure(ex)    =>
+        // Only log parse errors, not "queue not found" errors
+        if (!ex.getMessage.contains("exit code")) {
+          println(s"[ERROR] Failed to parse queue YAML for $name: ${ex.getMessage}")
+        }
+        None
+    }
   }
 
   /** Builds armadactl command with proper arguments. Splits subCommand by spaces and appends
@@ -293,13 +294,11 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
     // First check system property
     sys.props.get("armadactl.path") match {
       case Some(path) =>
-        println(s"[ARMADACTL] Using path from system property: $path")
         Some(path)
       case None =>
         // Fall back to PATH search
         val pathSep = java.io.File.pathSeparator
         val pathEnv = sys.env.get("PATH").getOrElse("")
-        println(s"[ARMADACTL] No system property found, searching in PATH: $pathEnv")
 
         val pathDirs = pathEnv.split(pathSep).filter(_.nonEmpty)
         val found = pathDirs
@@ -309,11 +308,8 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") extends ArmadaOperatio
 
         found match {
           case Some(path) =>
-            println(s"[ARMADACTL] Found in PATH: $path")
             Some(path)
           case None =>
-            println(s"[ARMADACTL] ERROR: Not found in system property or PATH")
-            println(s"[ARMADACTL] Searched directories: ${pathDirs.mkString(", ")}")
             None
         }
     }

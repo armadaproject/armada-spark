@@ -381,15 +381,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    log(s"[SUBMIT-JOB] Starting job submission process")
-    log(s"[SUBMIT-JOB] Queue: '${armadaJobConfig.queue}' (from config)")
-    log(s"[SUBMIT-JOB] JobSetId: '${armadaJobConfig.jobSetId}'")
 
     val primaryResource = extractPrimaryResource(clientArguments.mainAppResource)
     val executorCount   = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-
-    log(s"[SUBMIT-JOB] Primary resource: $primaryResource")
-    log(s"[SUBMIT-JOB] Executor count: $executorCount")
 
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -858,19 +852,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       container <- podSpec.containers.headOption
       image     <- container.image
     } yield image
-    containerImage.foreach(image => log(s"[SUBMIT-DRIVER] Driver container image: $image"))
 
     val driverResponse =
       try {
         armadaClient.submitJobs(queue, jobSetId, Seq(driver))
       } catch {
         case e: Exception =>
-          log(
-            s"[SUBMIT-DRIVER] ERROR: Failed to submit driver job: ${e.getClass.getName}: ${e.getMessage}"
-          )
-          if (e.getMessage != null && e.getMessage.contains("could not find queue")) {
-            log(s"[SUBMIT-DRIVER] Queue '$queue' not found. This might be a timing issue in CI.")
-          }
           throw e
       }
 
@@ -899,20 +886,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaClient.submitJobs(queue, jobSetId, executors)
       } catch {
         case e: Exception =>
-          log(
-            s"[SUBMIT-EXECUTOR] ERROR: Failed to submit executor jobs: ${e.getClass.getName}: ${e.getMessage}"
-          )
-          if (e.getMessage != null && e.getMessage.contains("could not find queue")) {
-            log(s"[SUBMIT-EXECUTOR] Queue '$queue' not found. This might be a timing issue in CI.")
-          }
           throw e
       }
 
-    executorsResponse.jobResponseItems.map { item =>
-      val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"[SUBMIT-EXECUTOR] Submitted executor job with ID: ${item.jobId}, Error: $error")
-      item.jobId
-    }
+    executorsResponse.jobResponseItems.map(_.jobId)
   }
 
   /** Merges a driver job item template with runtime configuration. If no template is provided,

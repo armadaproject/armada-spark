@@ -7,18 +7,13 @@ source "$scripts"/init.sh
 
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
-ARMADACTL_VERSION='0.19.1'
-JOB_DETAILS="${JOB_DETAILS:-1}"
-
 AOHOME="$scripts/../../armada-operator"
-now=$(date +'%Y%m%d%H%M%S')
-JOBSET="armada-spark-$now" # interactive users may run this multiple times on same Armada cluster
+ARMADACTL_VERSION='0.19.1'
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-ITERATION_COUNT=${FINAL_ARGS[0]}
 trap 'rm -f -- "$STATUSFILE"' EXIT
 
 log() {
@@ -117,18 +112,6 @@ init-cluster() {
     fetch-armadactl 2>&1 | log_group "Fetching armadactl"
   fi
 
-  # Verify armadactl version
-  echo "Verifying armadactl version..."
-  "$scripts"/armadactl version
-
-  # Log environment details for debugging
-  echo "Environment details:"
-  echo "- Hostname: $(hostname)"
-  echo "- User: $(whoami)"
-  echo "- Working directory: $(pwd)"
-  echo "- Docker info: $(docker info --format 'Server Version: {{.ServerVersion}}')"
-  echo "- Network interfaces:"
-  ip addr show | grep -E "^[0-9]+:|inet " || ifconfig | grep -E "^[a-z0-9]+:|inet "
 
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
@@ -162,10 +145,6 @@ init-cluster() {
 
   # configure the defaults for the e2e test
   cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
-
-  # Pause to ensure that Armada cluster is fully ready to accept jobs; without this,
-  # proceeding immediately causes sporadic immediate job rejections by Armada
-  sleep 30
 }
 
 run-test() {
@@ -198,17 +177,6 @@ run-test() {
   fi
 
   log "E2E tests completed successfully"
-
-  if [ "$JOB_DETAILS" = 1 ]; then
-    # Show pod details for debugging
-    kubectl get pods -A 2>&1 | log_group "pods"
-
-    kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read -r namespace pod
-    do
-      (kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
-       kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log") | log_group "$pod"
-    done
-  fi
 }
 
 main() {
