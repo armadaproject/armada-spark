@@ -1,0 +1,18 @@
+priority: 1.0
+namespace: default
+annotations:
+  armada/component: spark-driver
+  armada/template: spark-pi-driver-ingress
+labels:
+  app: spark-pi
+  component: driver
+  template-source: e2e-test-ingress
+ingress:
+  - ports:
+      - 7078
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      nginx.ingress.kubernetes.io/backend-protocol: HTTP
+      kubernetes.io/ingress.class: nginx
+    tlsEnabled: false
+    certName: ""

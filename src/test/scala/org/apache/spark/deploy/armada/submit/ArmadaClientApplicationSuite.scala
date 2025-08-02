@@ -17,7 +17,7 @@
 
 package org.apache.spark.deploy.armada.submit
 
-import api.submit.JobSubmitRequestItem
+import api.submit.{IngressConfig, JobSubmitRequestItem}
 import k8s.io.api.core.v1.generated.{
   Container,
   EnvVar,
@@ -806,6 +806,68 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       armadaClientApp.validateRequiredConfig(emptyImageConfig, None, None, None, sparkConf)
     }
     emptyException.getMessage should include("Empty container image is not allowed")
+
+    // Test executor template with ingress should fail
+    val executorTemplateWithIngress = Some(
+      api.submit.JobSubmitRequestItem(
+        priority = 1.0,
+        namespace = "test",
+        ingress = Seq(
+          api.submit.IngressConfig(
+            ports = Seq(7078),
+            annotations = Map.empty,
+            tlsEnabled = false,
+            certName = ""
+          )
+        )
+      )
+    )
+    val executorIngressException = intercept[IllegalArgumentException] {
+      armadaClientApp.validateRequiredConfig(
+        cliConfig,
+        None,
+        None,
+        executorTemplateWithIngress,
+        sparkConf
+      )
+    }
+    executorIngressException.getMessage should include(
+      "Executor job item template must not contain ingress definition"
+    )
+
+    // Test driver template with multiple ingresses should fail
+    val driverTemplateWithMultipleIngresses = Some(
+      api.submit.JobSubmitRequestItem(
+        priority = 1.0,
+        namespace = "test",
+        ingress = Seq(
+          api.submit.IngressConfig(
+            ports = Seq(7078),
+            annotations = Map.empty,
+            tlsEnabled = false,
+            certName = ""
+          ),
+          api.submit.IngressConfig(
+            ports = Seq(8080),
+            annotations = Map.empty,
+            tlsEnabled = false,
+            certName = ""
+          )
+        )
+      )
+    )
+    val multipleIngressException = intercept[IllegalArgumentException] {
+      armadaClientApp.validateRequiredConfig(
+        cliConfig,
+        None,
+        driverTemplateWithMultipleIngresses,
+        None,
+        sparkConf
+      )
+    }
+    multipleIngressException.getMessage should include(
+      "Driver job item template can contain only 1 ingress definition"
+    )
   }
 
   test("resolveValue should follow precedence correctly") {
@@ -878,7 +940,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       labels = Map("runtime-label" -> "runtime-value", "template-label" -> "template-value"),
       nodeSelectors = Map.empty,
       driverResources = armadaClientApp.ResolvedResourceConfig(None, None, None, None),
-      executorResources = armadaClientApp.ResolvedResourceConfig(None, None, None, None)
+      executorResources = armadaClientApp.ResolvedResourceConfig(None, None, None, None),
+      driverIngress = Some(
+        IngressConfig(
+          ports = Seq(7078),
+          annotations = Map("nginx.ingress.kubernetes.io/rewrite-target" -> "/"),
+          tlsEnabled = true,
+          certName = "driver-cert"
+        )
+      )
     )
 
     val cliConfig = armadaClientApp.CLIConfig(
@@ -988,6 +1058,13 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val volumeMounts = containerWithMounts.get.volumeMounts
     val mountNames   = volumeMounts.map(_.name.getOrElse("")).toSet
     mountNames should contain("driver-template-volume")
+
+    result.ingress should have size 1
+    val ingress = result.ingress.head
+    ingress.ports shouldBe Seq(7078)
+    ingress.annotations should contain("nginx.ingress.kubernetes.io/rewrite-target" -> "/")
+    ingress.tlsEnabled shouldBe true
+    ingress.certName shouldBe "driver-cert"
   }
 
   test("mergeDriverTemplate should handle template without podSpec") {
@@ -1176,6 +1253,43 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.annotations should contain("runtime-key" -> "runtime-value")
     result.labels should contain("template-label" -> "template-value")
     result.labels should contain("runtime-label" -> "runtime-value")
+  }
+
+  test("resolveIngressConfig should follow CLI > template > default precedence") {
+    val templateIngress = IngressConfig(
+      ports = Seq(8080),
+      annotations = Map("foo" -> "template"),
+      tlsEnabled = true,
+      certName = "template-cert"
+    )
+
+    val cliIngress = armadaClientApp.IngressConfig(
+      annotations = Map("bazz" -> "cli"),
+      tls = Some(false),
+      certName = None
+    )
+
+    val result = armadaClientApp.resolveIngressConfig(
+      Some(cliIngress),
+      Some(templateIngress)
+    )
+
+    // Port should always be overriden to Seq(7078)
+    result.ports shouldBe Seq(7078)
+
+    result.annotations should contain("foo" -> "template")
+    result.annotations should contain("bazz" -> "cli")
+    result.tlsEnabled shouldBe false
+    result.certName shouldBe "template-cert"
+  }
+
+  test("resolveIngressConfig should use defaults when no CLI or template values") {
+    val result = armadaClientApp.resolveIngressConfig(None, None)
+
+    result.ports shouldBe Seq(7078)
+    result.annotations shouldBe Map.empty
+    result.tlsEnabled shouldBe false
+    result.certName shouldBe ""
   }
 
   test(

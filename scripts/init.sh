@@ -87,7 +87,7 @@ fi
 
 
 shift $((OPTIND - 1))
-FINAL_ARGS=("${@}")   
+FINAL_ARGS=("${@:-}")   
 
 if [ ${#FINAL_ARGS[@]} -eq 0 ]; then
     FINAL_ARGS+=("100")

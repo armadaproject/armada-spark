@@ -33,7 +33,7 @@
         <!-- configure Spark version -->
         <spark.major.version>3</spark.major.version>
         <spark.minor.version>5</spark.minor.version>
-        <spark.patch.version>3</spark.patch.version>
+        <spark.patch.version>5</spark.patch.version>
         <spark.binary.version>${spark.major.version}.${spark.minor.version}</spark.binary.version>
         <spark.version>${spark.binary.version}.${spark.patch.version}</spark.version>
         <spotless.version>2.44.4</spotless.version>

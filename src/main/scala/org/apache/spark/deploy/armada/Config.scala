@@ -26,6 +26,8 @@ import scala.util.{Failure, Success, Try}
 private[spark] object Config {
   private val invalidLabelListErrorMessage =
     "Must be a comma-separated list of valid Kubernetes labels (each as key=value)"
+  private val invalidAnnotationListErrorMessage =
+    "Must be a comma-separated list of valid Kubernetes annotations (each as key=value)"
 
   val ARMADA_SERVER_INTERNAL_URL: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.internalUrl")
@@ -105,6 +107,41 @@ private[spark] object Config {
         path => if (path.isEmpty) false else isValidFilePath(path),
         "Must be a valid local file path, file://, http://, https:// URL"
       )
+      .createOptional
+
+  val ARMADA_SPARK_DRIVER_INGRESS_ENABLED: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.driver.ingress.enabled")
+      .doc(
+        "If set to true, the driver will be exposed via an Ingress resource. " +
+          "This is useful for accessing the Spark UI."
+      )
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED: OptionalConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.driver.ingress.tls.enabled")
+      .doc(
+        "Whether to enable TLS for the driver Ingress resource. " +
+          "If not set, TLS will be disabled by default."
+      )
+      .booleanConf
+      .createOptional
+
+  val ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.ingress.annotations")
+      .doc(
+        "A comma-separated list of annotations (in key=value format) to be added to the driver Ingress resource."
+      )
+      .stringConf
+      .checkValue(k8sAnnotationListValidator, invalidAnnotationListErrorMessage)
+      .createOptional
+
+  val ARMADA_SPARK_DRIVER_INGRESS_CERT_NAME: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.ingress.certName")
+      .doc(
+        "The name of the TLS certificate to use for the driver Ingress resource."
+      )
+      .stringConf
       .createOptional
 
   /** Configuration for specifying an executor job item template file to customize executor pods.
@@ -344,29 +381,30 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
-  /** Converts a comma-separated list of key=value pairs into a Map.
-    *
-    * @param str
-    *   The string to convert.
-    * @return
-    *   A Map of the key=value pairs.
-    */
-  def commaSeparatedLabelsToMap(str: String): Map[String, String] = {
-    parseCommaSeparatedK8sLabels(str).map(_.get).toMap
+  def commaSeparatedLabelsToMap(labelList: String): Map[String, String] = {
+    parseCommaSeparatedK8sValue(labelList, K8sValidator.Label).map(_.get).toMap
   }
 
   private def k8sLabelListValidator(labelList: String): Boolean = {
-    parseCommaSeparatedK8sLabels(labelList).forall(_.isSuccess)
+    parseCommaSeparatedK8sValue(labelList, K8sValidator.Label).forall(_.isSuccess)
   }
 
-  private def parseCommaSeparatedK8sLabels(str: String): Seq[Try[(String, String)]] = {
-    str.trim
-      .split(",")
-      .filter(_.nonEmpty)
+  def commaSeparatedAnnotationsToMap(annotationList: String): Map[String, String] = {
+    parseCommaSeparatedK8sValue(annotationList, K8sValidator.Annotation).map(_.get).toMap
+  }
+
+  private def k8sAnnotationListValidator(annotationList: String): Boolean = {
+    parseCommaSeparatedK8sValue(annotationList, K8sValidator.Annotation).forall(_.isSuccess)
+  }
+
+  private def parseCommaSeparatedK8sValue(
+      str: String,
+      validator: K8sValidator
+  ): Seq[Try[(String, String)]] = {
+    parseCommaSeparatedString(str)
       .map { entry =>
         entry.split("=", 2).map(_.trim) match {
-          case Array(key, value)
-              if K8sValidator.Label.isValidKey(key) && K8sValidator.Label.isValidValue(value) =>
+          case Array(key, value) if validator.isValidKey(key) && validator.isValidValue(value) =>
             Success(key -> value)
           case _ =>
             Failure(
@@ -376,5 +414,13 @@ private[spark] object Config {
             )
         }
       }
+  }
+
+  private def parseCommaSeparatedString(str: String): Seq[String] = {
+    str.trim
+      .split(",")
+      .filter(_.nonEmpty)
+      .map(_.trim)
+      .toSeq
   }
 }
