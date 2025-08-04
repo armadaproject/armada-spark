@@ -247,6 +247,7 @@ section of the README for more information.
 
 Any files you wish to be included in the image, (e.g. Python scripts or Scala / Java jar files) should be copied into the [extraFiles](../extraFiles) directory.  They will appear on the image in the /opt/spark/extraFiles directory.
 
+Any jars you want added to the classpath should be copied into the [extraJars](../extraJars) directory.
 
 # Architecture & Design
 

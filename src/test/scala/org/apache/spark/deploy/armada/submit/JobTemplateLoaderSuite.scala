@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
-import k8s.io.api.core.v1.generated.PodSpec
+import k8s.io.api.core.v1.generated.{PodSpec, SecretKeySelector}
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
@@ -303,5 +303,38 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     resources.limits("cpu").getString shouldBe expectedLimitCpu
     resources.limits("memory").getString shouldBe expectedLimitMemory
     resources.limits("nvidia.com/gpu").getString shouldBe expectedLimitGpu
+  }
+
+  test("should correctly deserialize SecretKeySelector with elided LocalObjectReference ") {
+    val secretName = "secretName"
+    val secretKey  = "secretKey"
+    val yamlWithCompleteSecretKeySelector =
+      s"""priority: 1.0
+        |namespace: default
+        |podSpec:
+        |  containers:
+        |    - name: test-container
+        |      env:
+        |        - name: SECRET_ENV
+        |          valueFrom:
+        |            secretKeyRef:
+        |              name: $secretName
+        |              key: $secretKey
+        |""".stripMargin
+
+    val completeFile =
+      createTemplateFile("complete-secret-key-selector.yaml", yamlWithCompleteSecretKeySelector)
+    val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
+
+    val secretKeyRef = for {
+      podSpec      <- completeResult.podSpec
+      container    <- podSpec.containers.headOption
+      env          <- container.env.headOption
+      valueFrom    <- env.valueFrom
+      secretKeyRef <- valueFrom.secretKeyRef
+    } yield secretKeyRef
+
+    secretKeyRef.get.getLocalObjectReference.getName shouldBe secretName
+    secretKeyRef.get.getKey shouldBe secretKey
   }
 }
