@@ -222,6 +222,15 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 - `spark.armada.executor.jobItemTemplate` - URL or file path to a job item template YAML file for the executors.
     Supports local files (with or without file:// prefix) and HTTP/HTTPS URLs.
     The template should contain a JobSubmitRequestItem configuration in YAML format.
+- `spark.armada.driver.ingress.enabled` - If set to true, the driver will be
+    exposed via an Ingress resource. This is useful for accessing the Spark UI
+    and other services running on the driver pod.
+- `spark.armada.driver.ingress.tls.enabled` - If set to true, the Ingress resource
+    for the driver will be configured to use TLS.
+- `spark.armada.driver.ingress.annotations` - A comma-separated list of annotations to apply to the Ingress resource for the driver.
+    Annotations should be in the format key=value, e.g. `nginx.ingress.kubernetes.io/rewrite-target=/`.
+- `spark.armada.driver.ingress.certName` - The name of the TLS certificate to use for the Ingress resource.
+    This is used when `spark.armada.driver.ingress.tls.enabled` is set to true.
 
 # Building `armada-spark`
 
