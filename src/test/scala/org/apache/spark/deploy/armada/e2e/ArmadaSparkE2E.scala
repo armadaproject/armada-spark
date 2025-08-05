@@ -135,84 +135,101 @@ class ArmadaSparkE2E
   }
 
   test("Basic SparkPi job", E2ETest) {
-    val config = baseConfig.copy(
-      sparkConfs = Map("spark.armada.pod.labels" -> "test-type=basic")
-    )
+    implicit val orch: TestOrchestrator = orchestrator
 
-    val result = orchestrator.runTest("basic-spark-pi", config).futureValue
-    result.status shouldBe JobSetStatus.Success
+    E2ETestBuilder("basic-spark-pi")
+      .withBaseConfig(baseConfig)
+      .withPodLabels(Map("test-type" -> "basic"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "basic"))
+      .run()
   }
 
   test("SparkPi job with node selectors", E2ETest) {
-    val config = baseConfig.copy(
-      sparkConfs = Map(
-        "spark.armada.scheduling.nodeSelectors" -> "kubernetes.io/hostname=armada-worker",
-        "spark.armada.pod.labels"               -> "test-type=node-selector"
-      )
-    )
+    implicit val orch: TestOrchestrator = orchestrator
 
-    val result = orchestrator.runTest("spark-pi-node-selectors", config).futureValue
-    result.status shouldBe JobSetStatus.Success
+    E2ETestBuilder("spark-pi-node-selectors")
+      .withBaseConfig(baseConfig)
+      .withPodLabels(Map("test-type" -> "node-selector"))
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "node-selector"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .run()
   }
 
   test("SparkPi job using job templates", E2ETest) {
-    val config = baseConfig.copy(
-      sparkConfs = Map(
-        "spark.armada.jobTemplate"              -> templatePath("spark-pi-job-template.yaml"),
-        "spark.armada.driver.jobItemTemplate"   -> templatePath("spark-pi-driver-template.yaml"),
-        "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml"),
-        "spark.armada.pod.labels"               -> "test-type=template"
-      )
-    )
+    implicit val orch: TestOrchestrator = orchestrator
 
-    val result = orchestrator.runTest("spark-pi-templates", config).futureValue
-    result.status shouldBe JobSetStatus.Success
+    E2ETestBuilder("spark-pi-templates")
+      .withBaseConfig(baseConfig)
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.jobItemTemplate"   -> templatePath("spark-pi-driver-template.yaml"),
+          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+        )
+      )
+      .withPodLabels(Map("test-type" -> "template"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "template"))
+      .run()
   }
 
   test("SparkPi job with driver ingress using cli", E2ETest) {
-    val ingressAssertion = new IngressAssertion(
-      requiredAnnotations = Set(
-        "nginx.ingress.kubernetes.io/rewrite-target",
-        "nginx.ingress.kubernetes.io/backend-protocol",
-        "armada_jobset_id",
-        "armada_owner"
+    implicit val orch: TestOrchestrator = orchestrator
+
+    E2ETestBuilder("spark-pi-ingress")
+      .withBaseConfig(baseConfig)
+      .withDriverIngress(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
+        )
       )
-    )
-
-    val config = baseConfig.copy(
-      sparkConfs = Map(
-        "spark.armada.driver.ingress.enabled" -> "true",
-        "spark.armada.driver.ingress.annotations" ->
-          "nginx.ingress.kubernetes.io/rewrite-target=/,nginx.ingress.kubernetes.io/backend-protocol=HTTP",
-        "spark.armada.driver.ingress.tls.enabled" -> "false",
-        "spark.armada.pod.labels"                 -> "test-type=ingress"
-      ),
-      assertions = Seq(ingressAssertion)
-    )
-
-    val result = orchestrator.runTest("spark-pi-ingress", config).futureValue
-    result.status shouldBe JobSetStatus.Success
-    AssertionRunner.assertAllSuccess(result.assertionResults)
+      .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
+      .withPodLabels(Map("test-type" -> "ingress"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "ingress"))
+      .assertIngress(
+        Set(
+          "nginx.ingress.kubernetes.io/rewrite-target",
+          "nginx.ingress.kubernetes.io/backend-protocol"
+        )
+      )
+      .run()
   }
 
   test("SparkPi job with driver ingress using template", E2ETest) {
-    val templateIngressAssertion = new TemplateIngressAssertion()
+    implicit val orch: TestOrchestrator = orchestrator
 
-    val config = baseConfig.copy(
-      sparkConfs = Map(
-        "spark.armada.jobTemplate" -> templatePath("spark-pi-job-template.yaml"),
-        "spark.armada.driver.jobItemTemplate" -> templatePath(
-          "spark-pi-driver-ingress-template.yaml"
-        ),
-        "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml"),
-        "spark.armada.pod.labels"               -> "test-type=ingress-template"
-      ),
-      assertions = Seq(templateIngressAssertion)
-    )
-
-    val result = orchestrator.runTest("spark-pi-ingress-template", config).futureValue
-    result.status shouldBe JobSetStatus.Success
-    AssertionRunner.assertAllSuccess(result.assertionResults)
+    E2ETestBuilder("spark-pi-ingress-template")
+      .withBaseConfig(baseConfig)
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.jobItemTemplate" -> templatePath(
+            "spark-pi-driver-ingress-template.yaml"
+          ),
+          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+        )
+      )
+      .withPodLabels(Map("test-type" -> "ingress-template"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "ingress-template"))
+      .assertIngress(
+        Set(
+          "nginx.ingress.kubernetes.io/rewrite-target",
+          "nginx.ingress.kubernetes.io/backend-protocol",
+          "kubernetes.io/ingress.class"
+        )
+      )
+      .run()
   }
 
   private def loadProperties(): Properties = {

@@ -19,44 +19,32 @@ package org.apache.spark.deploy.armada.e2e
 
 import scala.concurrent.duration._
 
-/** Constants used throughout the E2E test framework */
+/** Essential timeout and configuration values for E2E tests */
 object TestConstants {
 
-  // Timing constants
-  val PodCheckInterval             = 3.seconds
-  val PodStatusUpdateInterval      = 5.seconds
-  val ProgressLogInterval          = 30.seconds
-  val IngressCreationCheckInterval = 2.seconds
-  val QueuePollInterval            = 2.seconds
-  val QueuePropagationDelay        = 5.seconds
-  val ClusterCheckRetryDelay       = 10.seconds
+  val JobSubmitTimeout      = 60.seconds  // Time to submit job via Docker
+  val JobWatchTimeout       = 300.seconds // Max time for job to complete (5 minutes)
+  val PodRunningTimeout     = 60.seconds  // Max time for pod to reach Running state
+  val DefaultProcessTimeout = 10.seconds  // Default timeout for CLI commands
 
-  // Timeout constants
-  val DefaultProcessTimeout  = 30.seconds
-  val JobSubmitTimeout       = 30.seconds
-  val JobWatchTimeout        = 300.seconds
-  val QueueCreationTimeout   = 30.seconds
-  val PodRunningTimeout      = 240.seconds
-  val IngressCreationTimeout = 30.seconds
-  val ClusterReadyTimeout    = 300.seconds
+  val PodCheckInterval = 5.seconds // How often to check for pod failures
 
-  // Retry constants
-  val DefaultMaxRetries = 3
-  val DefaultRetryDelay = 1.second
-  val KubectlMaxRetries = 3
-  val KubectlRetryDelay = 1.second
+  val DefaultMaxRetries = 3        // Number of retries for transient failures
+  val DefaultRetryDelay = 1.second // Delay between retries
 
-  // Resource limits
-  val MaxLogLines         = 200
-  val MaxPreviousLogLines = 100
-  val MaxEventLines       = 30
-  val MaxErrorLines       = 10
+  val QueueCreationTimeout = 60.seconds // Max time for queue to become available
 
-  // Thread management
-  val ThreadJoinTimeout       = 1000L // milliseconds
-  val ThreadSleepAfterDestroy = 100L  // milliseconds
-  val PodLogCaptureDelay      = 500L  // milliseconds
+  val IngressCreationTimeout = 30.seconds // Max time to wait for ingress creation
 
-  // Executor failure thresholds
-  val ExecutorMaxRestarts = 1
+  val MaxLogLines         = 200 // Max lines to capture from pod logs
+  val MaxPreviousLogLines = 100 // Max lines from previous container logs
+  val MaxEventLines       = 50  // Max event lines to capture
+
+  val ClusterReadyTimeout     = 300.seconds
+  val ClusterCheckRetryDelay  = 2.seconds
+  val PodStatusUpdateInterval = 10.seconds
+  val ProgressLogInterval     = 30.seconds
+  val PodLogCaptureDelay      = 500L // milliseconds
+  val KubectlMaxRetries       = 3
+  val KubectlRetryDelay       = 1.second
 }

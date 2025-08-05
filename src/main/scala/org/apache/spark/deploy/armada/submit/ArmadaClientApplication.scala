@@ -157,7 +157,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication: starting.")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -168,37 +167,30 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Unit = {
     log("[RUN] Starting Armada job submission")
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
-    log(s"[RUN] Queue: '${armadaJobConfig.queue}', JobSetId: '${armadaJobConfig.jobSetId}'")
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
-    log(s"[RUN] Armada connection - host: $host, port: $port")
-
-    // Log environment info for CI debugging
-    if (sys.env.get("CI").contains("true") || sys.env.get("GITHUB_ACTIONS").contains("true")) {
-      log(
-        s"[RUN] Running in CI environment (CI=${sys.env.get("CI")}, GITHUB_ACTIONS=${sys.env.get("GITHUB_ACTIONS")})"
-      )
-    }
+    log(s"Connecting to Armada Server - host: $host, port: $port")
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 
-    log(s"[RUN] Checking Armada health with timeout: $healthTimeout")
+    log(s"Checking Armada Server health (timeout: $healthTimeout)")
     val healthResp =
       try {
         Await.result(armadaClient.submitHealth(), healthTimeout)
       } catch {
         case e: Exception =>
-          log(s"[RUN] Health check failed: ${e.getClass.getName}: ${e.getMessage}")
+          log(s"Armada health check failed: ${e.getClass.getName}: ${e.getMessage}")
           throw e
       }
 
     if (healthResp.status.isServing) {
-      log("[RUN] Submit health good!")
+      log("Armada Server is serving requests!")
     } else {
-      log("[RUN] Could not contact Armada!")
-      throw new RuntimeException("Armada health check failed - service not serving")
+      throw new RuntimeException(
+        "Armada health check failed - Armada Server is not serving requests!"
+      )
     }
 
     // # FIXME: Need to check how this is launched whether to submit a job or
@@ -848,14 +840,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driver: api.submit.JobSubmitRequestItem
   ): String = {
     log(
-      s"[SUBMIT-DRIVER] Submitting driver job to queue: '$queue' (length: ${queue.length}), jobSetId: '$jobSetId'"
+      s"[SUBMIT-DRIVER] Submitting driver job to queue: '$queue', jobSetId: '$jobSetId'"
     )
-    // Log container image if available
-    val containerImage = for {
-      podSpec   <- driver.podSpec
-      container <- podSpec.containers.headOption
-      image     <- container.image
-    } yield image
 
     val driverResponse =
       try {
@@ -881,10 +867,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       executors: Seq[api.submit.JobSubmitRequestItem]
   ): Seq[String] = {
-    log(
-      s"[SUBMIT-EXECUTOR] Submitting ${executors.size} executor(s) to queue: '$queue', jobSetId: '$jobSetId'"
-    )
-
     val executorsResponse =
       try {
         armadaClient.submitJobs(queue, jobSetId, executors)

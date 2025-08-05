@@ -43,7 +43,6 @@ object KubectlUtils {
     require(maxRetries > 0, "maxRetries must be positive")
 
     def isRetriable(result: ProcessResult): Boolean = {
-      // Retry on connection errors and timeouts
       result.timedOut ||
       result.stderr.contains("connection refused") ||
       result.stderr.contains("Unable to connect") ||

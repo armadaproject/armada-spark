@@ -38,8 +38,20 @@ object ProcessExecutor {
     val stderr = new StringBuilder
 
     val processLogger = ProcessLogger(
-      line => stdout.append(line).append("\n"),
-      line => stderr.append(line).append("\n")
+      line => {
+        stdout.append(line).append("\n")
+        // Print docker/spark-submit output in real-time for debugging
+        if (command.headOption.contains("docker") && line.nonEmpty) {
+          println(s"[SPARK-SUBMIT] $line")
+        }
+      },
+      line => {
+        stderr.append(line).append("\n")
+        // Print docker/spark-submit errors in real-time for debugging
+        if (command.headOption.contains("docker") && line.nonEmpty) {
+          println(s"[SPARK-SUBMIT] $line")
+        }
+      }
     )
 
     val process = Process(command).run(processLogger)

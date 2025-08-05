@@ -20,15 +20,10 @@ package org.apache.spark.deploy.armada.e2e
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
 import scala.util.{Failure, Success, Try}
-
-// Extension for Future.never
-object FutureExtensions {
-  def never[T]: Future[T] = Promise[T]().future
-}
 
 case class TestConfig(
     baseQueueName: String,
@@ -69,73 +64,122 @@ case class TestResult(
 
 class AssertionFailedException(message: String) extends Exception(message)
 
-/** Orchestrates end-to-end testing of Spark jobs on Armada.
-  *
-  * This class manages the complete lifecycle of E2E tests including:
-  *   - Queue creation and management
-  *   - Docker-based Spark job submission
-  *   - Job monitoring and status tracking
-  *   - Runtime assertion execution (e.g., verifying ingress creation)
-  *   - Comprehensive logging of all test stages
-  *
-  * Tests can include assertions that run while the job is executing, allowing verification of
-  * runtime resources like Kubernetes ingresses. Failed assertions will cause the test to fail.
-  *
-  * @param armadaClient
-  *   Client for Armada operations (queue management, job watching)
-  * @param k8sClient
-  *   Client for Kubernetes operations (pod/ingress verification)
-  */
+/** Orchestrates end-to-end testing of Spark jobs on Armada. */
 class TestOrchestrator(
-    armadaClient: ArmadaOperations,
-    k8sClient: K8sOperations
+    armadaClient: ArmadaClient,
+    k8sClient: K8sClient
 )(implicit ec: ExecutionContext) {
 
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
-  private def delay(duration: Duration): Future[Unit] = {
-    val promise = Promise[Unit]()
-    val timer   = new java.util.Timer(true) // daemon timer to prevent resource leak
-    timer.schedule(
-      new java.util.TimerTask {
-        def run(): Unit = {
-          promise.success(())
-          timer.cancel()
-        }
-      },
-      duration.toMillis
-    )
-    promise.future
-  }
-
-  private def waitForIngressCreation(
+  private def runAssertionsWhileJobRunning(
+      assertions: Seq[TestAssertion],
       context: TestContext,
-      k8sClient: K8sOperations,
-      maxWait: Duration
-  )(implicit ec: ExecutionContext): Future[Unit] = {
-    val startTime     = System.currentTimeMillis()
-    val maxWaitMillis = maxWait.toMillis
+      jobCompleted: () => Boolean
+  ): Map[String, AssertionResult] = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
 
-    def checkIngress(): Future[Unit] = {
-      k8sClient.getPodByLabel(s"test-id=${context.testId}", context.namespace).flatMap {
-        case Some(pod) =>
-          k8sClient.getIngressForPod(pod.name, context.namespace).flatMap {
-            case Some(_) =>
-              println(s"* Ingress created for pod ${pod.name}")
-              Future.successful(())
-            case None if (System.currentTimeMillis() - startTime) > maxWaitMillis =>
-              Future.failed(new TimeoutException(s"Ingress not created within $maxWait"))
-            case None =>
-              // Wait 2 seconds and retry
-              delay(IngressCreationCheckInterval).flatMap(_ => checkIngress())
-          }
-        case None =>
-          Future.failed(new RuntimeException("Driver pod disappeared while waiting for ingress"))
+    val assertionContext = AssertionContext(
+      context.testId,
+      context.namespace,
+      context.testId,
+      k8sClient,
+      armadaClient
+    )
+
+    // Wait for Spark driver pod to be scheduled and running
+    val driverSelector  = s"spark-role=driver,test-id=${context.testId}"
+    var driverRunning   = false
+    var attempts        = 0
+    val maxWaitAttempts = 60 // 2 minutes max to wait for driver
+
+    while (!driverRunning && !jobCompleted() && attempts < maxWaitAttempts) {
+      try {
+        val driverPod = Await.result(
+          k8sClient.getPodByLabel(driverSelector, context.namespace),
+          10.seconds
+        )
+        driverPod match {
+          case Some(pod) if pod.status.phase == "Running" =>
+            driverRunning = true
+          case Some(pod) =>
+          case None      =>
+        }
+      } catch {
+        case ex: Exception =>
+      }
+
+      if (!driverRunning) {
+        Thread.sleep(2000)
+        attempts += 1
       }
     }
 
-    checkIngress()
+    if (!driverRunning) {
+      return assertions.map { assertion =>
+        assertion.name -> AssertionResult.Failure(
+          "Driver pod never started, Armada may not have scheduled it",
+          None
+        )
+      }.toMap
+    }
+
+    assertions.map { assertion =>
+      val result = validateScheduling(assertion, assertionContext, jobCompleted)
+      assertion.name -> result
+    }.toMap
+  }
+
+  private def validateScheduling(
+      assertion: TestAssertion,
+      context: AssertionContext,
+      jobCompleted: () => Boolean
+  ): AssertionResult = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
+
+    // Give Armada some time to schedule resources after driver starts (executors need time to come up)
+    val maxWaitTime                 = 30.seconds
+    val startTime                   = System.currentTimeMillis()
+    var attempts                    = 0
+    var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked", None)
+
+    while (!jobCompleted() && (System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
+      attempts += 1
+      try {
+        val result = Await.result(assertion.assert(context)(ec), 10.seconds)
+        lastResult = result
+
+        result match {
+          case AssertionResult.Success =>
+            return result
+          case AssertionResult.Failure(_, _) =>
+          // For the first few attempts, be patient - resources may still be scheduling
+        }
+      } catch {
+        case ex: Exception =>
+          lastResult = AssertionResult.Failure(ex.getMessage, Some(ex))
+        // Don't log retries to avoid clutter
+      }
+
+      Thread.sleep(2000)
+    }
+
+    lastResult match {
+      case AssertionResult.Success =>
+        lastResult
+      case AssertionResult.Failure(_, cause) =>
+        if (jobCompleted()) {
+          AssertionResult.Failure(
+            s"${assertion.name}: Job completed before assertion could pass",
+            cause
+          )
+        } else {
+          lastResult
+        }
+    }
   }
 
   def runTest(name: String, config: TestConfig): Future[TestResult] = {
@@ -148,32 +192,24 @@ class TestOrchestrator(
     println(s"Test ID: ${context.testId}")
     println(s"Namespace: ${context.namespace}")
     println(s"Queue: $queueName")
-    println(s"Time: ${java.time.LocalTime.now()}")
 
     val resultFuture = for {
-      _ <- {
-        k8sClient.createNamespace(context.namespace)
+      _ <- k8sClient.createNamespace(context.namespace)
+      _ <- armadaClient.ensureQueueExists(queueName).recoverWith { case ex =>
+        throw new RuntimeException(s"Failed to ensure queue $queueName", ex)
       }
-      _ <- {
-        // ensureQueueExists creates queue and polls until visible
-        armadaClient.ensureQueueExists(queueName).recoverWith { case ex =>
-          throw new RuntimeException(s"Failed to ensure queue $queueName", ex)
-        }
-      }
-      _ <- submitJob(testJobSetId, queueName, name, config, context)
-      result <-
-        if (config.assertions.nonEmpty) {
-          watchJobWithAssertions(queueName, testJobSetId, config, context)
-        } else {
-          watchJobWithPodMonitoring(queueName, testJobSetId, config, context)
-        }
+      _      <- submitJob(testJobSetId, queueName, name, config, context)
+      result <- watchJob(queueName, testJobSetId, config, context)
     } yield result
 
-    // Ensure cleanup happens regardless of test outcome
     resultFuture
       .andThen {
         case scala.util.Failure(ex) =>
-          println(s"Test failed: ${ex.getMessage}")
+          // Capture debug info on any failure
+          println(s"\n[FAILURE] Test failed with exception: ${ex.getMessage}")
+          val podMonitor = new SimplePodMonitor(context.namespace)
+          podMonitor.captureDebugInfo()
+          podMonitor.printCapturedLogs()
         case _ =>
       }
       .andThen { case _ =>
@@ -183,10 +219,6 @@ class TestOrchestrator(
         println(s"\n========== Test Completed: $name ==========")
         println(s"Status: ${result.status}")
         println(s"Duration: ${(System.currentTimeMillis() - context.startTime) / 1000}s")
-        println(s"End Time: ${java.time.LocalTime.now()}")
-        if (result.assertionResults.nonEmpty) {
-          println(s"** Assertions: ${result.assertionResults.size} total")
-        }
         result
       }
   }
@@ -194,12 +226,16 @@ class TestOrchestrator(
   private def cleanupTest(context: TestContext, queueName: String): Future[Unit] = {
     for {
       _ <- k8sClient.deleteNamespace(context.namespace).recover { case ex =>
+        println(
+          s"[CLEANUP] Warning: Failed to delete namespace ${context.namespace}: ${ex.getMessage}"
+        )
         ()
       }
       _ <- armadaClient.deleteQueue(queueName).recover { case ex =>
+        println(s"[CLEANUP] Warning: Failed to delete queue $queueName: ${ex.getMessage}")
         ()
       }
-    } yield {}
+    } yield ()
   }
 
   private def submitJob(
@@ -215,7 +251,6 @@ class TestOrchestrator(
       s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
     val volumeMounts = buildVolumeMounts()
 
-    // Merge test context labels with config labels
     val contextLabelString = context.labels.iterator.map { case (k, v) => s"$k=$v" }.mkString(",")
     val mergedLabels = config.sparkConfs
       .get("spark.armada.pod.labels")
@@ -239,7 +274,6 @@ class TestOrchestrator(
       config.lookoutUrl
     )
 
-    // Log the submission details
     println(s"\n[SUBMIT] Submitting Spark job via Docker:")
     println(s"[SUBMIT]   Queue: $queueName")
     println(s"[SUBMIT]   JobSetId: $jobSetId")
@@ -249,11 +283,9 @@ class TestOrchestrator(
     println(s"[SUBMIT]   Application JAR: $sparkExamplesJar")
     println(s"[SUBMIT]   Spark config:")
     enhancedSparkConfs.toSeq.sortBy(_._1).foreach { case (key, value) =>
-      // Truncate long values for readability
       val displayValue = if (value.length > 100) value.take(100) + "..." else value
       println(s"[SUBMIT]     $key = $displayValue")
     }
-    println(s"[SUBMIT] Executing Docker command (${dockerCommand.size} args total)")
     // Properly escape command for shell reproduction
     val escapedCommand = dockerCommand.map { arg =>
       if (arg.contains(" ") || arg.contains("'") || arg.contains("\"")) {
@@ -262,178 +294,140 @@ class TestOrchestrator(
     }
     println(s"[SUBMIT] Full command: ${escapedCommand.mkString(" ")}\n")
 
-    val result = ProcessExecutor.execute(dockerCommand, jobSubmitTimeout)
+    def attemptSubmit(attempt: Int = 1): ProcessResult = {
+      val result = ProcessExecutor.executeWithResult(dockerCommand, jobSubmitTimeout)
 
-    if (result.exitCode != 0) {
-      // Try to find the actual error in stderr or stdout
-      val errorPattern = """Exception|Error|Failed|FAILED""".r
-      val relevantLines = (result.stdout + "\n" + result.stderr)
-        .split("\n")
-        .filter(line => errorPattern.findFirstIn(line).isDefined)
-        .take(10)
+      if (result.exitCode != 0) {
+        val allOutput            = result.stdout + "\n" + result.stderr
+        val isQueueNotFoundError = allOutput.contains("PERMISSION_DENIED: could not find queue")
 
-      println(s"[SUBMIT] ❌ Submit failed with exit code ${result.exitCode}")
-      if (relevantLines.nonEmpty) {
-        println("[SUBMIT] Relevant error lines:")
-        relevantLines.foreach(line => println(s"[SUBMIT]   $line"))
+        if (isQueueNotFoundError && attempt <= 3) {
+          val waitTime = attempt * 2 // 2, 4, 6 seconds
+          println(
+            s"[SUBMIT] Queue not found error on attempt $attempt, retrying in ${waitTime}s..."
+          )
+          Thread.sleep(waitTime * 1000)
+          attemptSubmit(attempt + 1)
+        } else {
+          // Try to find the actual error in stderr or stdout
+          val errorPattern = """Exception|Error|Failed|FAILED""".r
+          val relevantLines = allOutput
+            .split("\n")
+            .filter(line => errorPattern.findFirstIn(line).isDefined)
+            .take(10)
+
+          println(
+            s"[SUBMIT] ERROR Submit failed with exit code ${result.exitCode} after $attempt attempts"
+          )
+          if (relevantLines.nonEmpty) {
+            println("[SUBMIT] Relevant error lines:")
+            relevantLines.foreach(line => println(s"[SUBMIT]   $line"))
+          }
+
+          throw new RuntimeException(s"Spark submit failed with exit code ${result.exitCode}")
+        }
+      } else {
+        if (attempt > 1) {
+          println(s"[SUBMIT] Job submitted successfully on attempt $attempt")
+        } else {
+          println(s"[SUBMIT] Job submitted successfully")
+        }
+        result
       }
-
-      throw new RuntimeException(s"Spark submit failed with exit code ${result.exitCode}")
-    } else {
-      println(s"[SUBMIT] Job submitted successfully")
-      println(s"[SUBMIT] Now monitoring job in queue '$queueName' with jobSetId '$jobSetId'")
     }
+
+    attemptSubmit()
   }
 
-  private def watchJobWithPodMonitoring(
+  private def watchJob(
       queueName: String,
       jobSetId: String,
       config: TestConfig,
       context: TestContext
-  ): Future[TestResult] = {
-    println(s"[MONITOR] Starting job monitoring for jobSetId: $jobSetId")
-    println(s"[MONITOR] Pod failure detection: ${if (config.failFastOnPodFailure) "enabled"
-      else "disabled"}")
+  ): Future[TestResult] = Future {
+    val podMonitor = new SimplePodMonitor(context.namespace)
 
-    val podWatcher = new PodWatcher(context.namespace, jobSetId, config.failFastOnPodFailure)
-
-    // Start monitoring pods
-    val podFailureFuture = if (config.failFastOnPodFailure) {
-      println(s"[MONITOR] Starting pod watcher in namespace: ${context.namespace}")
-      podWatcher.start()
-    } else {
-      FutureExtensions.never
-    }
-
-    // Watch the job
-    println(s"[MONITOR] Starting Armada job watch with timeout: ${jobWatchTimeout.toSeconds}s")
+    println(s"[WATCH] Starting job watch for jobSetId: $jobSetId")
     val jobFuture = armadaClient.watchJobSet(queueName, jobSetId, jobWatchTimeout)
 
-    // Race between job completion and pod failure
-    val resultFuture = Future.firstCompletedOf(
-      Seq(
-        jobFuture.map { status =>
-          println(s"[COMPLETE] Job finished with status=$status at ${java.time.LocalTime.now()}")
-          TestResult(jobSetId, queueName, status)
-        },
-        podFailureFuture.map { failureMsg =>
-          println(s"[FAILED] Job failed: $failureMsg at ${java.time.LocalTime.now()}")
-          TestResult(jobSetId, queueName, JobSetStatus.Failed)
-        }
-      )
-    )
+    var jobCompleted               = false
+    var podFailure: Option[String] = None
+    var assertionResults           = Map.empty[String, AssertionResult]
 
-    // Handle completion
-    resultFuture.andThen {
-      case Success(result) =>
-        podWatcher.stop()
-        // Print captured logs only if the test failed
-        if (result.status != JobSetStatus.Success) {
-          podWatcher.getLogCapture().printCapturedLogs()
+    if (config.failFastOnPodFailure) {
+      println(s"[MONITOR] Starting pod monitoring for namespace: ${context.namespace}")
+      val monitorThread = new Thread(() => {
+        while (!jobCompleted && podFailure.isEmpty) {
+          podFailure = podMonitor.checkForFailures()
+          if (podFailure.isEmpty) {
+            Thread.sleep(5000) // Check every 5 seconds
+          }
         }
-      case Failure(ex) =>
-        podWatcher.stop()
-        podWatcher.getLogCapture().printCapturedLogs()
-        println(s"* Job watch failed: ${ex.getMessage}")
+      })
+      monitorThread.setDaemon(true)
+      monitorThread.start()
     }
-  }
 
-  private def watchJobWithAssertions(
-      queueName: String,
-      jobSetId: String,
-      config: TestConfig,
-      context: TestContext
-  ): Future[TestResult] = {
-    val assertionPromise = Promise[Map[String, AssertionResult]]()
-    val jobPromise       = Promise[JobSetStatus]()
-    val podWatcher       = new PodWatcher(context.namespace, jobSetId, config.failFastOnPodFailure)
-
-    // Start pod monitoring
-    val podFailureFuture = if (config.failFastOnPodFailure) {
-      podWatcher.start()
+    // If we have assertions, run them after driver starts but while job is running
+    val assertionThread = if (config.assertions.nonEmpty) {
+      val thread = new Thread(() => {
+        // Wait for driver to start, then run assertions while job is active
+        assertionResults = runAssertionsWhileJobRunning(
+          config.assertions,
+          context,
+          jobCompleted = () => jobCompleted
+        )
+      })
+      thread.setDaemon(true)
+      thread.start()
+      Some(thread)
     } else {
-      FutureExtensions.never
+      None
     }
 
-    val assertionContext =
-      AssertionContext(jobSetId, context.namespace, context.testId, k8sClient, armadaClient)
-
-    println(s"* Watching job $jobSetId in queue $queueName")
-    val jobFuture = armadaClient.watchJobSet(queueName, jobSetId, jobWatchTimeout)
-    jobFuture.onComplete { result =>
-      result match {
-        case Success(status) => println(s"** Job completed with status: $status")
-        case Failure(ex)     => println(s"** Job watch failed: ${ex.getMessage}")
+    // Wait for job to complete or fail
+    val jobStatus =
+      try {
+        import scala.concurrent.Await
+        Await.result(jobFuture, jobWatchTimeout + 10.seconds)
+      } catch {
+        case _: TimeoutException =>
+          println(s"[TIMEOUT] Job watch timed out after ${jobWatchTimeout.toSeconds}s")
+          JobSetStatus.Timeout
+        case ex: Exception =>
+          println(s"[ERROR] Job watch failed: ${ex.getMessage}")
+          JobSetStatus.Failed
+      } finally {
+        jobCompleted = true
       }
-      jobPromise.tryComplete(result)
+
+    // Wait for assertion thread to complete if it exists
+    assertionThread.foreach { thread =>
+      try {
+        thread.join(30000) // Wait up to 30 seconds for assertions to complete
+      } catch {
+        case _: InterruptedException =>
+      }
     }
 
-    // Use test-id label to identify pods belonging to this specific test
-    val labelSelector = s"test-id=${context.testId}"
-
-    val assertionFuture = for {
-      // Look for driver pod with test-id label in the test-specific namespace
-      _ <- k8sClient.waitForPodRunning(labelSelector, context.namespace, PodRunningTimeout)
-      _ = println("* Driver pod is running, waiting for resources to be created...")
-      // Poll for ingress to be created (if ingress assertions are present)
-      _ <-
-        if (config.assertions.exists(_.isInstanceOf[IngressAssertion])) {
-          waitForIngressCreation(context, k8sClient, maxWait = IngressCreationTimeout)
-        } else {
-          Future.successful(())
-        }
-      _ = println("* Running assertions...")
-      results <- AssertionRunner.runAssertions(config.assertions, assertionContext)
-    } yield results
-
-    assertionFuture.onComplete {
-      case Success(results) =>
-        println(s"** Assertions completed: ${results.size} assertions run")
-        val failedAssertions = results.collect { case (name, AssertionResult.Failure(reason, _)) =>
-          (name, reason)
-        }
-        results.foreach { case (name, status) =>
-          println(s"  - $name: $status")
-        }
-        if (failedAssertions.nonEmpty) {
-          val failureMessage = failedAssertions
-            .map { case (name, reason) => s"$name: $reason" }
-            .mkString("Failed assertions:\n", "\n", "")
-          assertionPromise.failure(new AssertionFailedException(failureMessage))
-        } else {
-          assertionPromise.success(results)
-        }
-      case Failure(ex) =>
-        println(s"** Assertion execution failed: ${ex.getMessage}")
-        assertionPromise.failure(ex)
+    val finalStatus = podFailure match {
+      case Some(failureMsg) =>
+        println(s"[FAILED] Pod failure detected: $failureMsg")
+        JobSetStatus.Failed
+      case None =>
+        jobStatus
     }
 
-    // Handle pod failures
-    podFailureFuture.onComplete {
-      case Success(failureMsg) =>
-        jobPromise.tryFailure(new RuntimeException(s"Pod failure: $failureMsg"))
-        assertionPromise.tryFailure(new RuntimeException(s"Pod failure: $failureMsg"))
-      case _ => // Ignore
+    // Capture debug info if test failed OR if assertions failed
+    val hasAssertionFailures =
+      assertionResults.values.exists(_.isInstanceOf[AssertionResult.Failure])
+    if (finalStatus != JobSetStatus.Success || hasAssertionFailures) {
+      println("[DEBUG] Test or assertions failed, capturing debug information...")
+      podMonitor.captureDebugInfo()
+      podMonitor.printCapturedLogs()
     }
 
-    val result = for {
-      jobStatus        <- jobPromise.future
-      assertionResults <- assertionPromise.future
-    } yield TestResult(jobSetId, queueName, jobStatus, assertionResults)
-
-    // Stop pod watcher and print logs if needed when test completes
-    result.onComplete {
-      case Success(testResult) =>
-        podWatcher.stop()
-        if (testResult.status != JobSetStatus.Success) {
-          podWatcher.getLogCapture().printCapturedLogs()
-        }
-      case Failure(_) =>
-        podWatcher.stop()
-        podWatcher.getLogCapture().printCapturedLogs()
-    }
-
-    result
+    TestResult(jobSetId, queueName, finalStatus, assertionResults)
   }
 
   private def buildDockerCommand(

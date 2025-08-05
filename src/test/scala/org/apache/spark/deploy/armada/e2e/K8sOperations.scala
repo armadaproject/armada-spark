@@ -25,71 +25,6 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import scala.collection.mutable.ArrayBuffer
 
-/** Abstraction for Kubernetes operations used in E2E testing.
-  *
-  * Provides async methods for querying and waiting for Kubernetes resources. All operations are
-  * non-blocking and return Futures for composition.
-  */
-trait K8sOperations {
-
-  /** Creates a namespace if it doesn't exist.
-    * @param name
-    *   Namespace name
-    * @return
-    *   Future indicating success
-    */
-  def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit]
-
-  /** Deletes a namespace and all its resources.
-    * @param name
-    *   Namespace name
-    * @return
-    *   Future indicating success
-    */
-  def deleteNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit]
-
-  /** Retrieves a pod matching the given label selector.
-    * @param labelSelector
-    *   Kubernetes label selector (e.g., "app=spark,role=driver")
-    * @param namespace
-    *   Namespace to search in
-    * @return
-    *   Future containing the pod if found, None otherwise
-    */
-  def getPodByLabel(labelSelector: String, namespace: String)(implicit
-      ec: ExecutionContext
-  ): Future[Option[Pod]]
-
-  /** Retrieves the ingress associated with a pod. Convention: Ingress name is "{podName}-ingress-1"
-    * @param podName
-    *   Name of the pod whose ingress to retrieve
-    * @param namespace
-    *   Namespace to search in
-    * @return
-    *   Future containing the ingress if found, None otherwise
-    */
-  def getIngressForPod(podName: String, namespace: String)(implicit
-      ec: ExecutionContext
-  ): Future[Option[Ingress]]
-
-  /** Waits for a pod to reach Running state with ready condition. Polls every 2 seconds until
-    * timeout.
-    * @param labelSelector
-    *   Label selector to identify the pod
-    * @param namespace
-    *   Namespace to search in
-    * @param timeout
-    *   Maximum time to wait
-    * @return
-    *   Future containing the running pod
-    * @throws TimeoutException
-    *   if pod doesn't reach running state within timeout
-    */
-  def waitForPodRunning(labelSelector: String, namespace: String, timeout: Duration)(implicit
-      ec: ExecutionContext
-  ): Future[Pod]
-}
-
 case class Pod(name: String, namespace: String, labels: Map[String, String], status: PodStatus)
 case class PodStatus(phase: String, ready: Boolean)
 
@@ -113,16 +48,14 @@ case class IngressBackend(serviceName: String, servicePort: Int)
   *   - Implements retry logic with exponential backoff for transient failures
   *   - All operations are async and non-blocking
   */
-class K8sClient extends K8sOperations {
+class K8sClient {
   private val mapper = new ObjectMapper()
   mapper.registerModule(DefaultScalaModule)
 
   private val processTimeout = 5.seconds
-  private val retryConfig    = RetryConfig(maxAttempts = 3, initialDelay = 500.millis)
 
-  override def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
+  def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
     Future {
-      // Try to create namespace, ignore if already exists
       Try(
         ProcessExecutor.execute(
           Seq("kubectl", "create", "namespace", name),
@@ -133,7 +66,7 @@ class K8sClient extends K8sOperations {
     }
   }
 
-  override def deleteNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
+  def deleteNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
     Future {
       ProcessExecutor.execute(
         Seq("kubectl", "delete", "namespace", name, "--wait=false"),
@@ -145,38 +78,38 @@ class K8sClient extends K8sOperations {
     }
   }
 
-  override def getPodByLabel(
+  def getPodByLabel(
       labelSelector: String,
       namespace: String
-  )(implicit ec: ExecutionContext): Future[Option[Pod]] = {
-    Retry.withBackoff(retryConfig) {
+  )(implicit ec: ExecutionContext): Future[Option[Pod]] = Future {
+    try {
       val result = ProcessExecutor.execute(
         Seq("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "-o", "json"),
         processTimeout
       )
       parsePods(result.stdout).headOption
+    } catch {
+      case _: Exception => None
     }
   }
 
-  override def getIngressForPod(
+  def getIngressForPod(
       podName: String,
       namespace: String
-  )(implicit ec: ExecutionContext): Future[Option[Ingress]] = {
-    Retry
-      .withBackoff(retryConfig) {
-        val ingressName = s"$podName-ingress-1"
-        val result = ProcessExecutor.execute(
-          Seq("kubectl", "get", "ingress", "-n", namespace, ingressName, "-o", "json"),
-          processTimeout
-        )
-        parseIngress(result.stdout)
-      }
-      .recover { case _ =>
-        None
-      }
+  )(implicit ec: ExecutionContext): Future[Option[Ingress]] = Future {
+    try {
+      val ingressName = s"$podName-ingress-1"
+      val result = ProcessExecutor.execute(
+        Seq("kubectl", "get", "ingress", "-n", namespace, ingressName, "-o", "json"),
+        processTimeout
+      )
+      parseIngress(result.stdout)
+    } catch {
+      case _: Exception => None
+    }
   }
 
-  override def waitForPodRunning(
+  def waitForPodRunning(
       labelSelector: String,
       namespace: String,
       timeout: Duration
@@ -193,18 +126,9 @@ class K8sClient extends K8sOperations {
             new TimeoutException(s"Pod with label $labelSelector not running within $timeout")
           )
         case _ =>
-          val delay = Promise[Unit]()
-          val timer = new java.util.Timer()
-          timer.schedule(
-            new java.util.TimerTask {
-              def run(): Unit = {
-                delay.success(())
-                timer.cancel()
-              }
-            },
-            2000
-          )
-          delay.future.flatMap(_ => checkPod())
+          Future {
+            Thread.sleep(2000)
+          }.flatMap(_ => checkPod())
       }
     }
 
@@ -228,7 +152,6 @@ class K8sClient extends K8sOperations {
 
         val labels = parseObjectToMap(metadata.path("labels"))
 
-        // Check if pod has Ready=True condition
         val ready = {
           val conditions     = status.path("conditions")
           var isReady        = false
