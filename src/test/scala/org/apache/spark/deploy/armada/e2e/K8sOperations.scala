@@ -17,13 +17,14 @@
 
 package org.apache.spark.deploy.armada.e2e
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.concurrent.duration._
-import scala.util.Try
-import java.util.concurrent.TimeoutException
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+
+import java.util.concurrent.TimeoutException
 import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 case class Pod(name: String, namespace: String, labels: Map[String, String], status: PodStatus)
 case class PodStatus(phase: String, ready: Boolean)

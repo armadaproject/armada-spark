@@ -79,7 +79,7 @@ class ArmadaSparkE2E
     val testQueueName = s"${baseConfig.baseQueueName}-cluster-check-${System.currentTimeMillis()}"
 
     println(s"[CLUSTER-CHECK] Verifying Armada cluster readiness...")
-    println(s"[CLUSTER-CHECK] Will retry for up to ${clusterReadyTimeout} seconds")
+    println(s"[CLUSTER-CHECK] Will retry for up to $clusterReadyTimeout seconds")
 
     val startTime                    = System.currentTimeMillis()
     var clusterReady                 = false
@@ -121,19 +121,19 @@ class ArmadaSparkE2E
     val totalTime = (System.currentTimeMillis() - startTime) / 1000
     if (!clusterReady) {
       throw new RuntimeException(
-        s"Armada cluster not ready after ${totalTime} seconds (${attempts} attempts). " +
+        s"Armada cluster not ready after $totalTime seconds ($attempts attempts). " +
           s"Last error: ${lastError.map(_.getMessage).getOrElse("Unknown")}"
       )
     }
 
     println(
-      s"[CLUSTER-CHECK] Cluster verified ready after ${totalTime} seconds (${attempts} attempts)"
+      s"[CLUSTER-CHECK] Cluster verified ready after $totalTime seconds ($attempts attempts)"
     )
   }
 
-  test("Basic SparkPi job", E2ETest) {
-    implicit val orch: TestOrchestrator = orchestrator
+  implicit val orch: TestOrchestrator = orchestrator
 
+  test("Basic SparkPi job", E2ETest) {
     E2ETestBuilder("basic-spark-pi")
       .withBaseConfig(baseConfig)
       .withExecutors(3)
@@ -145,8 +145,6 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with node selectors", E2ETest) {
-    implicit val orch: TestOrchestrator = orchestrator
-
     E2ETestBuilder("spark-pi-node-selectors")
       .withBaseConfig(baseConfig)
       .withPodLabels(Map("test-type" -> "node-selector"))
@@ -159,8 +157,6 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job using job templates", E2ETest) {
-    implicit val orch: TestOrchestrator = orchestrator
-
     E2ETestBuilder("spark-pi-templates")
       .withBaseConfig(baseConfig)
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
@@ -178,8 +174,6 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with driver ingress using cli", E2ETest) {
-    implicit val orch: TestOrchestrator = orchestrator
-
     E2ETestBuilder("spark-pi-ingress")
       .withBaseConfig(baseConfig)
       .withDriverIngress(
@@ -203,8 +197,6 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with driver ingress using template", E2ETest) {
-    implicit val orch: TestOrchestrator = orchestrator
-
     E2ETestBuilder("spark-pi-ingress-template")
       .withBaseConfig(baseConfig)
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))

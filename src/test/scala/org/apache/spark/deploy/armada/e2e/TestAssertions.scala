@@ -57,7 +57,7 @@ class PodCountAssertion(
       val result = ProcessExecutor.execute(cmd, 10.seconds)
 
       if (result.exitCode == 0) {
-        val podCount = result.stdout.split("\n").filter(_.nonEmpty).length
+        val podCount = result.stdout.split("\n").count(_.nonEmpty)
         if (podCount == expectedCount) {
           AssertionResult.Success
         } else {
@@ -111,7 +111,7 @@ class PodLabelAssertion(
         AssertionResult.Failure(s"No pod found with selector: $podSelector")
       case Some(pod) =>
         val missingLabels = expectedLabels.filter { case (key, value) =>
-          pod.labels.get(key) != Some(value)
+          !pod.labels.get(key).contains(value)
         }
         if (missingLabels.isEmpty) {
           AssertionResult.Success

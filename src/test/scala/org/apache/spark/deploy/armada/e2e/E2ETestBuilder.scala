@@ -197,8 +197,10 @@ class E2ETestBuilder(testName: String) {
   /** Add custom assertion with inline definition */
   def assertThat(assertionName: String)(check: AssertionContext => Boolean): E2ETestBuilder = {
     assertions :+= new TestAssertion {
-      override val name = assertionName
-      override def assert(context: AssertionContext)(implicit ec: ExecutionContext) = {
+      override val name: String = assertionName
+      override def assert(context: AssertionContext)(implicit
+          ec: ExecutionContext
+      ): Future[AssertionResult] = {
         Future {
           if (check(context)) AssertionResult.Success
           else AssertionResult.Failure(s"Assertion '$assertionName' failed")
@@ -235,7 +237,7 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
-  def run()(implicit orchestrator: TestOrchestrator, ec: ExecutionContext): TestResult = {
+  def run()(implicit orchestrator: TestOrchestrator): TestResult = {
     import scala.concurrent.Await
     val future = orchestrator.runTest(testName, build())
     val result = Await.result(future, 5.minutes)

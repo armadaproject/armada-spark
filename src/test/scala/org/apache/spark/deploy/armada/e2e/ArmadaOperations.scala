@@ -22,7 +22,7 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
-import scala.concurrent.{ExecutionContext, Future, blocking}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
 import scala.util.{Failure, Success, Try}
@@ -117,7 +117,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
             if (queueFound) {
               println(s"[QUEUE] Queue $name is ready")
             } else {
-              throw new RuntimeException(s"Queue $name not available after ${attempts} seconds")
+              throw new RuntimeException(s"Queue $name not available after $attempts seconds")
             }
           }
         }
@@ -173,8 +173,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
       updateThread.start()
 
       try {
-        val result  = handle.waitFor(watchTimeout)(ec)
-        val elapsed = (System.currentTimeMillis() - startTime) / 1000
+        val result = handle.waitFor(watchTimeout)(ec)
 
         if (result.timedOut) {
           None // Watch timed out
@@ -209,7 +208,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
       yamlMapper.readValue(result.stdout, classOf[Queue])
     } match {
       case Success(queue) => Some(queue)
-      case Failure(ex) =>
+      case Failure(_) =>
         None
     }
   }

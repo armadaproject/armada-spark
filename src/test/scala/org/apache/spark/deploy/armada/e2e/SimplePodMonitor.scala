@@ -70,7 +70,7 @@ class SimplePodMonitor(namespace: String) {
               val eventsIndex = lines.indexWhere(_.contains("Events:"))
               if (eventsIndex >= 0) {
                 println(s"[MONITOR] Pod $failedPodName events:")
-                println(lines.drop(eventsIndex).take(20).mkString("\n"))
+                println(lines.slice(eventsIndex, eventsIndex + 20).mkString("\n"))
               }
             }
           } catch {
@@ -83,6 +83,7 @@ class SimplePodMonitor(namespace: String) {
           None
         }
       } else {
+        println(s"[MONITOR] Failed to get pods: ${podsResult.stderr}")
         None
       }
     } catch {

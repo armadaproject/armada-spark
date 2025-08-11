@@ -25,7 +25,6 @@ import scala.concurrent.duration._
 import TestConstants._
 
 import scala.annotation.tailrec
-import scala.util.{Failure, Success, Try}
 
 case class TestConfig(
     baseQueueName: String,
@@ -104,8 +103,8 @@ class TestOrchestrator(
         driverPod match {
           case Some(pod) if pod.status.phase == "Running" =>
             driverRunning = true
-          case Some(pod) =>
-          case None      =>
+          case Some(_) =>
+          case None    =>
         }
       } catch {
         case _: Exception =>
@@ -216,8 +215,8 @@ class TestOrchestrator(
         cleanupTest(context, queueName)
       }
       .map { result =>
-        println(s"\n========== Test Completed: $name ==========")
-        println(s"Status: ${result.status}")
+        println(s"\n========== Test Finished: $name ==========")
+        println(s"Job Status: ${result.status}")
         println(s"Duration: ${(System.currentTimeMillis() - context.startTime) / 1000}s")
         result
       }
@@ -403,11 +402,29 @@ class TestOrchestrator(
       }
 
     // Wait for assertion thread to complete if it exists
-    assertionThread.foreach { thread =>
-      try {
-        thread.join(30000) // Wait up to 30 seconds for assertions to complete
-      } catch {
-        case _: InterruptedException =>
+    val assertionsCompleted = assertionThread match {
+      case Some(thread) =>
+        try {
+          thread.join(AssertionThreadTimeout.toMillis)
+          !thread.isAlive // Returns true if thread completed, false if still running
+        } catch {
+          case _: InterruptedException =>
+            println("[WARNING] Assertion thread was interrupted while waiting for completion")
+            false
+        }
+      case None => true // No assertions to run, so consider them "completed"
+    }
+
+    // If assertions didn't complete, add a failure result
+    if (!assertionsCompleted && config.assertions.nonEmpty) {
+      // Add failure results for all assertions that didn't complete
+      config.assertions.foreach { assertion =>
+        if (!assertionResults.contains(assertion.name)) {
+          assertionResults += (assertion.name -> AssertionResult.Failure(
+            "Assertion did not complete within timeout or was interrupted",
+            None
+          ))
+        }
       }
     }
 
