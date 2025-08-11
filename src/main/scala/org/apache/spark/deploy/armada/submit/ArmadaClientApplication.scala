@@ -165,7 +165,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments: ClientArguments,
       sparkConf: SparkConf
   ): Unit = {
-    log("[RUN] Starting Armada job submission")
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
@@ -176,14 +175,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 
     log(s"Checking Armada Server health (timeout: $healthTimeout)")
-    val healthResp =
-      try {
-        Await.result(armadaClient.submitHealth(), healthTimeout)
-      } catch {
-        case e: Exception =>
-          log(s"Armada health check failed: ${e.getClass.getName}: ${e.getMessage}")
-          throw e
-      }
+    val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
     if (healthResp.status.isServing) {
       log("Armada Server is serving requests!")
@@ -839,14 +831,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       driver: api.submit.JobSubmitRequestItem
   ): String = {
-      val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
-
-    val driverJobId = driverResponse.jobResponseItems.head.jobId
+    val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
+    val driverJobId    = driverResponse.jobResponseItems.head.jobId
     val error = Some(driverResponse.jobResponseItems.head.error)
       .filter(_.nonEmpty)
       .getOrElse("none")
     log(
-      s"[SUBMIT-DRIVER] Submitted driver job with ID: $driverJobId, Error: $error"
+      s"Submitted driver job with ID: $driverJobId, Error: $error"
     )
     driverJobId
   }
@@ -857,15 +848,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       executors: Seq[api.submit.JobSubmitRequestItem]
   ): Seq[String] = {
-    val executorsResponse =
-      try {
-        armadaClient.submitJobs(queue, jobSetId, executors)
-      } catch {
-        case e: Exception =>
-          throw e
-      }
-
-    executorsResponse.jobResponseItems.map(_.jobId)
+    val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
+    executorsResponse.jobResponseItems.map { item =>
+      val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
+      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      item.jobId
+    }
   }
 
   /** Merges a driver job item template with runtime configuration. If no template is provided,
