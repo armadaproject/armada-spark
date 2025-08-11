@@ -839,17 +839,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobSetId: String,
       driver: api.submit.JobSubmitRequestItem
   ): String = {
-    log(
-      s"[SUBMIT-DRIVER] Submitting driver job to queue: '$queue', jobSetId: '$jobSetId'"
-    )
-
-    val driverResponse =
-      try {
-        armadaClient.submitJobs(queue, jobSetId, Seq(driver))
-      } catch {
-        case e: Exception =>
-          throw e
-      }
+      val driverResponse = armadaClient.submitJobs(queue, jobSetId, Seq(driver))
 
     val driverJobId = driverResponse.jobResponseItems.head.jobId
     val error = Some(driverResponse.jobResponseItems.head.error)

@@ -124,9 +124,6 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     }
   }
 
-  /** Watches job set using armadactl watch command. --exit-if-inactive flag ensures watch exits
-    * when job completes. Exit code 0 = success, non-zero = failed job.
-    */
   def deleteQueue(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
     Future {
       Try(
@@ -141,6 +138,9 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     }
   }
 
+  /** Watches job set using armadactl watch command. --exit-if-inactive flag ensures watch exits
+    * when job completes. Exit code 0 = success, non-zero = failed job.
+    */
   def watchJobSet(
       queue: String,
       jobSetId: String,
@@ -237,7 +237,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
         Some(path)
       case None =>
         val pathSep = java.io.File.pathSeparator
-        val pathEnv = sys.env.get("PATH").getOrElse("")
+        val pathEnv = sys.env.getOrElse("PATH", "")
 
         val pathDirs = pathEnv.split(pathSep).filter(_.nonEmpty)
         val found = pathDirs

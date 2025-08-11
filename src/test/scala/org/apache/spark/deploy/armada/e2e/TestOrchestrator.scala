@@ -62,8 +62,6 @@ case class TestResult(
     assertionResults: Map[String, AssertionResult] = Map.empty
 )
 
-class AssertionFailedException(message: String) extends Exception(message)
-
 /** Orchestrates end-to-end testing of Spark jobs on Armada. */
 class TestOrchestrator(
     armadaClient: ArmadaClient,

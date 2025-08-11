@@ -26,7 +26,7 @@ import org.scalatest.Assertions._
   *
   * Example usage:
   * {{{
-  * E2ETest("My new feature")
+  * E2ETestBuilder("My new feature")
   *   .withSparkConf("spark.my.feature.enabled", "true")
   *   .withExecutors(3)
   *   .assertExecutorCount(3)
@@ -257,49 +257,4 @@ class E2ETestBuilder(testName: String) {
 /** Companion object with factory methods */
 object E2ETestBuilder {
   def apply(testName: String): E2ETestBuilder = new E2ETestBuilder(testName)
-
-  /** Create a test for Spark Pi workload */
-  def sparkPi(testName: String): E2ETestBuilder = {
-    new E2ETestBuilder(testName)
-      .withSparkConf("spark.armada.container.image", "spark:armada")
-  }
-
-  /** Create a test with driver ingress enabled */
-  def withIngress(testName: String): E2ETestBuilder = {
-    sparkPi(testName)
-      .withDriverIngress()
-      .assertIngress(
-        Set(
-          "nginx.ingress.kubernetes.io/rewrite-target",
-          "nginx.ingress.kubernetes.io/backend-protocol"
-        )
-      )
-  }
-}
-
-/** Common test patterns that can be reused
-  */
-object TestPatterns {
-
-  /** Standard executor scaling test */
-  def executorScalingTest(minExecutors: Int, maxExecutors: Int): Seq[TestAssertion] = {
-    Seq(
-      new PodCountAssertion(
-        labelSelector = "spark-role=executor",
-        expectedCount = minExecutors,
-        description = s"At least $minExecutors executors"
-      )
-    )
-  }
-
-  /** High availability test pattern */
-  def highAvailabilityTest(): Seq[TestAssertion] = {
-    Seq(
-      new PodCountAssertion(
-        labelSelector = "spark-role=driver",
-        expectedCount = 1,
-        description = "Driver HA check"
-      )
-    )
-  }
 }

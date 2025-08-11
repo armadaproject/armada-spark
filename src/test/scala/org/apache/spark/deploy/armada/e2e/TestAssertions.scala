@@ -198,46 +198,6 @@ class NodeSelectorAssertion(
   }
 }
 
-/** Helper object with convenience methods for creating common assertions */
-object Assertions {
-
-  def executorCount(expected: Int)(implicit testId: String): PodCountAssertion = {
-    new PodCountAssertion(
-      labelSelector = s"spark-role=executor,test-id=$testId",
-      expectedCount = expected,
-      description = "Executor count"
-    )
-  }
-
-  def driverExists(implicit testId: String): PodCountAssertion = {
-    new PodCountAssertion(
-      labelSelector = s"spark-role=driver,test-id=$testId",
-      expectedCount = 1,
-      description = "Driver pod"
-    )
-  }
-
-  def podLabels(selector: String, labels: Map[String, String]): PodLabelAssertion = {
-    new PodLabelAssertion(selector, labels)
-  }
-
-  def executorLabels(labels: Map[String, String])(implicit testId: String): PodLabelAssertion = {
-    new PodLabelAssertion(s"spark-role=executor,test-id=$testId", labels)
-  }
-
-  def driverLabels(labels: Map[String, String])(implicit testId: String): PodLabelAssertion = {
-    new PodLabelAssertion(s"spark-role=driver,test-id=$testId", labels)
-  }
-
-  def nodeSelectors(selector: String, selectors: Map[String, String]): NodeSelectorAssertion = {
-    new NodeSelectorAssertion(selector, selectors)
-  }
-
-  def driverIngress(annotations: Set[String], port: Int = 7078): IngressAssertion = {
-    new IngressAssertion(annotations, port)
-  }
-}
-
 class IngressAssertion(
     requiredAnnotations: Set[String],
     requiredPort: Int = 7078
@@ -270,23 +230,5 @@ class IngressAssertion(
           }
       }
     }
-  }
-}
-
-object AssertionRunner {
-  def runAssertions(
-      assertions: Seq[TestAssertion],
-      context: AssertionContext
-  )(implicit ec: ExecutionContext): Future[Map[String, AssertionResult]] = {
-    Future
-      .traverse(assertions) { assertion =>
-        Future(assertion.name)
-          .zip(assertion.assert(context))
-          .map { case (name, result) => name -> result }
-          .recover { case ex: Throwable =>
-            assertion.name -> AssertionResult.Failure(ex.getMessage, Some(ex))
-          }
-      }
-      .map(_.toMap)
   }
 }

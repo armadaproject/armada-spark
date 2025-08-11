@@ -289,18 +289,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
 
     if (clusterManager == ARMADA) {
       printMessage(s"Armada selected as cluster manager.")
-      printMessage(s"[ARMADA] Master URL: ${args.master}")
-      
-      // Log queue information if available
-      sparkConf.getOption("spark.armada.queue").foreach { queue =>
-        printMessage(s"[ARMADA] Queue from spark.armada.queue: '$queue'")
-      }
-      
-      // Log CI environment
-      if (sys.env.get("CI").contains("true") || sys.env.get("GITHUB_ACTIONS").contains("true")) {
-        printMessage(s"[ARMADA] Running in CI environment (CI=${sys.env.get("CI")}, GITHUB_ACTIONS=${sys.env.get("GITHUB_ACTIONS")})")
-      }
-      
+
       if (!Utils.classIsLoadable(ARMADA_CLUSTER_SUBMIT_CLASS) && !Utils.isTesting) {
         error(
           "Could not load ARMADA class " + ARMADA_CLUSTER_SUBMIT_CLASS + ". " +
@@ -1141,7 +1130,7 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         logInfo(s"[ARMADA-SUBMIT] JobSetId: '$jobSetId'")
       }
     }
-    
+
     if (args.verbose) {
       logInfo(s"Main class:\n$childMainClass")
       logInfo(s"Arguments:\n${childArgs.mkString("\n")}")

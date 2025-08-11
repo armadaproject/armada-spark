@@ -120,15 +120,14 @@ class ArmadaSparkE2E
       }
     }
 
+    val totalTime = (System.currentTimeMillis() - startTime) / 1000
     if (!clusterReady) {
-      val totalTime = (System.currentTimeMillis() - startTime) / 1000
       throw new RuntimeException(
         s"Armada cluster not ready after ${totalTime} seconds (${attempts} attempts). " +
           s"Last error: ${lastError.map(_.getMessage).getOrElse("Unknown")}"
       )
     }
 
-    val totalTime = (System.currentTimeMillis() - startTime) / 1000
     println(
       s"[CLUSTER-CHECK] Cluster verified ready after ${totalTime} seconds (${attempts} attempts)"
     )
@@ -139,9 +138,10 @@ class ArmadaSparkE2E
 
     E2ETestBuilder("basic-spark-pi")
       .withBaseConfig(baseConfig)
+      .withExecutors(3)
       .withPodLabels(Map("test-type" -> "basic"))
       .assertDriverExists()
-      .assertExecutorCount(2)
+      .assertExecutorCount(3)
       .assertPodLabels(Map("test-type" -> "basic"))
       .run()
   }
