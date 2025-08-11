@@ -23,6 +23,8 @@ import java.util.concurrent.TimeoutException
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
+
+import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
 case class TestConfig(
@@ -106,7 +108,7 @@ class TestOrchestrator(
           case None      =>
         }
       } catch {
-        case ex: Exception =>
+        case _: Exception =>
       }
 
       if (!driverRunning) {
@@ -292,6 +294,7 @@ class TestOrchestrator(
     }
     println(s"[SUBMIT] Full command: ${escapedCommand.mkString(" ")}\n")
 
+    @tailrec
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
       val result = ProcessExecutor.executeWithResult(dockerCommand, jobSubmitTimeout)
 
@@ -478,17 +481,7 @@ class TestOrchestrator(
       "spark.home"                           -> "/opt/spark"
     )
 
-    // Override internalUrl to use the Kubernetes service name instead of localhost
-    val ciAdjustedConfs =
-      if (sys.env.get("CI").contains("true") || sys.env.get("GITHUB_ACTIONS").contains("true")) {
-        defaultConfs ++ Map(
-          "spark.armada.internalUrl" -> "armada-server.armada:50051"
-        )
-      } else {
-        defaultConfs
-      }
-
-    val allConfs = ciAdjustedConfs ++ sparkConfs
+    val allConfs = defaultConfs ++ sparkConfs
     val confArgs = allConfs.flatMap { case (key, value) =>
       Seq("--conf", s"$key=$value")
     }.toSeq

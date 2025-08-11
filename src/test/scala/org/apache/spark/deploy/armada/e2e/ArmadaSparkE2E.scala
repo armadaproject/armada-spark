@@ -23,7 +23,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 
-import java.io.{File, FileInputStream}
 import java.util.Properties
 import scala.concurrent.ExecutionContext.Implicits.global
 import TestConstants._
@@ -41,7 +40,6 @@ class ArmadaSparkE2E
   )
 
   private val baseQueueName = "e2e-template"
-  private val configFile    = new File("src/test/resources/e2e/spark-pi-e2e.conf")
 
   private lazy val armadaClient = new ArmadaClient()
   private lazy val k8sClient    = new K8sClient()
@@ -234,16 +232,6 @@ class ArmadaSparkE2E
 
   private def loadProperties(): Properties = {
     val props = new Properties()
-
-    // Load from config file if it exists
-    if (configFile.exists()) {
-      val fis = new FileInputStream(configFile)
-      try {
-        props.load(fis)
-      } finally {
-        fis.close()
-      }
-    }
 
     // Check system properties first, then environment variables
     def getPropertyOrEnv(propName: String, envName: String): Option[String] = {
