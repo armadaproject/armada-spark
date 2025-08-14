@@ -26,7 +26,13 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
-case class Pod(name: String, namespace: String, labels: Map[String, String], status: PodStatus)
+case class Pod(
+    name: String,
+    namespace: String,
+    labels: Map[String, String],
+    annotations: Map[String, String],
+    status: PodStatus
+)
 case class PodStatus(phase: String, ready: Boolean)
 
 case class Ingress(
@@ -94,6 +100,36 @@ class K8sClient {
     }
   }
 
+  def getPodsByLabel(
+      labelSelector: String,
+      namespace: String
+  )(implicit ec: ExecutionContext): Future[Seq[Pod]] = Future {
+    try {
+      val result = ProcessExecutor.execute(
+        Seq("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "-o", "json"),
+        processTimeout
+      )
+      parsePods(result.stdout)
+    } catch {
+      case _: Exception => Seq.empty
+    }
+  }
+
+  def getPodsWithNodeSelectors(
+      labelSelector: String,
+      namespace: String
+  )(implicit ec: ExecutionContext): Future[Seq[(String, Map[String, String])]] = Future {
+    try {
+      val result = ProcessExecutor.execute(
+        Seq("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "-o", "json"),
+        processTimeout
+      )
+      parsePodsWithNodeSelectors(result.stdout)
+    } catch {
+      case _: Exception => Seq.empty
+    }
+  }
+
   def getIngressForPod(
       podName: String,
       namespace: String
@@ -136,6 +172,28 @@ class K8sClient {
     checkPod()
   }
 
+  /** Parses kubectl JSON output to extract pod names and their node selectors */
+  private def parsePodsWithNodeSelectors(json: String): Seq[(String, Map[String, String])] = {
+    Try {
+      val root  = mapper.readTree(json)
+      val items = root.path("items")
+
+      val pods          = ArrayBuffer[(String, Map[String, String])]()
+      val itemsIterator = items.elements()
+      while (itemsIterator.hasNext) {
+        val item     = itemsIterator.next()
+        val metadata = item.path("metadata")
+        val spec     = item.path("spec")
+
+        val podName       = metadata.path("name").asText()
+        val nodeSelectors = parseObjectToMap(spec.path("nodeSelector"))
+
+        pods += ((podName, nodeSelectors))
+      }
+      pods.toSeq
+    }.getOrElse(Seq.empty)
+  }
+
   /** Parses kubectl JSON output into Pod objects. Uses manual iteration over Jackson nodes to avoid
     * Scala collection converter issues.
     */
@@ -151,7 +209,8 @@ class K8sClient {
         val metadata = item.path("metadata")
         val status   = item.path("status")
 
-        val labels = parseObjectToMap(metadata.path("labels"))
+        val labels      = parseObjectToMap(metadata.path("labels"))
+        val annotations = parseObjectToMap(metadata.path("annotations"))
 
         val ready = {
           val conditions     = status.path("conditions")
@@ -173,6 +232,7 @@ class K8sClient {
           name = metadata.path("name").asText(),
           namespace = metadata.path("namespace").asText(),
           labels = labels,
+          annotations = annotations,
           status = PodStatus(
             phase = status.path("phase").asText(),
             ready = ready

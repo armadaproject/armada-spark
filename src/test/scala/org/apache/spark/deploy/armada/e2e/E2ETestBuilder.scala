@@ -75,11 +75,6 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
-  /** Add multiple Spark configurations (alias for consistency) */
-  def withSparkConfs(confs: Map[String, String]): E2ETestBuilder = {
-    withSparkConf(confs)
-  }
-
   def withExecutors(count: Int): E2ETestBuilder = {
     withSparkConf("spark.executor.instances", count.toString)
   }
@@ -142,25 +137,27 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
-  /** Assert driver ingress exists, optionally with specific annotations */
-  def assertIngress(requiredAnnotations: Set[String] = Set.empty): E2ETestBuilder = {
-    // Always check for basic Armada annotations plus any additional ones specified
-    val baseAnnotations = Set("armada_jobset_id", "armada_owner")
-    assertions :+= new IngressAssertion(baseAnnotations ++ requiredAnnotations)
+  /** Assert driver ingress exists with specific annotations (key-value pairs) */
+  def assertIngressAnnotations(
+      requiredAnnotations: Map[String, String] = Map.empty
+  ): E2ETestBuilder = {
+    assertions :+= new IngressAssertion(requiredAnnotations)
     this
-  }
-
-  /** Assert driver ingress exists (convenience overload with no annotations) */
-  def assertIngress(): E2ETestBuilder = {
-    assertIngress(Set.empty)
   }
 
   /** Assert pods are scheduled with node selectors */
   def assertNodeSelectors(selectors: Map[String, String]): E2ETestBuilder = {
-    assertions :+= new NodeSelectorAssertion(
-      podSelector = "spark-role=driver,spark-role=executor",
-      expectedNodeSelectors = selectors
-    )
+    // We need to create a custom assertion that uses the test-id from context
+    assertions :+= new TestAssertion {
+      override val name = "Node selector verification"
+      override def assert(context: AssertionContext)(implicit
+          ec: ExecutionContext
+      ): Future[AssertionResult] = {
+        // Use test-id from context to find all pods for this test
+        val podSelector = s"test-id=${context.testId}"
+        new NodeSelectorAssertion(podSelector, selectors).assert(context)
+      }
+    }
     this
   }
 
@@ -189,23 +186,34 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
-  def withAssertion(assertion: TestAssertion): E2ETestBuilder = {
-    assertions :+= assertion
+  /** Assert driver has specific annotation */
+  def assertDriverHasAnnotation(key: String, value: String): E2ETestBuilder = {
+    // Ensure driver has spark-role label for assertions to work
+    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
+    assertions :+= new DriverAnnotationAssertion(Map(key -> value))
     this
   }
 
-  /** Add custom assertion with inline definition */
-  def assertThat(assertionName: String)(check: AssertionContext => Boolean): E2ETestBuilder = {
-    assertions :+= new TestAssertion {
-      override val name: String = assertionName
-      override def assert(context: AssertionContext)(implicit
-          ec: ExecutionContext
-      ): Future[AssertionResult] = {
-        Future {
-          if (check(context)) AssertionResult.Success
-          else AssertionResult.Failure(s"Assertion '$assertionName' failed")
-        }
-      }
+  /** Assert executors have specific annotation */
+  def assertExecutorsHaveAnnotation(key: String, value: String): E2ETestBuilder = {
+    // Ensure executors have spark-role label for assertions to work
+    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
+    assertions :+= new ExecutorAnnotationAssertion(Map(key -> value))
+    this
+  }
+
+  /** Assert driver pod has all specified annotations */
+  def assertDriverHasAnnotations(annotations: Map[String, String]): E2ETestBuilder = {
+    annotations.foreach { case (key, value) =>
+      assertDriverHasAnnotation(key, value)
+    }
+    this
+  }
+
+  /** Assert executor pods have all specified annotations */
+  def assertExecutorsHaveAnnotations(annotations: Map[String, String]): E2ETestBuilder = {
+    annotations.foreach { case (key, value) =>
+      assertExecutorsHaveAnnotation(key, value)
     }
     this
   }

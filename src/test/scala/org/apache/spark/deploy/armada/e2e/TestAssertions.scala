@@ -18,7 +18,6 @@
 package org.apache.spark.deploy.armada.e2e
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
 
 trait TestAssertion {
   def name: String
@@ -52,19 +51,12 @@ class PodCountAssertion(
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     import context._
 
-    Future {
-      val cmd    = Seq("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "-o", "name")
-      val result = ProcessExecutor.execute(cmd, 10.seconds)
-
-      if (result.exitCode == 0) {
-        val podCount = result.stdout.split("\n").count(_.nonEmpty)
-        if (podCount == expectedCount) {
-          AssertionResult.Success
-        } else {
-          AssertionResult.Failure(s"Expected $expectedCount pods, found $podCount")
-        }
+    k8sClient.getPodsByLabel(labelSelector, namespace).map { pods =>
+      val podCount = pods.size
+      if (podCount == expectedCount) {
+        AssertionResult.Success
       } else {
-        AssertionResult.Failure(s"Failed to get pods: ${result.stderr}")
+        AssertionResult.Failure(s"Expected $expectedCount pods, found $podCount")
       }
     }
   }
@@ -158,52 +150,98 @@ class NodeSelectorAssertion(
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     import context._
 
-    Future {
-      val cmd = Seq(
-        "kubectl",
-        "get",
-        "pods",
-        "-n",
-        namespace,
-        "-l",
-        podSelector,
-        "-o",
-        "jsonpath={range .items[*]}{.metadata.name} {.spec.nodeSelector}{\"\\n\"}{end}"
-      )
-      val result = ProcessExecutor.execute(cmd, 10.seconds)
-
-      if (result.exitCode == 0) {
-        // Parse the output and check node selectors
-        val lines = result.stdout.split("\n").filter(_.nonEmpty)
-        val failures = lines.flatMap { line =>
-          val parts = line.split(" ", 2)
-          if (parts.length < 2) {
-            Some(s"Pod ${parts(0)} has no node selectors")
+    k8sClient.getPodsWithNodeSelectors(podSelector, namespace).map { pods =>
+      if (pods.isEmpty) {
+        AssertionResult.Failure(s"No pods found with selector: $podSelector")
+      } else {
+        val failures = pods.flatMap { case (podName, nodeSelectors) =>
+          val missing = expectedNodeSelectors.filter { case (k, v) =>
+            !nodeSelectors.get(k).contains(v)
+          }
+          if (missing.nonEmpty) {
+            Some(s"Pod $podName missing node selectors: $missing")
           } else {
-            // Simple check - in reality would need proper JSON parsing
-            val missing = expectedNodeSelectors.filter { case (k, v) =>
-              !parts(1).contains(s"$k:$v")
-            }
-            if (missing.nonEmpty) Some(s"Pod ${parts(0)} missing node selectors: $missing")
-            else None
+            None
           }
         }
 
-        if (failures.isEmpty) AssertionResult.Success
-        else AssertionResult.Failure(failures.mkString("; "))
-      } else {
-        AssertionResult.Failure(s"Failed to get pods: ${result.stderr}")
+        if (failures.isEmpty) {
+          AssertionResult.Success
+        } else {
+          AssertionResult.Failure(failures.mkString("; "))
+        }
       }
     }
   }
 }
 
+/** Pod annotation assertion - verifies pods have expected annotations */
+class PodAnnotationAssertion(
+    podSelector: String,
+    expectedAnnotations: Map[String, String]
+) extends TestAssertion {
+  override val name = "Pod annotations verification"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    import context._
+
+    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+      if (pods.isEmpty) {
+        AssertionResult.Failure(s"No pods found with selector: $podSelector")
+      } else {
+        val failures = pods.flatMap { pod =>
+          val missingAnnotations = expectedAnnotations.filter { case (key, value) =>
+            !pod.annotations.get(key).contains(value)
+          }
+          if (missingAnnotations.nonEmpty) {
+            Some(s"Pod ${pod.name} missing or incorrect annotations: $missingAnnotations")
+          } else {
+            None
+          }
+        }
+
+        if (failures.isEmpty) {
+          AssertionResult.Success
+        } else {
+          AssertionResult.Failure(failures.mkString("; "))
+        }
+      }
+    }
+  }
+}
+
+/** Driver annotation assertion - uses test-id from context */
+class DriverAnnotationAssertion(expectedAnnotations: Map[String, String]) extends TestAssertion {
+  override val name = "Driver annotations"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val selector = s"spark-role=driver,test-id=${context.testId}"
+    new PodAnnotationAssertion(selector, expectedAnnotations).assert(context)
+  }
+}
+
+/** Executor annotation assertion - uses test-id from context */
+class ExecutorAnnotationAssertion(expectedAnnotations: Map[String, String]) extends TestAssertion {
+  override val name = "Executor annotations"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val selector = s"spark-role=executor,test-id=${context.testId}"
+    new PodAnnotationAssertion(selector, expectedAnnotations).assert(context)
+  }
+}
+
 class IngressAssertion(
-    requiredAnnotations: Set[String],
+    requiredAnnotations: Map[String, String],
     requiredPort: Int = 7078
 ) extends TestAssertion {
 
-  override val name = "Ingress Verification"
+  override val name = "Ingress annotations verification"
 
   override def assert(
       context: AssertionContext
@@ -220,9 +258,13 @@ class IngressAssertion(
         case None =>
           AssertionResult.Failure(s"No ingress found for driver pod: $podName")
         case Some(ing) =>
-          val missingAnnotations = requiredAnnotations -- ing.annotations.keySet
-          if (missingAnnotations.nonEmpty) {
-            AssertionResult.Failure(s"Missing annotations: ${missingAnnotations.mkString(", ")}")
+          val missingOrIncorrect = requiredAnnotations.filter { case (key, value) =>
+            !ing.annotations.get(key).contains(value)
+          }
+          if (missingOrIncorrect.nonEmpty) {
+            AssertionResult.Failure(
+              s"Missing or incorrect ingress annotations: $missingOrIncorrect"
+            )
           } else if (!ing.rules.exists(_.paths.exists(_.backend.servicePort == requiredPort))) {
             AssertionResult.Failure(s"Expected port $requiredPort not found in ingress")
           } else {

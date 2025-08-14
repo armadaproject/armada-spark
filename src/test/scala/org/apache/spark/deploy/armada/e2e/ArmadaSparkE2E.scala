@@ -170,6 +170,36 @@ class ArmadaSparkE2E
       .assertDriverExists()
       .assertExecutorCount(2)
       .assertPodLabels(Map("test-type" -> "template"))
+      // Assert template-specific labels from driver template
+      .assertDriverHasLabels(
+        Map(
+          "app"             -> "spark-pi",
+          "component"       -> "driver",
+          "template-source" -> "e2e-test"
+        )
+      )
+      // Assert template-specific labels from executor template
+      .assertExecutorsHaveLabels(
+        Map(
+          "app"             -> "spark-pi",
+          "component"       -> "executor",
+          "template-source" -> "e2e-test"
+        )
+      )
+      // Assert template-specific annotations from driver template
+      .assertDriverHasAnnotations(
+        Map(
+          "armada/component" -> "spark-driver",
+          "armada/template"  -> "spark-pi-driver"
+        )
+      )
+      // Assert template-specific annotations from executor template
+      .assertExecutorsHaveAnnotations(
+        Map(
+          "armada/component" -> "spark-executor",
+          "armada/template"  -> "spark-pi-executor"
+        )
+      )
       .run()
   }
 
@@ -187,10 +217,10 @@ class ArmadaSparkE2E
       .assertDriverExists()
       .assertExecutorCount(2)
       .assertPodLabels(Map("test-type" -> "ingress"))
-      .assertIngress(
-        Set(
-          "nginx.ingress.kubernetes.io/rewrite-target",
-          "nginx.ingress.kubernetes.io/backend-protocol"
+      .assertIngressAnnotations(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
         )
       )
       .run()
@@ -212,11 +242,11 @@ class ArmadaSparkE2E
       .assertDriverExists()
       .assertExecutorCount(2)
       .assertPodLabels(Map("test-type" -> "ingress-template"))
-      .assertIngress(
-        Set(
-          "nginx.ingress.kubernetes.io/rewrite-target",
-          "nginx.ingress.kubernetes.io/backend-protocol",
-          "kubernetes.io/ingress.class"
+      .assertIngressAnnotations(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
+          "kubernetes.io/ingress.class"                  -> "nginx"
         )
       )
       .run()

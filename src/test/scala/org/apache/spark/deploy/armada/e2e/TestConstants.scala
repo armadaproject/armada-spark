@@ -35,7 +35,8 @@ object TestConstants {
   val QueueCreationTimeout: FiniteDuration = 60.seconds // Max time for queue to become available
 
   val IngressCreationTimeout: FiniteDuration = 30.seconds // Max time to wait for ingress creation
-  val AssertionThreadTimeout: FiniteDuration = 30.seconds // Max time to wait for assertion thread completion
+  val AssertionThreadTimeout: FiniteDuration =
+    30.seconds // Max time to wait for assertion thread completion
 
   val MaxLogLines         = 200 // Max lines to capture from pod logs
   val MaxPreviousLogLines = 100 // Max lines from previous container logs
