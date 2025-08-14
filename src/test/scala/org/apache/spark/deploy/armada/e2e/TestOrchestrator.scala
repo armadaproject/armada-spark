@@ -441,6 +441,19 @@ class TestOrchestrator(
       assertionResults.values.exists(_.isInstanceOf[AssertionResult.Failure])
     if (finalStatus != JobSetStatus.Success || hasAssertionFailures) {
       println("[DEBUG] Test or assertions failed, capturing debug information...")
+
+      // Print which assertions failed for clarity
+      if (hasAssertionFailures) {
+        println("[DEBUG] Failed assertions:")
+        assertionResults.foreach { case (name, result) =>
+          result match {
+            case AssertionResult.Failure(msg, _) =>
+              println(s"  - $name: $msg")
+            case _ =>
+          }
+        }
+      }
+
       podMonitor.captureDebugInfo()
       podMonitor.printCapturedLogs()
     }

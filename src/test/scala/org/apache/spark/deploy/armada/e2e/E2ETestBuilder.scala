@@ -103,7 +103,7 @@ class E2ETestBuilder(testName: String) {
 
   def withNodeSelectors(selectors: Map[String, String]): E2ETestBuilder = {
     val selectorString = selectors.map { case (k, v) => s"$k=$v" }.mkString(",")
-    withSparkConf("spark.armada.node.selectors", selectorString)
+    withSparkConf("spark.armada.scheduling.nodeSelectors", selectorString)
   }
 
   /** Assert exact executor count */

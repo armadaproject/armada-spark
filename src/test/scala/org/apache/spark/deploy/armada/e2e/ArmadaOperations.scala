@@ -224,25 +224,16 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     *   Some(path) if found, None otherwise.
     */
   private def resolveArmadactlPath: Option[String] = {
-    sys.props.get("armadactl.path") match {
-      case Some(path) =>
-        Some(path)
-      case None =>
-        val pathSep = java.io.File.pathSeparator
-        val pathEnv = sys.env.getOrElse("PATH", "")
+    sys.props.get("armadactl.path").orElse {
+      val pathSep = java.io.File.pathSeparator
+      val pathEnv = sys.env.getOrElse("PATH", "")
 
-        val pathDirs = pathEnv.split(pathSep).filter(_.nonEmpty)
-        val found = pathDirs
-          .map(dir => new java.io.File(dir, "armadactl"))
-          .find(_.exists())
-          .map(_.getAbsolutePath)
-
-        found match {
-          case Some(path) =>
-            Some(path)
-          case None =>
-            None
-        }
+      pathEnv
+        .split(pathSep)
+        .filter(_.nonEmpty)
+        .map(dir => new java.io.File(dir, "armadactl"))
+        .find(_.exists())
+        .map(_.getAbsolutePath)
     }
   }
 }
