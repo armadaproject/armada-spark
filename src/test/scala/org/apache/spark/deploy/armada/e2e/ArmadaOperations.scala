@@ -149,7 +149,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     // Use slightly less than the provided timeout to allow for command overhead
     val watchTimeout = (timeout.toSeconds - 10).seconds.max(30.seconds)
 
-    val watchFuture = Future {
+    Future {
       val cmd = buildCommand(s"watch $queue $jobSetId --exit-if-inactive")
 
       val startTime = System.currentTimeMillis()
@@ -176,23 +176,16 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
         val result = handle.waitFor(watchTimeout)(ec)
 
         if (result.timedOut) {
-          None // Watch timed out
+          JobSetStatus.Timeout
         } else if (result.exitCode == 0) {
-          Some(JobSetStatus.Success)
+          JobSetStatus.Success
         } else {
-          Some(JobSetStatus.Failed)
+          JobSetStatus.Failed
         }
       } finally {
         shouldStop = true
         updateThread.interrupt() // Ensure thread stops
       }
-    }
-
-    watchFuture.map {
-      case Some(status) =>
-        status
-      case None =>
-        JobSetStatus.Timeout
     }
   }
 
