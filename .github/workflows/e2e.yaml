@@ -36,4 +36,3 @@ jobs:
           spark_version: ${{ matrix.spark_version }}
           scala_version: ${{ matrix.scala_version }}
           java_version: ${{ matrix.java_version }}
-          iteration_count: 102

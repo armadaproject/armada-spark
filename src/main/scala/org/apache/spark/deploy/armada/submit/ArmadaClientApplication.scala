@@ -39,6 +39,10 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_LOOKOUTURL,
   ARMADA_RUN_AS_USER,
   ARMADA_SERVER_INTERNAL_URL,
+  ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS,
+  ARMADA_SPARK_DRIVER_INGRESS_CERT_NAME,
+  ARMADA_SPARK_DRIVER_INGRESS_ENABLED,
+  ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED,
   ARMADA_SPARK_DRIVER_LABELS,
   ARMADA_SPARK_EXECUTOR_LABELS,
   ARMADA_SPARK_JOB_NAMESPACE,
@@ -49,6 +53,7 @@ import org.apache.spark.deploy.armada.Config.{
   DEFAULT_MEM,
   DEFAULT_SPARK_EXECUTOR_CORES,
   DEFAULT_SPARK_EXECUTOR_MEMORY,
+  commaSeparatedAnnotationsToMap,
   commaSeparatedLabelsToMap
 }
 import io.armadaproject.armada.ArmadaClient
@@ -58,10 +63,11 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkApplication
+import org.apache.spark.deploy.armada.submit.ArmadaClientApplication.DRIVER_PORT
 import org.apache.spark.deploy.k8s.submit.{
+  JavaMainAppResource,
   KubernetesDriverBuilder,
   MainAppResource,
-  JavaMainAppResource,
   PythonMainAppResource,
   RMainAppResource
 }
@@ -151,7 +157,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
-    log("ArmadaClientApplication: starting.")
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     run(parsedArguments, conf)
   }
@@ -163,17 +168,21 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
-    log(s"host is $host, port is $port")
+    log(s"Connecting to Armada Server - host: $host, port: $port")
 
-    val armadaClient = ArmadaClient(host, port, false, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
+
+    log(s"Checking Armada Server health (timeout: $healthTimeout)")
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
     if (healthResp.status.isServing) {
-      log("Submit health good!")
+      log("Armada Server is serving requests!")
     } else {
-      log("Could not contact Armada!")
+      throw new RuntimeException(
+        "Armada health check failed - Armada Server is not serving requests!"
+      )
     }
 
     // # FIXME: Need to check how this is launched whether to submit a job or
@@ -449,25 +458,21 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorConnectionTimeout: Option[Duration],
       runAsUser: Option[Long],
       driverResources: ResourceConfig,
-      executorResources: ResourceConfig
+      executorResources: ResourceConfig,
+      driverIngress: Option[IngressConfig] = None
   )
 
-  /** Resource configuration for a pod (driver or executor).
-    *
-    * @param limitCores
-    *   CPU limit for the pod
-    * @param requestCores
-    *   CPU request for the pod
-    * @param limitMemory
-    *   Memory limit for the pod
-    * @param requestMemory
-    *   Memory request for the pod
-    */
   private[spark] case class ResourceConfig(
       limitCores: Option[String],
       requestCores: Option[String],
       limitMemory: Option[String],
       requestMemory: Option[String]
+  )
+
+  private[spark] case class IngressConfig(
+      annotations: Map[String, String],
+      tls: Option[Boolean],
+      certName: Option[String]
   )
 
   private[spark] def parseCLIConfig(conf: SparkConf): CLIConfig = {
@@ -514,6 +519,21 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       requestMemory = conf.get(ARMADA_EXECUTOR_REQUEST_MEMORY)
     )
 
+    val driverIngress = if (conf.get(ARMADA_SPARK_DRIVER_INGRESS_ENABLED)) {
+      Some(
+        IngressConfig(
+          annotations = conf
+            .get(ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS)
+            .map(commaSeparatedAnnotationsToMap)
+            .getOrElse(Map.empty),
+          tls = conf.get(ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED),
+          certName = conf.get(ARMADA_SPARK_DRIVER_INGRESS_CERT_NAME)
+        )
+      )
+    } else {
+      None
+    }
+
     CLIConfig(
       queue = queue,
       jobSetId = jobSetId,
@@ -530,7 +550,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         Some(Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)),
       runAsUser = runAsUser,
       driverResources = driverResources,
-      executorResources = executorResources
+      executorResources = executorResources,
+      driverIngress = driverIngress
     )
   }
 
@@ -558,6 +579,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Unit = {
     validateContainerImage(cliConfig, driverJobItemTemplate, executorJobItemTemplate)
 
+    if (executorJobItemTemplate.exists(_.ingress.nonEmpty)) {
+      throw new IllegalArgumentException(
+        "Executor job item template must not contain ingress definition."
+      )
+    }
+
+    if (driverJobItemTemplate.exists(_.ingress.size > 1)) {
+      throw new IllegalArgumentException(
+        "Driver job item template can contain only 1 ingress definition."
+      )
+    }
+
     val hasValidQueue = cliConfig.queue.exists(_.nonEmpty) ||
       jobTemplate.exists(_.queue.nonEmpty)
     if (!hasValidQueue) {
@@ -573,6 +606,31 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
+  // Validates that container image is provided either via CLI or in both templates
+  private def validateContainerImage(
+      cliConfig: CLIConfig,
+      driverTemplate: Option[api.submit.JobSubmitRequestItem],
+      executorTemplate: Option[api.submit.JobSubmitRequestItem]
+  ): Unit = {
+    cliConfig.containerImage match {
+      case Some(image) if image.isEmpty =>
+        throw new IllegalArgumentException(
+          s"Empty container image is not allowed. Please set a valid container image via ${CONTAINER_IMAGE.key}"
+        )
+      case None =>
+        val driverImage   = extractContainerImageFromTemplate(driverTemplate)
+        val executorImage = extractContainerImageFromTemplate(executorTemplate)
+
+        if (driverImage.isEmpty || executorImage.isEmpty) {
+          throw new IllegalArgumentException(
+            s"Container image must be set via ${CONTAINER_IMAGE.key} or provided in BOTH driver and executor job item templates " +
+              s"(found driver: ${driverImage.isDefined}, executor: ${executorImage.isDefined})"
+          )
+        }
+      case Some(_) => // Valid non-empty image provided via CLI
+    }
+  }
+
   /** Comprehensive resolved configuration holding all resolved values after applying precedence */
   private[submit] case class ResolvedJobConfig(
       namespace: String,
@@ -585,7 +643,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeSelectors: Map[String, String],
       runAsUser: Long,
       driverResources: ResolvedResourceConfig,
-      executorResources: ResolvedResourceConfig
+      executorResources: ResolvedResourceConfig,
+      driverIngress: Option[api.submit.IngressConfig] = None
   )
 
   /** Resolved resource configuration for driver and executor pods */
@@ -655,6 +714,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       Duration(conf.get(ARMADA_EXECUTOR_CONNECTION_TIMEOUT), SECONDS)
     )
 
+    val resolvedIngressConfig =
+      if (cliConfig.driverIngress.isDefined || template.flatMap(_.ingress.headOption).isDefined) {
+        Some(
+          resolveIngressConfig(
+            cliConfig.driverIngress,
+            template.flatMap(_.ingress.headOption)
+          )
+        )
+      } else {
+        None
+      }
+
     ResolvedJobConfig(
       namespace = resolvedNamespace,
       priority = resolvedPriority,
@@ -676,7 +747,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         cliConfig.executorResources.requestCores,
         cliConfig.executorResources.limitMemory,
         cliConfig.executorResources.requestMemory
-      )
+      ),
+      driverIngress = resolvedIngressConfig
     )
   }
 
@@ -839,13 +911,18 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     )
 
-    workingTemplate
+    val finalTemplate = workingTemplate
       .withPriority(resolvedConfig.priority)
       .withNamespace(resolvedConfig.namespace)
       .withLabels(resolvedConfig.labels)
       .withAnnotations(resolvedConfig.annotations)
       .withPodSpec(finalPodSpec)
       .withServices(finalServices)
+
+    resolvedConfig.driverIngress match {
+      case Some(ingress) => finalTemplate.withIngress(Seq(ingress))
+      case None          => finalTemplate
+    }
   }
 
   // Create a blank template if none provided
@@ -1114,23 +1191,41 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
   }
 
-  /** Resolves a value based on precedence: CLI > Template > Default
-    *
-    * @param cliValue
-    *   Value from CLI configuration
-    * @param templateValue
-    *   Value from template
-    * @param defaultValue
-    *   Default value to use if neither CLI nor template provide a value
-    * @return
-    *   Resolved value based on precedence
-    */
+  // Resolves a value based on precedence: CLI > Template > Default
   private[submit] def resolveValue[T](
       cliValue: Option[T],
       templateValue: => Option[T],
       defaultValue: => T
   ): T = {
     cliValue.orElse(templateValue).getOrElse(defaultValue)
+  }
+
+  // Resolves ingress configuration based precedence: CLI > Template > Default
+  private[submit] def resolveIngressConfig(
+      cliIngress: Option[IngressConfig],
+      templateIngress: Option[api.submit.IngressConfig]
+  ): api.submit.IngressConfig = {
+    val mergedAnnotations = templateIngress
+      .map(_.annotations)
+      .getOrElse(Map.empty) ++
+      cliIngress
+        .map(_.annotations)
+        .getOrElse(Map.empty)
+
+    api.submit.IngressConfig(
+      ports = Seq(DRIVER_PORT),
+      annotations = mergedAnnotations,
+      tlsEnabled = resolveValue(
+        cliIngress.flatMap(_.tls),
+        templateIngress.map(_.tlsEnabled),
+        false
+      ),
+      certName = resolveValue(
+        cliIngress.flatMap(_.certName),
+        templateIngress.map(_.certName),
+        ""
+      )
+    )
   }
 
   // Helper method to extract volumes and volumeMounts from a template
@@ -1166,31 +1261,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       securityContext <- podSpec.securityContext
       runAsUser       <- securityContext.runAsUser
     } yield runAsUser
-  }
-
-  // Validates that container image is provided either via CLI or in both templates
-  private def validateContainerImage(
-      cliConfig: CLIConfig,
-      driverTemplate: Option[api.submit.JobSubmitRequestItem],
-      executorTemplate: Option[api.submit.JobSubmitRequestItem]
-  ): Unit = {
-    cliConfig.containerImage match {
-      case Some(image) if image.isEmpty =>
-        throw new IllegalArgumentException(
-          s"Empty container image is not allowed. Please set a valid container image via ${CONTAINER_IMAGE.key}"
-        )
-      case None =>
-        val driverImage   = extractContainerImageFromTemplate(driverTemplate)
-        val executorImage = extractContainerImageFromTemplate(executorTemplate)
-
-        if (driverImage.isEmpty || executorImage.isEmpty) {
-          throw new IllegalArgumentException(
-            s"Container image must be set via ${CONTAINER_IMAGE.key} or provided in BOTH driver and executor job item templates " +
-              s"(found driver: ${driverImage.isDefined}, executor: ${executorImage.isDefined})"
-          )
-        }
-      case Some(_) => // Valid non-empty image provided via CLI
-    }
   }
 
   // Convert the space-delimited "spark.executor.extraJavaOptions" into env vars that can be used by entrypoint.sh

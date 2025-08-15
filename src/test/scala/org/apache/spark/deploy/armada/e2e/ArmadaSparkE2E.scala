@@ -20,325 +20,268 @@ package org.apache.spark.deploy.armada.e2e
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.concurrent.TimeLimits
+import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 
-import java.io.{File, FileInputStream}
-import java.util.{Properties, UUID}
-import scala.concurrent.duration._
-import scala.sys.process._
-import scala.util.{Failure, Success, Using}
+import java.util.Properties
+import scala.concurrent.ExecutionContext.Implicits.global
+import TestConstants._
 
-/** Comprehensive E2E test framework for Armada Spark jobs with different configurations.
-  *
-  * Each test creates its own queue with a random suffix for isolation.
-  *
-  * ## Adding New Tests with Templates
-  *
-  * To add a new test that uses templates or other test resources:
-  *
-  *   1. **Add your templates/resources**: Place them in `src/test/resources/e2e/` or a new
-  *      subdirectory
-  *   2. **Update mount patterns**: If using a new subdirectory, add it to
-  *      `buildTestResourceVolumeMounts()`
-  *   3. **Create your test**: Use relative paths like `src/test/resources/e2e/your-template.yaml`
-  *   4. **No other changes needed**: The framework automatically mounts test resources
-  */
-class ArmadaSparkE2E extends AnyFunSuite with BeforeAndAfterAll with Matchers with TimeLimits {
-  private val templateQueueBase = "e2e-template"
-  private val jobWatchTimeout   = 240.seconds
-  private val testTimeoutSpan   = Span(300, Seconds)
-  private val configFile        = new File("src/test/resources/e2e/spark-pi-e2e.conf")
-  private val armadaCtl         = new ArmadaCtlWrapper()
+class ArmadaSparkE2E
+    extends AnyFunSuite
+    with BeforeAndAfterAll
+    with Matchers
+    with ScalaFutures
+    with Eventually {
 
-  /** Get the path to a template file relative to the e2e test resources directory.
-    *
-    * @param name
-    *   The name of the template file (e.g., "spark-pi-job-template.yaml")
-    * @return
-    *   The full path to the template file
-    */
-  private def templatePath(name: String): String =
-    s"src/test/resources/e2e/templates/$name"
+  implicit override val patienceConfig: PatienceConfig = PatienceConfig(
+    timeout = Span(300, Seconds),
+    interval = Span(2, Seconds)
+  )
 
-  private var imageName: String    = _
-  private var masterUrl: String    = _
-  private var lookoutUrl: String   = _
-  private var scalaVersion: String = _
-  private var sparkVersion: String = _
+  private val baseQueueName = "e2e-template"
+
+  private lazy val armadaClient = new ArmadaClient()
+  private lazy val k8sClient    = new K8sClient()
+  private lazy val orchestrator = new TestOrchestrator(armadaClient, k8sClient)
+
+  private var baseConfig: TestConfig = _
 
   override def beforeAll(): Unit = {
     super.beforeAll()
 
-    val props = new Properties()
-    if (configFile.exists()) {
-      Using(new FileInputStream(configFile)) { fis =>
-        props.load(fis)
+    val props = loadProperties()
+
+    // Get Scala binary version - either from system property or derive from full version
+    // This should be "2.12" or "2.13", not the full version like "2.12.15"
+    val scalaBinaryVersion = props.getProperty("scala.binary.version") match {
+      case null | "" =>
+        val fullVersion = props.getProperty("scala.version", "2.13.8")
+        fullVersion.split('.').take(2).mkString(".")
+      case binaryVersion => binaryVersion
+    }
+
+    val finalSparkVersion = props.getProperty("spark.version", "3.5.5")
+
+    baseConfig = TestConfig(
+      baseQueueName = props.getProperty("armada.queue", baseQueueName),
+      imageName = props.getProperty("container.image", "spark:armada"),
+      masterUrl = props.getProperty("armada.master", "armada://localhost:30002"),
+      lookoutUrl = props.getProperty("armada.lookout.url", "http://localhost:30000"),
+      scalaVersion = scalaBinaryVersion,
+      sparkVersion = finalSparkVersion
+    )
+
+    println(s"Test configuration loaded: $baseConfig")
+
+    // Verify Armada cluster is ready before running tests
+    val clusterReadyTimeout = ClusterReadyTimeout.toSeconds.toInt
+    val testQueueName = s"${baseConfig.baseQueueName}-cluster-check-${System.currentTimeMillis()}"
+
+    println(s"[CLUSTER-CHECK] Verifying Armada cluster readiness...")
+    println(s"[CLUSTER-CHECK] Will retry for up to $clusterReadyTimeout seconds")
+
+    val startTime                    = System.currentTimeMillis()
+    var clusterReady                 = false
+    var lastError: Option[Throwable] = None
+    var attempts                     = 0
+
+    while (!clusterReady && (System.currentTimeMillis() - startTime) < clusterReadyTimeout * 1000) {
+      attempts += 1
+      println(
+        s"[CLUSTER-CHECK] Attempt #$attempts - Creating and verifying test queue: $testQueueName"
+      )
+
+      try {
+        armadaClient.ensureQueueExists(testQueueName).futureValue
+        println(s"[CLUSTER-CHECK] Queue creation and verification succeeded - cluster is ready!")
+        clusterReady = true
+
+        try {
+          armadaClient.deleteQueue(testQueueName).futureValue
+          println(s"[CLUSTER-CHECK] Test queue cleaned up")
+        } catch {
+          case _: Exception => // Ignore cleanup failures
+        }
+      } catch {
+        case ex: Exception =>
+          lastError = Some(ex)
+          val elapsed = (System.currentTimeMillis() - startTime) / 1000
+          println(s"[CLUSTER-CHECK] Attempt #$attempts failed after ${elapsed}s: ${ex.getMessage}")
+
+          if ((System.currentTimeMillis() - startTime) < clusterReadyTimeout * 1000) {
+            println(
+              s"[CLUSTER-CHECK] Waiting ${ClusterCheckRetryDelay.toSeconds} seconds before retry..."
+            )
+            Thread.sleep(ClusterCheckRetryDelay.toMillis)
+          }
       }
     }
 
-    imageName = props.getProperty("container.image", "spark:armada")
-    masterUrl = props.getProperty("armada.master", "armada://localhost:30002")
-    lookoutUrl = props.getProperty("armada.lookout.url", "http://localhost:30000")
-    scalaVersion = props.getProperty("scala.version", "2.13")
-    sparkVersion = props.getProperty("spark.version", "3.5.3")
+    val totalTime = (System.currentTimeMillis() - startTime) / 1000
+    if (!clusterReady) {
+      throw new RuntimeException(
+        s"Armada cluster not ready after $totalTime seconds ($attempts attempts). " +
+          s"Last error: ${lastError.map(_.getMessage).getOrElse("Unknown")}"
+      )
+    }
 
-    info(s"Using image: $imageName")
-    info(s"Using master: $masterUrl")
-    info(s"Using lookout: $lookoutUrl")
-    info(s"Using Scala version: $scalaVersion")
-    info(s"Using Spark version: $sparkVersion")
+    println(
+      s"[CLUSTER-CHECK] Cluster verified ready after $totalTime seconds ($attempts attempts)"
+    )
   }
 
-  test("Basic SparkPi job", E2ETest) {
-    failAfter(testTimeoutSpan) {
-      val (testJobSetId, queueName) = prepareTest()
+  implicit val orch: TestOrchestrator = orchestrator
 
-      val result = submitAndWaitForSparkPiJob(
-        queueName = queueName,
-        jobSetId = testJobSetId,
-        testName = "Basic SparkPi",
-        imageName = imageName,
-        masterUrl = masterUrl,
-        sparkConfs = Map(
-          "spark.armada.pod.labels" -> "test-type=basic"
-        )
-      )
-      result shouldBe JobSetResult.Success
-    }
+  test("Basic SparkPi job", E2ETest) {
+    E2ETestBuilder("basic-spark-pi")
+      .withBaseConfig(baseConfig)
+      .withExecutors(3)
+      .withPodLabels(Map("test-type" -> "basic"))
+      .assertDriverExists()
+      .assertExecutorCount(3)
+      .assertPodLabels(Map("test-type" -> "basic"))
+      .run()
   }
 
   test("SparkPi job with node selectors", E2ETest) {
-    failAfter(testTimeoutSpan) {
-      val (testJobSetId, queueName) = prepareTest()
-
-      val result = submitAndWaitForSparkPiJob(
-        queueName = queueName,
-        jobSetId = testJobSetId,
-        testName = "SparkPi with Node Selectors",
-        imageName = imageName,
-        masterUrl = masterUrl,
-        sparkConfs = Map(
-          "spark.armada.scheduling.nodeSelectors" -> "kubernetes.io/hostname=armada-worker",
-          "spark.armada.pod.labels"               -> "test-type=node-selector"
-        )
-      )
-      result shouldBe JobSetResult.Success
-    }
+    E2ETestBuilder("spark-pi-node-selectors")
+      .withBaseConfig(baseConfig)
+      .withPodLabels(Map("test-type" -> "node-selector"))
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "node-selector"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .run()
   }
 
   test("SparkPi job using job templates", E2ETest) {
-    failAfter(testTimeoutSpan) {
-      val (testJobSetId, queueName) = prepareTest()
-
-      val result = submitAndWaitForSparkPiJob(
-        queueName = queueName,
-        jobSetId = testJobSetId,
-        testName = "SparkPi with Templates",
-        imageName = imageName,
-        masterUrl = masterUrl,
-        sparkConfs = Map(
-          "spark.armada.jobTemplate"            -> templatePath("spark-pi-job-template.yaml"),
-          "spark.armada.driver.jobItemTemplate" -> templatePath("spark-pi-driver-template.yaml"),
-          "spark.armada.executor.jobItemTemplate" -> templatePath(
-            "spark-pi-executor-template.yaml"
-          ),
-          "spark.armada.pod.labels" -> "test-type=template"
+    E2ETestBuilder("spark-pi-templates")
+      .withBaseConfig(baseConfig)
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.jobItemTemplate"   -> templatePath("spark-pi-driver-template.yaml"),
+          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
         )
       )
-      result shouldBe JobSetResult.Success
-    }
+      .withPodLabels(Map("test-type" -> "template"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "template"))
+      // Assert template-specific labels from driver template
+      .assertDriverHasLabels(
+        Map(
+          "app"             -> "spark-pi",
+          "component"       -> "driver",
+          "template-source" -> "e2e-test"
+        )
+      )
+      // Assert template-specific labels from executor template
+      .assertExecutorsHaveLabels(
+        Map(
+          "app"             -> "spark-pi",
+          "component"       -> "executor",
+          "template-source" -> "e2e-test"
+        )
+      )
+      // Assert template-specific annotations from driver template
+      .assertDriverHasAnnotations(
+        Map(
+          "armada/component" -> "spark-driver",
+          "armada/template"  -> "spark-pi-driver"
+        )
+      )
+      // Assert template-specific annotations from executor template
+      .assertExecutorsHaveAnnotations(
+        Map(
+          "armada/component" -> "spark-executor",
+          "armada/template"  -> "spark-pi-executor"
+        )
+      )
+      .run()
   }
 
-  /** Prepare the test environment by creating a unique queue and returning the test job set ID.
-    *
-    * @return
-    *   Tuple containing the test job set ID and the created queue name
-    */
-  private def prepareTest(): (String, String) = {
-    val queueSuffix  = UUID.randomUUID().toString.take(8)
-    val queueName    = s"$templateQueueBase-$queueSuffix"
-    val testJobSetId = s"e2e-template-${System.currentTimeMillis()}"
+  test("SparkPi job with driver ingress using cli", E2ETest) {
+    E2ETestBuilder("spark-pi-ingress")
+      .withBaseConfig(baseConfig)
+      .withDriverIngress(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
+        )
+      )
+      .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
+      .withPodLabels(Map("test-type" -> "ingress"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "ingress"))
+      .assertIngressAnnotations(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
+        )
+      )
+      .run()
+  }
 
-    armadaCtl.ensureQueueExists(queueName) match {
-      case Success(_)  => info(s"Created queue: $queueName")
-      case Failure(ex) => fail(s"Failed to create queue $queueName: ${ex.getMessage}")
+  test("SparkPi job with driver ingress using template", E2ETest) {
+    E2ETestBuilder("spark-pi-ingress-template")
+      .withBaseConfig(baseConfig)
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.jobItemTemplate" -> templatePath(
+            "spark-pi-driver-ingress-template.yaml"
+          ),
+          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+        )
+      )
+      .withPodLabels(Map("test-type" -> "ingress-template"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertPodLabels(Map("test-type" -> "ingress-template"))
+      .assertIngressAnnotations(
+        Map(
+          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
+          "kubernetes.io/ingress.class"                  -> "nginx"
+        )
+      )
+      .run()
+  }
+
+  private def loadProperties(): Properties = {
+    val props = new Properties()
+
+    // Check system properties first, then environment variables
+    def getPropertyOrEnv(propName: String, envName: String): Option[String] = {
+      sys.props.get(propName).orElse(sys.env.get(envName))
     }
 
-    // Due to Armada's eventual consistency, even though we verify the queue exists by fetching it from Armada API,
-    // job submission occassionally fails with a "queue not found" error.
-    // This might even be a bug in Armada, but for now we add a delay to ensure the queue is ready.
-    info(s"Waiting for queue $queueName to be ready...")
-    Thread.sleep(10000)
-
-    if (!armadaCtl.verifyQueueExists(queueName)) {
-      fail(
-        s"Failed to fetch the newly created queue $queueName"
+    // Helper to set property if it exists in either system properties or environment variables
+    def set(property: String, envvar: String): Unit = {
+      getPropertyOrEnv(property, envvar).foreach(
+        props.setProperty(property, _)
       )
     }
 
-    (testJobSetId, queueName)
+    // Set properties using the same precedence as the scripts
+    set("container.image", "IMAGE_NAME")
+    set("armada.master", "ARMADA_MASTER")
+    set("armada.lookout.url", "ARMADA_LOOKOUT_URL")
+    set("scala.version", "SCALA_VERSION")
+    set("spark.version", "SPARK_VERSION")
+    set("armada.queue", "ARMADA_QUEUE")
+
+    // Also check for binary versions
+    set("scala.binary.version", "SCALA_BIN_VERSION")
+    set("spark.binary.version", "SPARK_BIN_VERSION")
+
+    props
   }
 
-  /** Submit a Spark job and wait for completion.
-    *
-    * This method automatically handles volume mounting for any test resources, making it easy to
-    * add new tests with templates or other resources.
-    */
-  private def submitAndWaitForSparkPiJob(
-      queueName: String,
-      jobSetId: String,
-      testName: String,
-      imageName: String,
-      masterUrl: String,
-      sparkConfs: Map[String, String] = Map.empty
-  ): JobSetResult.Value = {
-
-    info(s"Submitting $testName job...")
-    info(s"Configuration summary:")
-    info(s"  Queue: $queueName")
-    info(s"  JobSetId: $jobSetId")
-    info(s"  Container Image: $imageName")
-    info(s"  Master URL: $masterUrl")
-
-    // Log additional configurations
-    sparkConfs.foreach { case (key, value) =>
-      info(s"  $key: $value")
-    }
-
-    try {
-      val sparkExamplesJar =
-        s"local:///opt/spark/examples/jars/spark-examples_$scalaVersion-$sparkVersion.jar"
-
-      val volumeMounts = buildTestResourceVolumeMounts()
-
-      val baseCommand = Seq(
-        "docker",
-        "run",
-        "--rm",
-        "--network",
-        "host"
-      ) ++ volumeMounts ++ Seq(
-        imageName,
-        "/opt/spark/bin/spark-class",
-        "org.apache.spark.deploy.ArmadaSparkSubmit",
-        "--master",
-        masterUrl,
-        "--deploy-mode",
-        "cluster",
-        "--name",
-        s"e2e-$testName",
-        "--class",
-        "org.apache.spark.examples.SparkPi"
-      )
-
-      val defaultConfs = Map(
-        "spark.armada.internalUrl"             -> "armada-server.armada:50051",
-        "spark.armada.queue"                   -> queueName,
-        "spark.armada.jobSetId"                -> jobSetId,
-        "spark.executor.instances"             -> "2",
-        "spark.armada.container.image"         -> imageName,
-        "spark.armada.lookouturl"              -> lookoutUrl,
-        "spark.armada.driver.limit.cores"      -> "200m",
-        "spark.armada.driver.limit.memory"     -> "450Mi",
-        "spark.armada.driver.request.cores"    -> "200m",
-        "spark.armada.driver.request.memory"   -> "450Mi",
-        "spark.armada.executor.limit.cores"    -> "100m",
-        "spark.armada.executor.limit.memory"   -> "510Mi",
-        "spark.armada.executor.request.cores"  -> "100m",
-        "spark.armada.executor.request.memory" -> "510Mi"
-      )
-
-      // Merge with custom configurations (custom configs override defaults)
-      val allConfs = defaultConfs ++ sparkConfs
-
-      // Convert configurations to --conf arguments
-      val confArgs = allConfs.flatMap { case (key, value) =>
-        Seq("--conf", s"$key=$value")
-      }.toSeq
-
-      val finalCommand = baseCommand ++ confArgs ++ Seq(
-        sparkExamplesJar,
-        "100"
-      )
-
-      info(s"Executing docker command for $testName job...")
-      val process  = Process(finalCommand)
-      val exitCode = process.!
-
-      if (exitCode == 0) {
-        info(s"$testName job submitted successfully")
-      } else {
-        throw new RuntimeException(s"Spark submit failed with exit code $exitCode")
-      }
-
-      // Wait for completion using armadactl watch
-      info(s"Waiting for jobset $jobSetId to complete...")
-      val result = armadaCtl.watchJobSet(
-        queueName,
-        jobSetId,
-        jobWatchTimeout
-      )
-
-      result match {
-        case JobSetResult.Success =>
-          info(s"$testName job completed successfully!")
-        case JobSetResult.Failed =>
-          info(s"$testName job failed")
-        case JobSetResult.Timeout =>
-          info(s"watching Armada job until completion timed out after $jobWatchTimeout")
-      }
-
-      result
-
-    } catch {
-      case ex: Exception =>
-        info(s"$testName job submission failed: ${ex.getMessage}")
-        JobSetResult.Failed
-    }
-  }
-
-  /** Build volume mount arguments for Docker to make test resources accessible inside containers.
-    *
-    * This method automatically mounts directories that contain test resources (templates, configs,
-    * etc.) so they can be accessed by Spark jobs running inside Docker containers. It supports:
-    *   - The main e2e test resources directory
-    *   - Any subdirectories that might contain test-specific resources
-    *
-    * The mounts are read-only for security and to prevent accidental modifications.
-    *
-    * @return
-    *   Sequence of Docker volume mount arguments (-v flags)
-    */
-  private def buildTestResourceVolumeMounts(): Seq[String] = {
-    val userDir          = System.getProperty("user.dir")
-    val testResourcesDir = new File(s"$userDir/src/test/resources")
-
-    if (!testResourcesDir.exists() || !testResourcesDir.isDirectory) {
-      // No test resources directory, return empty
-      return Seq.empty
-    }
-
-    // Mount patterns for different test resource locations
-    // Add new patterns here if you have test resources in other locations
-    val mountPatterns = Seq(
-      // Main e2e resources directory (includes templates, configs, etc.)
-      "e2e" -> "/opt/spark/work-dir/src/test/resources/e2e"
-    )
-
-    // Build volume mount arguments for existing directories
-    mountPatterns.flatMap { case (subDir, containerPath) =>
-      val hostDir = new File(testResourcesDir, subDir)
-      if (hostDir.exists() && hostDir.isDirectory) {
-        // Mount as read-only for security
-        Seq("-v", s"${hostDir.getAbsolutePath}:$containerPath:ro")
-      } else {
-        Seq.empty
-      }
-    }
-  }
-
-  override def afterAll(): Unit = {
-    super.afterAll()
-  }
+  private def templatePath(name: String): String =
+    s"src/test/resources/e2e/templates/$name"
 }

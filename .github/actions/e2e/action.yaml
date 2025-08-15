@@ -12,9 +12,6 @@ inputs:
   java_version:
     description: Java version to build with, e.g. "11"
     required: true
-  iteration_count:
-    description: iteration parameter to pass into the sparkPi command
-    required: true
 
 runs:
   using: composite
@@ -95,116 +92,6 @@ runs:
     id: submit
     run: |
       echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh -q test -k ${{ inputs.iteration_count }}
+      ./armada-spark/scripts/dev-e2e.sh -q test
       echo "::endgroup::"
     shell: bash
-  - name: Ensure job completed
-    run: |
-      timeout 5m bash -c '
-        while kubectl get pods -l spark-job=example \
-              --field-selector=status.phase!=Succeeded,status.phase!=Failed \
-              -o name | grep -q .; do
-          echo "waiting…"; sleep 5;
-        done
-      '
-      if [[ $? -eq 124 ]]; then
-        echo "Timeout after 5m" >&2
-        exit 1
-      fi
-      echo "All pods have terminated."
-    shell: bash
-  - name: Inspect k8s pods
-    id: k8s-pods
-    if: always() && steps.kind.outcome == 'success'
-    run: |
-      # Inspect k8s pods
-      echo "::group::pods"
-      kubectl get pods -A
-      echo "::endgroup::"
-
-      kubectl get pods -A | tail -n+2 | sed -E -e "s/ +/ /g" | cut -d " " -f 1-2 | while read namespace pod
-      do
-        echo "::group::$pod"
-        kubectl get pod "$pod" --namespace "$namespace" --output json 2>&1 | tee "$namespace.$pod.json"
-        kubectl logs "$pod" --namespace "$namespace" 2>&1 | tee "$namespace.$pod.log"
-        echo "::endgroup::"
-      done
-    shell: bash
-  - name: Inspect Lookout
-    if: always() && steps.submit.outcome == 'success'
-    run: |
-      # Inspect k8s pods
-      echo "::group::Inspect k8s pods"
-      curl --silent --show-error -X POST "http://localhost:30000/api/v1/jobSpec" --json '{"jobId":"${{ steps.submit.outputs.jobid }}"}' | jq
-      echo "::endgroup::"
-    shell: bash
-  - name: Confirm number of executors
-    if: always()
-    run: |
-      # Confirm number of executors
-      echo "::group::Confirm number of executors"
-      expectedExecutorCount=`grep 'conf spark.executor.instances' ./armada-spark/scripts/submitArmadaSpark.sh | grep -oP 'spark\.executor\.instances=\K\d+'`
-      actualExecutorCount=`grep "ArmadaDriverEndpoint: Registered executor" default.armada-${{ steps.submit.outputs.jobid }}-0.log | wc -l`
-      echo executor count expected: $expectedExecutorCount actual: $actualExecutorCount
-      if [ $expectedExecutorCount -eq $actualExecutorCount ]; then
-        echo "got expected executor count"
-      else
-        echo "Bad executor count"; exit 1
-      fi
-      echo "::endgroup::"
-    shell: bash
-  - name: Confirm iteration count
-    if: always()
-    run: |
-      echo "::group::Confirm iteration count"
-      export count=${{ inputs.iteration_count }}
-      if grep "TaskSetManager: Finished task .* ($count/$count)" default.armada-${{ steps.submit.outputs.jobid }}-0.log; then
-        echo "got expected iteration count"
-      else
-        echo "Bad iteration count"; exit 1
-      fi
-      echo "::endgroup::"
-    shell: bash
-  - name: Confirm node selection
-    if: always()
-    run: |
-      # Confirm node selection
-      echo "::group::Confirm node selection"
-      success=true
-      expectedNode="armada-worker2"
-
-      for pod in default.armada-*-0.json
-      do
-        echo "pod ${pod/%.json/}"
-        nodeSelector=$(jq -r '.spec.nodeSelector."armada-spark"' "$pod")
-        actualNode=$(jq -r .spec.nodeName "$pod")
-
-        if [[ "$nodeSelector" == "true" ]]
-        then
-          echo "- Node selector exists"
-        else
-          echo "- Node selector is missing"
-          success=false
-        fi
-
-        if [[ "$actualNode" == "$expectedNode" ]]
-        then
-          echo "- Pod assigned to expected node"
-        else
-          echo "- Pod assigned to unexpected node: $actualNode"
-          success=false
-        fi
-        jq '.spec | { "nodeName": .nodeName, nodeSelector: .nodeSelector }' "$pod"
-        echo
-      done
-      "$success"
-      echo "::endgroup::"
-    shell: bash
-  - name: Upload k8s insights
-    if: always()
-    uses: actions/upload-artifact@v4
-    with:
-      name: k8s-${{ inputs.spark_version }}-${{ inputs.scala_version }}
-      path: |
-        *.log
-        *.json
