@@ -17,6 +17,7 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 trait TestAssertion {
@@ -25,8 +26,8 @@ trait TestAssertion {
 }
 
 case class AssertionContext(
-    jobSetId: String,
     namespace: String,
+    queueName: String,
     testId: String,
     k8sClient: K8sClient,
     armadaClient: ArmadaClient
@@ -34,8 +35,10 @@ case class AssertionContext(
 
 sealed trait AssertionResult
 object AssertionResult {
-  case object Success                                                  extends AssertionResult
-  case class Failure(message: String, cause: Option[Throwable] = None) extends AssertionResult
+  case object Success                 extends AssertionResult
+  case class Failure(message: String) extends AssertionResult
+  case class Skipped(reason: String)  extends AssertionResult
+  case class Retry(reason: String)    extends AssertionResult
 }
 
 /** Pod count assertion - verifies expected number of pods with given labels */
@@ -44,7 +47,7 @@ class PodCountAssertion(
     expectedCount: Int,
     description: String = "Pod count"
 ) extends TestAssertion {
-  override val name = s"$description verification"
+  override val name = s"$description should be $expectedCount"
 
   override def assert(
       context: AssertionContext
@@ -52,37 +55,38 @@ class PodCountAssertion(
     import context._
 
     k8sClient.getPodsByLabel(labelSelector, namespace).map { pods =>
-      val podCount = pods.size
-      if (podCount == expectedCount) {
+      if (pods.size == expectedCount) {
         AssertionResult.Success
       } else {
-        AssertionResult.Failure(s"Expected $expectedCount pods, found $podCount")
+        AssertionResult.Failure(
+          s"Expected $expectedCount pods with selector '$labelSelector', found ${pods.size}"
+        )
       }
     }
   }
 }
 
-/** Driver exists assertion - uses test-id from context */
+/** Driver exists assertion - verifies driver pod exists */
 class DriverExistsAssertion extends TestAssertion {
-  override val name = "Driver exists"
+  override val name = "Driver pod exists"
 
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     val labelSelector = s"spark-role=driver,test-id=${context.testId}"
-    new PodCountAssertion(labelSelector, 1, "Driver pod").assert(context)
+    new PodCountAssertion(labelSelector, 1, "Driver pods").assert(context)
   }
 }
 
-/** Executor count assertion - uses test-id from context */
+/** Executor count assertion - verifies exact number of executor pods */
 class ExecutorCountAssertion(expectedCount: Int) extends TestAssertion {
-  override val name = s"Executor count ($expectedCount)"
+  override val name = s"Executor count should be $expectedCount"
 
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     val labelSelector = s"spark-role=executor,test-id=${context.testId}"
-    new PodCountAssertion(labelSelector, expectedCount, s"$expectedCount executors").assert(context)
+    new PodCountAssertion(labelSelector, expectedCount, "Executor pods").assert(context)
   }
 }
 
@@ -98,23 +102,26 @@ class PodLabelAssertion(
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     import context._
 
-    k8sClient.getPodByLabel(podSelector, namespace).map {
-      case None =>
-        AssertionResult.Failure(s"No pod found with selector: $podSelector")
-      case Some(pod) =>
-        val missingLabels = expectedLabels.filter { case (key, value) =>
-          !pod.labels.get(key).contains(value)
-        }
-        if (missingLabels.isEmpty) {
-          AssertionResult.Success
-        } else {
-          AssertionResult.Failure(s"Missing or incorrect labels: $missingLabels")
-        }
+    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+      pods.headOption match {
+        case None =>
+          AssertionResult.Failure(s"No pod found with selector: $podSelector")
+        case Some(pod) =>
+          val podLabels = pod.getMetadata.getLabels.asScala.toMap
+          val missingLabels = expectedLabels.filter { case (key, value) =>
+            !podLabels.get(key).contains(value)
+          }
+          if (missingLabels.isEmpty) {
+            AssertionResult.Success
+          } else {
+            AssertionResult.Failure(s"Missing or incorrect labels: $missingLabels")
+          }
+      }
     }
   }
 }
 
-/** Driver label assertion - uses test-id from context */
+/** Driver label assertion - verifies driver pod has expected labels */
 class DriverLabelAssertion(expectedLabels: Map[String, String]) extends TestAssertion {
   override val name = "Driver labels"
 
@@ -126,7 +133,7 @@ class DriverLabelAssertion(expectedLabels: Map[String, String]) extends TestAsse
   }
 }
 
-/** Executor label assertion - uses test-id from context */
+/** Executor label assertion - verifies executor pods have expected labels */
 class ExecutorLabelAssertion(expectedLabels: Map[String, String]) extends TestAssertion {
   override val name = "Executor labels"
 
@@ -192,11 +199,14 @@ class PodAnnotationAssertion(
         AssertionResult.Failure(s"No pods found with selector: $podSelector")
       } else {
         val failures = pods.flatMap { pod =>
+          val podAnnotations = pod.getMetadata.getAnnotations.asScala.toMap
           val missingAnnotations = expectedAnnotations.filter { case (key, value) =>
-            !pod.annotations.get(key).contains(value)
+            !podAnnotations.get(key).contains(value)
           }
           if (missingAnnotations.nonEmpty) {
-            Some(s"Pod ${pod.name} missing or incorrect annotations: $missingAnnotations")
+            Some(
+              s"Pod ${pod.getMetadata.getName} missing or incorrect annotations: $missingAnnotations"
+            )
           } else {
             None
           }
@@ -212,7 +222,7 @@ class PodAnnotationAssertion(
   }
 }
 
-/** Driver annotation assertion - uses test-id from context */
+/** Driver annotation assertion - verifies driver pod has expected annotations */
 class DriverAnnotationAssertion(expectedAnnotations: Map[String, String]) extends TestAssertion {
   override val name = "Driver annotations"
 
@@ -224,7 +234,6 @@ class DriverAnnotationAssertion(expectedAnnotations: Map[String, String]) extend
   }
 }
 
-/** Executor annotation assertion - uses test-id from context */
 class ExecutorAnnotationAssertion(expectedAnnotations: Map[String, String]) extends TestAssertion {
   override val name = "Executor annotations"
 
@@ -236,6 +245,8 @@ class ExecutorAnnotationAssertion(expectedAnnotations: Map[String, String]) exte
   }
 }
 
+/** Ingress assertion - verifies ingress for driver pod exists and has expected annotations and port
+  */
 class IngressAssertion(
     requiredAnnotations: Map[String, String],
     requiredPort: Int = 7078
@@ -250,25 +261,38 @@ class IngressAssertion(
 
     for {
       // Find driver pod using test-id label in the test namespace
-      pod <- k8sClient.getPodByLabel(s"test-id=$testId", namespace)
-      podName = pod.getOrElse(throw new AssertionError("Driver pod not found")).name
+      pods <- k8sClient.getPodsByLabel(s"test-id=$testId", namespace)
+      podName = pods.headOption
+        .getOrElse(throw new AssertionError("Driver pod not found"))
+        .getMetadata
+        .getName
       ingress <- k8sClient.getIngressForPod(podName, namespace)
     } yield {
       ingress match {
         case None =>
           AssertionResult.Failure(s"No ingress found for driver pod: $podName")
         case Some(ing) =>
+          val ingressAnnotations = ing.getMetadata.getAnnotations.asScala.toMap
           val missingOrIncorrect = requiredAnnotations.filter { case (key, value) =>
-            !ing.annotations.get(key).contains(value)
+            !ingressAnnotations.get(key).contains(value)
           }
           if (missingOrIncorrect.nonEmpty) {
             AssertionResult.Failure(
               s"Missing or incorrect ingress annotations: $missingOrIncorrect"
             )
-          } else if (!ing.rules.exists(_.paths.exists(_.backend.servicePort == requiredPort))) {
-            AssertionResult.Failure(s"Expected port $requiredPort not found in ingress")
           } else {
-            AssertionResult.Success
+            // Check if required port exists in any rule's paths
+            val hasRequiredPort = ing.getSpec.getRules.asScala.exists { rule =>
+              rule.getHttp.getPaths.asScala.exists { path =>
+                path.getBackend.getService.getPort.getNumber == requiredPort
+              }
+            }
+
+            if (hasRequiredPort) {
+              AssertionResult.Success
+            } else {
+              AssertionResult.Failure(s"Expected port $requiredPort not found in ingress")
+            }
           }
       }
     }
