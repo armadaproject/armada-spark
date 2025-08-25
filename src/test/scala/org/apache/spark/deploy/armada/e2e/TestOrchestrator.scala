@@ -35,7 +35,8 @@ case class TestConfig(
     sparkVersion: String,
     sparkConfs: Map[String, String] = Map.empty,
     assertions: Seq[TestAssertion] = Seq.empty,
-    failFastOnPodFailure: Boolean = true
+    failFastOnPodFailure: Boolean = true,
+    pythonScript: Option[String] = None
 )
 
 /** Manages test isolation with unique namespace and queue per test. Ensures cleanup of resources
@@ -246,8 +247,9 @@ class TestOrchestrator(
   ): Future[Unit] = Future {
     // Use spark-examples JAR with the correct path based on Scala binary version and Spark version
     // Following the same pattern as scripts/init.sh
-    val sparkExamplesJar =
+    val appResource = config.pythonScript.getOrElse(
       s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+    )
     val volumeMounts = buildVolumeMounts()
 
     val contextLabelString = context.labels.iterator.map { case (k, v) => s"$k=$v" }.mkString(",")
@@ -269,8 +271,9 @@ class TestOrchestrator(
       queueName,
       jobSetId,
       enhancedSparkConfs,
-      sparkExamplesJar,
-      config.lookoutUrl
+      appResource,
+      config.lookoutUrl,
+      config.pythonScript
     )
 
     println(s"\n[SUBMIT] Submitting Spark job via Docker:")
@@ -279,7 +282,7 @@ class TestOrchestrator(
     println(s"[SUBMIT]   Namespace: ${context.namespace}")
     println(s"[SUBMIT]   Image: ${config.imageName}")
     println(s"[SUBMIT]   Master URL: ${config.masterUrl}")
-    println(s"[SUBMIT]   Application JAR: $sparkExamplesJar")
+    println(s"[SUBMIT]   Application Resource: $appResource")
     println(s"[SUBMIT]   Spark config:")
     enhancedSparkConfs.toSeq.sortBy(_._1).foreach { case (key, value) =>
       val displayValue = if (value.length > 100) value.take(100) + "..." else value
@@ -469,8 +472,9 @@ class TestOrchestrator(
       queueName: String,
       jobSetId: String,
       sparkConfs: Map[String, String],
-      appJar: String,
-      lookoutUrl: String
+      appResource: String,
+      lookoutUrl: String,
+      pythonScript: Option[String]
   ): Seq[String] = {
     val baseCommand = Seq(
       "docker",
@@ -487,10 +491,13 @@ class TestOrchestrator(
       "--deploy-mode",
       "cluster",
       "--name",
-      s"e2e-$testName",
-      "--class",
-      "org.apache.spark.examples.SparkPi"
+      s"e2e-$testName"
     )
+
+    val commandWithApp = pythonScript match {
+      case Some(_) => baseCommand // Python: no --class needed
+      case None    => baseCommand ++ Seq("--class", "org.apache.spark.examples.SparkPi")
+    }
 
     val defaultConfs = Map(
       "spark.armada.internalUrl"             -> "armada-server.armada:50051",
@@ -516,7 +523,7 @@ class TestOrchestrator(
       Seq("--conf", s"$key=$value")
     }.toSeq
 
-    baseCommand ++ confArgs ++ Seq(appJar, "100")
+    commandWithApp ++ confArgs ++ Seq(appResource, "100")
   }
 
   private def buildVolumeMounts(): Seq[String] = {
