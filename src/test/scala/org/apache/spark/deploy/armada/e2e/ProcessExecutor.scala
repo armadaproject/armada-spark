@@ -22,6 +22,7 @@ import scala.concurrent.{Future, ExecutionContext, blocking}
 import scala.concurrent.duration._
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
+import org.slf4j.{Logger, LoggerFactory}
 
 case class ProcessResult(
     exitCode: Int,
@@ -31,6 +32,7 @@ case class ProcessResult(
 )
 
 object ProcessExecutor {
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /** Execute command and always return ProcessResult, even on failure */
   def executeWithResult(command: Seq[String], timeout: Duration): ProcessResult = {
@@ -42,14 +44,14 @@ object ProcessExecutor {
         stdout.append(line).append("\n")
         // Print docker/spark-submit output in real-time for debugging
         if (command.headOption.contains("docker") && line.nonEmpty) {
-          println(s"[SPARK-SUBMIT] $line")
+          logger.info(s"[SPARK-SUBMIT] $line")
         }
       },
       line => {
         stderr.append(line).append("\n")
         // Print docker/spark-submit errors in real-time for debugging
         if (command.headOption.contains("docker") && line.nonEmpty) {
-          println(s"[SPARK-SUBMIT] $line")
+          logger.info(s"[SPARK-SUBMIT] $line")
         }
       }
     )

@@ -76,6 +76,7 @@ import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAIN
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.mutable
 import scala.concurrent.Await
@@ -143,18 +144,12 @@ private[spark] object ArmadaClientApplication {
   private val DEFAULT_NAMESPACE     = "default"
   private val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
   private val DEFAULT_RUN_AS_USER   = 185
-
 }
 
 /** Main class and entry point of application submission in KUBERNETES mode.
   */
 private[spark] class ArmadaClientApplication extends SparkApplication {
-  // FIXME: Find the real way to log properly.
-  private def log(msg: String): Unit = {
-    // scalastyle:off println
-    System.err.println(msg)
-    // scalastyle:on println
-  }
+  private val logger = LoggerFactory.getLogger(getClass)
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
@@ -168,17 +163,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
-    log(s"Connecting to Armada Server - host: $host, port: $port")
+    logger.info(s"Connecting to Armada Server - host: $host, port: $port")
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 
-    log(s"Checking Armada Server health (timeout: $healthTimeout)")
+    logger.info(s"Checking Armada Server health (timeout: $healthTimeout)")
     val healthResp = Await.result(armadaClient.submitHealth(), healthTimeout)
 
     if (healthResp.status.isServing) {
-      log("Armada Server is serving requests!")
+      logger.info("Armada Server is serving requests!")
     } else {
       throw new RuntimeException(
         "Armada health check failed - Armada Server is not serving requests!"
@@ -194,7 +189,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val lookoutURL =
       s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
         s"ps=50&sb=$driverJobId&active=false&refresh=true"
-    log(s"Lookout URL for the driver job is $lookoutURL")
+    logger.info(s"Lookout URL for the driver job is $lookoutURL")
 
     ()
   }
@@ -836,7 +831,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val error = Some(driverResponse.jobResponseItems.head.error)
       .filter(_.nonEmpty)
       .getOrElse("none")
-    log(
+    logger.info(
       s"Submitted driver job with ID: $driverJobId, Error: $error"
     )
     driverJobId
@@ -851,7 +846,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
       val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      logger.info(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
       item.jobId
     }
   }

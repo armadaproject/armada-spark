@@ -21,6 +21,7 @@ import api.submit.Queue
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -46,6 +47,7 @@ object JobSetStatus {
   *   Armada server URL (default: "localhost:30002")
   */
 class ArmadaClient(armadaUrl: String = "localhost:30002") {
+  private val logger         = LoggerFactory.getLogger(getClass)
   private val processTimeout = DefaultProcessTimeout
 
   private val yamlMapper = {
@@ -94,12 +96,12 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
   def ensureQueueExists(name: String)(implicit ec: ExecutionContext): Future[Unit] = {
     getQueue(name).flatMap {
       case Some(_) =>
-        println(s"[QUEUE] Queue $name already exists")
+        logger.info(s"[QUEUE] Queue $name already exists")
         Future.successful(())
       case None =>
-        println(s"[QUEUE] Creating queue $name...")
+        logger.info(s"[QUEUE] Creating queue $name...")
         createQueue(name).flatMap { _ =>
-          println(s"[QUEUE] Waiting for queue $name to become available...")
+          logger.info(s"[QUEUE] Waiting for queue $name to become available...")
           Future {
             var attempts    = 0
             val maxAttempts = 30
@@ -110,12 +112,12 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
               queueFound = getQueueSync(name).isDefined
               attempts += 1
               if (!queueFound && attempts % 5 == 0) {
-                println(s"[QUEUE] Still waiting for queue $name... (${attempts}s)")
+                logger.info(s"[QUEUE] Still waiting for queue $name... (${attempts}s)")
               }
             }
 
             if (queueFound) {
-              println(s"[QUEUE] Queue $name is ready")
+              logger.info(s"[QUEUE] Queue $name is ready")
             } else {
               throw new RuntimeException(s"Queue $name not available after $attempts seconds")
             }
@@ -164,7 +166,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
             val elapsed = (System.currentTimeMillis() - startTime) / 1000
             // Log progress periodically for long-running jobs
             if (elapsed % ProgressLogInterval.toSeconds == 0 && elapsed > 0) {
-              println(s"Still monitoring job - elapsed: ${elapsed}s")
+              logger.info(s"Still monitoring job - elapsed: ${elapsed}s")
             }
           }
         }
