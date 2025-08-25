@@ -42,6 +42,7 @@
         <kubernetes-client.version>6.7.2</kubernetes-client.version>
         <jackson.version>2.15.2</jackson.version>
         <scalatest-maven-plugin.version>2.2.0</scalatest-maven-plugin.version>
+        <slf4j.version>2.0.7</slf4j.version>
         <!-- SPARK-36796 for JDK-17 test-->
         <extraJavaTestArgs>
           -XX:+IgnoreUnrecognizedVMOptions
@@ -189,6 +190,11 @@
           <groupId>com.fasterxml.jackson.module</groupId>
           <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
           <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+          <version>${slf4j.version}</version>
         </dependency>
     </dependencies>
 

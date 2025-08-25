@@ -22,6 +22,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
+import org.slf4j.LoggerFactory
 
 import java.util.Properties
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -33,6 +34,8 @@ class ArmadaSparkE2E
     with Matchers
     with ScalaFutures
     with Eventually {
+
+  private val logger = LoggerFactory.getLogger(getClass)
 
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(
     timeout = Span(300, Seconds),
@@ -72,14 +75,14 @@ class ArmadaSparkE2E
       sparkVersion = finalSparkVersion
     )
 
-    println(s"Test configuration loaded: $baseConfig")
+    logger.info(s"Test configuration loaded: $baseConfig")
 
     // Verify Armada cluster is ready before running tests
     val clusterReadyTimeout = ClusterReadyTimeout.toSeconds.toInt
     val testQueueName = s"${baseConfig.baseQueueName}-cluster-check-${System.currentTimeMillis()}"
 
-    println(s"[CLUSTER-CHECK] Verifying Armada cluster readiness...")
-    println(s"[CLUSTER-CHECK] Will retry for up to $clusterReadyTimeout seconds")
+    logger.info(s"[CLUSTER-CHECK] Verifying Armada cluster readiness...")
+    logger.info(s"[CLUSTER-CHECK] Will retry for up to $clusterReadyTimeout seconds")
 
     val startTime                    = System.currentTimeMillis()
     var clusterReady                 = false
@@ -88,18 +91,20 @@ class ArmadaSparkE2E
 
     while (!clusterReady && (System.currentTimeMillis() - startTime) < clusterReadyTimeout * 1000) {
       attempts += 1
-      println(
+      logger.info(
         s"[CLUSTER-CHECK] Attempt #$attempts - Creating and verifying test queue: $testQueueName"
       )
 
       try {
         armadaClient.ensureQueueExists(testQueueName).futureValue
-        println(s"[CLUSTER-CHECK] Queue creation and verification succeeded - cluster is ready!")
+        logger.info(
+          s"[CLUSTER-CHECK] Queue creation and verification succeeded - cluster is ready!"
+        )
         clusterReady = true
 
         try {
           armadaClient.deleteQueue(testQueueName).futureValue
-          println(s"[CLUSTER-CHECK] Test queue cleaned up")
+          logger.info(s"[CLUSTER-CHECK] Test queue cleaned up")
         } catch {
           case _: Exception => // Ignore cleanup failures
         }
@@ -107,10 +112,12 @@ class ArmadaSparkE2E
         case ex: Exception =>
           lastError = Some(ex)
           val elapsed = (System.currentTimeMillis() - startTime) / 1000
-          println(s"[CLUSTER-CHECK] Attempt #$attempts failed after ${elapsed}s: ${ex.getMessage}")
+          logger.info(
+            s"[CLUSTER-CHECK] Attempt #$attempts failed after ${elapsed}s: ${ex.getMessage}"
+          )
 
           if ((System.currentTimeMillis() - startTime) < clusterReadyTimeout * 1000) {
-            println(
+            logger.info(
               s"[CLUSTER-CHECK] Waiting ${ClusterCheckRetryDelay.toSeconds} seconds before retry..."
             )
             Thread.sleep(ClusterCheckRetryDelay.toMillis)
@@ -126,7 +133,7 @@ class ArmadaSparkE2E
       )
     }
 
-    println(
+    logger.info(
       s"[CLUSTER-CHECK] Cluster verified ready after $totalTime seconds ($attempts attempts)"
     )
   }
