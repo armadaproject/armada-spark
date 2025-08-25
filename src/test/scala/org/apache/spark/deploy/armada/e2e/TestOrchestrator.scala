@@ -23,6 +23,7 @@ import java.util.concurrent.TimeoutException
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.annotation.tailrec
 
@@ -70,6 +71,7 @@ class TestOrchestrator(
     k8sClient: K8sClient
 )(implicit ec: ExecutionContext) {
 
+  private val logger           = LoggerFactory.getLogger(getClass)
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
@@ -187,10 +189,10 @@ class TestOrchestrator(
       s"e2e-${name.toLowerCase.replaceAll("[^a-z0-9]", "-")}-${System.currentTimeMillis()}"
     val queueName = s"${config.baseQueueName}-${context.queueSuffix}"
 
-    println(s"\n========== Starting E2E Test: $name ==========")
-    println(s"Test ID: ${context.testId}")
-    println(s"Namespace: ${context.namespace}")
-    println(s"Queue: $queueName")
+    logger.info(s"========== Starting E2E Test: $name ==========")
+    logger.info(s"Test ID: ${context.testId}")
+    logger.info(s"Namespace: ${context.namespace}")
+    logger.info(s"Queue: $queueName")
 
     val resultFuture = for {
       _ <- k8sClient.createNamespace(context.namespace)
@@ -205,7 +207,7 @@ class TestOrchestrator(
       .andThen {
         case scala.util.Failure(ex) =>
           // Capture debug info on any failure
-          println(s"\n[FAILURE] Test failed with exception: ${ex.getMessage}")
+          logger.error(s"Test failed with exception: ${ex.getMessage}")
           val podMonitor = new SimplePodMonitor(context.namespace)
           podMonitor.captureDebugInfo()
           podMonitor.printCapturedLogs()
@@ -215,9 +217,9 @@ class TestOrchestrator(
         cleanupTest(context, queueName)
       }
       .map { result =>
-        println(s"\n========== Test Finished: $name ==========")
-        println(s"Job Status: ${result.status}")
-        println(s"Duration: ${(System.currentTimeMillis() - context.startTime) / 1000}s")
+        logger.info(s"\n========== Test Finished: $name ==========")
+        logger.info(s"Job Status: ${result.status}")
+        logger.info(s"Duration: ${(System.currentTimeMillis() - context.startTime) / 1000}s")
         result
       }
   }
@@ -225,13 +227,13 @@ class TestOrchestrator(
   private def cleanupTest(context: TestContext, queueName: String): Future[Unit] = {
     for {
       _ <- k8sClient.deleteNamespace(context.namespace).recover { case ex =>
-        println(
+        logger.info(
           s"[CLEANUP] Warning: Failed to delete namespace ${context.namespace}: ${ex.getMessage}"
         )
         ()
       }
       _ <- armadaClient.deleteQueue(queueName).recover { case ex =>
-        println(s"[CLEANUP] Warning: Failed to delete queue $queueName: ${ex.getMessage}")
+        logger.info(s"[CLEANUP] Warning: Failed to delete queue $queueName: ${ex.getMessage}")
         ()
       }
     } yield ()
@@ -275,17 +277,17 @@ class TestOrchestrator(
       config.pythonScript
     )
 
-    println(s"\n[SUBMIT] Submitting Spark job via Docker:")
-    println(s"[SUBMIT]   Queue: $queueName")
-    println(s"[SUBMIT]   JobSetId: $jobSetId")
-    println(s"[SUBMIT]   Namespace: ${context.namespace}")
-    println(s"[SUBMIT]   Image: ${config.imageName}")
-    println(s"[SUBMIT]   Master URL: ${config.masterUrl}")
-    println(s"[SUBMIT]   Application Resource: $appResource")
-    println(s"[SUBMIT]   Spark config:")
+    logger.info(s"[SUBMIT] Submitting Spark job via Docker:")
+    logger.info(s"[SUBMIT]   Queue: $queueName")
+    logger.info(s"[SUBMIT]   JobSetId: $jobSetId")
+    logger.info(s"[SUBMIT]   Namespace: ${context.namespace}")
+    logger.info(s"[SUBMIT]   Image: ${config.imageName}")
+    logger.info(s"[SUBMIT]   Master URL: ${config.masterUrl}")
+    logger.info(s"[SUBMIT]   Application Resource: $appResource")
+    logger.info(s"[SUBMIT]   Spark config:")
     enhancedSparkConfs.toSeq.sortBy(_._1).foreach { case (key, value) =>
       val displayValue = if (value.length > 100) value.take(100) + "..." else value
-      println(s"[SUBMIT]     $key = $displayValue")
+      logger.info(s"[SUBMIT]     $key = $displayValue")
     }
     // Properly escape command for shell reproduction
     val escapedCommand = dockerCommand.map { arg =>
@@ -293,7 +295,7 @@ class TestOrchestrator(
         "'" + arg.replace("'", "'\\''") + "'"
       } else arg
     }
-    println(s"[SUBMIT] Full command: ${escapedCommand.mkString(" ")}\n")
+    logger.info(s"[SUBMIT] Full command: ${escapedCommand.mkString(" ")}\n")
 
     @tailrec
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
@@ -305,7 +307,7 @@ class TestOrchestrator(
 
         if (isQueueNotFoundError && attempt <= 3) {
           val waitTime = attempt * 2 // 2, 4, 6 seconds
-          println(
+          logger.info(
             s"[SUBMIT] Queue not found error on attempt $attempt, retrying in ${waitTime}s..."
           )
           Thread.sleep(waitTime * 1000)
@@ -318,21 +320,21 @@ class TestOrchestrator(
             .filter(line => errorPattern.findFirstIn(line).isDefined)
             .take(10)
 
-          println(
+          logger.info(
             s"[SUBMIT] ERROR Submit failed with exit code ${result.exitCode} after $attempt attempts"
           )
           if (relevantLines.nonEmpty) {
-            println("[SUBMIT] Relevant error lines:")
-            relevantLines.foreach(line => println(s"[SUBMIT]   $line"))
+            logger.info("[SUBMIT] Relevant error lines:")
+            relevantLines.foreach(line => logger.info(s"[SUBMIT]   $line"))
           }
 
           throw new RuntimeException(s"Spark submit failed with exit code ${result.exitCode}")
         }
       } else {
         if (attempt > 1) {
-          println(s"[SUBMIT] Job submitted successfully on attempt $attempt")
+          logger.info(s"[SUBMIT] Job submitted successfully on attempt $attempt")
         } else {
-          println(s"[SUBMIT] Job submitted successfully")
+          logger.info(s"[SUBMIT] Job submitted successfully")
         }
         result
       }
@@ -349,7 +351,7 @@ class TestOrchestrator(
   ): Future[TestResult] = Future {
     val podMonitor = new SimplePodMonitor(context.namespace)
 
-    println(s"[WATCH] Starting job watch for jobSetId: $jobSetId")
+    logger.info(s"[WATCH] Starting job watch for jobSetId: $jobSetId")
     val jobFuture = armadaClient.watchJobSet(queueName, jobSetId, jobWatchTimeout)
 
     var jobCompleted               = false
@@ -357,7 +359,7 @@ class TestOrchestrator(
     var assertionResults           = Map.empty[String, AssertionResult]
 
     if (config.failFastOnPodFailure) {
-      println(s"[MONITOR] Starting pod monitoring for namespace: ${context.namespace}")
+      logger.info(s"[MONITOR] Starting pod monitoring for namespace: ${context.namespace}")
       val monitorThread = new Thread(() => {
         while (!jobCompleted && podFailure.isEmpty) {
           podFailure = podMonitor.checkForFailures()
@@ -395,10 +397,10 @@ class TestOrchestrator(
         Await.result(jobFuture, jobWatchTimeout + 10.seconds)
       } catch {
         case _: TimeoutException =>
-          println(s"[TIMEOUT] Job watch timed out after ${jobWatchTimeout.toSeconds}s")
+          logger.warn(s"Job watch timed out after ${jobWatchTimeout.toSeconds}s")
           JobSetStatus.Timeout
         case ex: Exception =>
-          println(s"[ERROR] Job watch failed: ${ex.getMessage}")
+          logger.error(s"Job watch failed: ${ex.getMessage}")
           JobSetStatus.Failed
       } finally {
         jobCompleted = true
@@ -412,7 +414,7 @@ class TestOrchestrator(
           !thread.isAlive // Returns true if thread completed, false if still running
         } catch {
           case _: InterruptedException =>
-            println("[WARNING] Assertion thread was interrupted while waiting for completion")
+            logger.warn("Assertion thread was interrupted while waiting for completion")
             false
         }
       case None => true // No assertions to run, so consider them "completed"
@@ -432,7 +434,7 @@ class TestOrchestrator(
 
     val finalStatus = podFailure match {
       case Some(failureMsg) =>
-        println(s"[FAILED] Pod failure detected: $failureMsg")
+        logger.info(s"[FAILED] Pod failure detected: $failureMsg")
         JobSetStatus.Failed
       case None =>
         jobStatus
@@ -442,15 +444,15 @@ class TestOrchestrator(
     val hasAssertionFailures =
       assertionResults.values.exists(_.isInstanceOf[AssertionResult.Failure])
     if (finalStatus != JobSetStatus.Success || hasAssertionFailures) {
-      println("[DEBUG] Test or assertions failed, capturing debug information...")
+      logger.debug("Test or assertions failed, capturing debug information...")
 
       // Print which assertions failed for clarity
       if (hasAssertionFailures) {
-        println("[DEBUG] Failed assertions:")
+        logger.error("Failed assertions:")
         assertionResults.foreach { case (name, result) =>
           result match {
             case AssertionResult.Failure(msg) =>
-              println(s"  - $name: $msg")
+              logger.error(s"  - $name: $msg")
             case _ =>
           }
         }

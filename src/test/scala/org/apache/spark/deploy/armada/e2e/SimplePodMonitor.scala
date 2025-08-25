@@ -17,11 +17,13 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import org.slf4j.{Logger, LoggerFactory}
 import scala.collection.mutable
 import scala.concurrent.duration._
 
 /** Simple pod monitoring that captures logs and events on failure */
 class SimplePodMonitor(namespace: String) {
+  private val logger       = LoggerFactory.getLogger(getClass)
   private val capturedLogs = mutable.ArrayBuffer[String]()
 
   /** Check if any pods have failed and capture their logs if so */
@@ -45,7 +47,7 @@ class SimplePodMonitor(namespace: String) {
           val failedPodName = failedPods.head.split("\\s+").head
 
           // Immediately capture logs for the failed pod
-          println(s"[MONITOR] Pod $failedPodName failed, capturing logs...")
+          logger.info(s"[MONITOR] Pod $failedPodName failed, capturing logs...")
           try {
             val logsCmd = Seq(
               "kubectl",
@@ -58,8 +60,8 @@ class SimplePodMonitor(namespace: String) {
             )
             val logsResult = ProcessExecutor.executeWithResult(logsCmd, 10.seconds)
             if (logsResult.exitCode == 0 && logsResult.stdout.nonEmpty) {
-              println(s"[MONITOR] Pod $failedPodName logs:")
-              println(logsResult.stdout)
+              logger.info(s"[MONITOR] Pod $failedPodName logs:")
+              logger.info(logsResult.stdout)
             }
 
             // Also try to describe the pod
@@ -69,13 +71,13 @@ class SimplePodMonitor(namespace: String) {
               val lines       = describeResult.stdout.split("\n")
               val eventsIndex = lines.indexWhere(_.contains("Events:"))
               if (eventsIndex >= 0) {
-                println(s"[MONITOR] Pod $failedPodName events:")
-                println(lines.slice(eventsIndex, eventsIndex + 20).mkString("\n"))
+                logger.info(s"[MONITOR] Pod $failedPodName events:")
+                logger.info(lines.slice(eventsIndex, eventsIndex + 20).mkString("\n"))
               }
             }
           } catch {
             case e: Exception =>
-              println(s"[MONITOR] Failed to capture logs for $failedPodName: ${e.getMessage}")
+              logger.info(s"[MONITOR] Failed to capture logs for $failedPodName: ${e.getMessage}")
           }
 
           Some(s"Pod $failedPodName failed in namespace $namespace")
@@ -83,19 +85,19 @@ class SimplePodMonitor(namespace: String) {
           None
         }
       } else {
-        println(s"[MONITOR] Failed to get pods: ${podsResult.stderr}")
+        logger.info(s"[MONITOR] Failed to get pods: ${podsResult.stderr}")
         None
       }
     } catch {
       case e: Exception =>
-        println(s"[MONITOR] Error checking pods: ${e.getMessage}")
+        logger.info(s"[MONITOR] Error checking pods: ${e.getMessage}")
         None
     }
   }
 
   /** Capture all logs and events for debugging */
   def captureDebugInfo(): Unit = {
-    println(s"\n[DEBUG] Capturing debug info for namespace $namespace")
+    logger.debug(s"Capturing debug info for namespace $namespace")
 
     try {
       val podsCmd    = Seq("kubectl", "get", "pods", "-n", namespace, "-o", "name")
@@ -107,7 +109,7 @@ class SimplePodMonitor(namespace: String) {
 
         podNames.foreach { podName =>
           try {
-            println(s"[DEBUG] Capturing logs for pod $podName")
+            logger.debug(s"Capturing logs for pod $podName")
 
             val logsCmd = Seq(
               "kubectl",
@@ -150,7 +152,7 @@ class SimplePodMonitor(namespace: String) {
             }
           } catch {
             case e: Exception =>
-              println(s"[DEBUG] Failed to capture info for pod $podName: ${e.getMessage}")
+              logger.error(s"Failed to capture info for pod $podName: ${e.getMessage}")
           }
         }
       }
@@ -163,16 +165,16 @@ class SimplePodMonitor(namespace: String) {
 
     } catch {
       case e: Exception =>
-        println(s"[DEBUG] Failed to capture debug info: ${e.getMessage}")
+        logger.error(s"Failed to capture debug info: ${e.getMessage}")
     }
   }
 
   /** Print all captured logs */
   def printCapturedLogs(): Unit = {
     if (capturedLogs.nonEmpty) {
-      println(s"\n========== DEBUG INFO FOR NAMESPACE: $namespace ==========")
-      capturedLogs.foreach(println)
-      println(s"========== END DEBUG INFO ==========\n")
+      logger.info(s"\n========== DEBUG INFO FOR NAMESPACE: $namespace ==========")
+      capturedLogs.foreach(logger.info)
+      logger.info(s"========== END DEBUG INFO ==========\n")
     }
   }
 }
