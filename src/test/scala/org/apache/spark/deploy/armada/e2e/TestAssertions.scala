@@ -17,6 +17,7 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import io.fabric8.kubernetes.api.model.Pod
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -37,8 +38,6 @@ sealed trait AssertionResult
 object AssertionResult {
   case object Success                 extends AssertionResult
   case class Failure(message: String) extends AssertionResult
-  case class Skipped(reason: String)  extends AssertionResult
-  case class Retry(reason: String)    extends AssertionResult
 }
 
 /** Pod count assertion - verifies expected number of pods with given labels */
@@ -294,6 +293,71 @@ class IngressAssertion(
               AssertionResult.Failure(s"Expected port $requiredPort not found in ingress")
             }
           }
+      }
+    }
+  }
+}
+
+/** Driver pod assertion with custom predicate */
+class DriverPodAssertion(
+    predicate: Pod => Boolean
+) extends TestAssertion {
+  override val name = "Driver pod assertion"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val selector = s"spark-role=driver,test-id=${context.testId}"
+    new GenericPodAssertion(
+      selector,
+      predicate,
+      pod => s"Driver pod ${pod.getMetadata.getName} failed assertion"
+    ).assert(context)
+  }
+}
+
+/** Executor pod assertion with custom predicate */
+class ExecutorPodAssertion(
+    predicate: Pod => Boolean
+) extends TestAssertion {
+  override val name = "Executor pod assertion"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val selector = s"spark-role=executor,test-id=${context.testId}"
+    new GenericPodAssertion(
+      selector,
+      predicate,
+      pod => s"Executor pod ${pod.getMetadata.getName} failed assertion"
+    ).assert(context)
+  }
+}
+
+/** Generic pod assertion using a predicate function */
+class GenericPodAssertion(
+    podSelector: String,
+    predicate: Pod => Boolean,
+    errorMessage: Pod => String
+) extends TestAssertion {
+  override val name = "Pod assertion"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    import context._
+
+    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+      if (pods.isEmpty) {
+        AssertionResult.Failure(s"No pods found with selector: $podSelector")
+      } else {
+        val failures = pods.filterNot(predicate).map(errorMessage)
+
+        if (failures.isEmpty) {
+          AssertionResult.Success
+        } else {
+          AssertionResult.Failure(failures.mkString("; "))
+        }
       }
     }
   }

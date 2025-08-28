@@ -288,6 +288,24 @@
                         </manifest>
                     </archive>
                 </configuration>
+                <executions>
+                    <!-- Build test feature step JAR for e2e tests -->
+                    <execution>
+                        <id>test-feature-step-jar</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/extraJars</outputDirectory>
+                            <finalName>test-feature-step</finalName>
+                            <includes>
+                                <include>org/apache/spark/deploy/armada/e2e/featurestep/**</include>
+                            </includes>
+                            <skipIfEmpty>true</skipIfEmpty>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <!-- Fatjar and dependency shading Plugin -->
             <plugin>
