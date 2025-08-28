@@ -263,7 +263,7 @@ class E2ETestBuilder(testName: String) {
     result.assertionResults.foreach { case (name, assertionResult) =>
       assertionResult match {
         case AssertionResult.Success => // Success, no need to log
-        case AssertionResult.Failure(msg, _) =>
+        case AssertionResult.Failure(msg) =>
           fail(s"Assertion '$name' failed: $msg")
       }
     }
