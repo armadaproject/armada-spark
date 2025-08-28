@@ -252,6 +252,43 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("SparkPi job with custom feature steps", E2ETest) {
+    E2ETestBuilder("spark-pi-feature-steps")
+      .withBaseConfig(baseConfig)
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.driver.pod.featureSteps" ->
+            "org.apache.spark.deploy.armada.e2e.featurestep.DriverFeatureStep",
+          "spark.kubernetes.executor.pod.featureSteps" ->
+            "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
+        )
+      )
+      .withPodLabels(Map("test-type" -> "feature-step"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .assertDriverHasLabels(
+        Map(
+          "feature-step"      -> "driver-applied",
+          "feature-step-role" -> "driver"
+        )
+      )
+      .assertDriverHasAnnotation("driver-feature-step", "configured")
+      .assertExecutorsHaveLabels(
+        Map(
+          "feature-step"      -> "executor-applied",
+          "feature-step-role" -> "executor"
+        )
+      )
+      .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
+      .withDriverPodAssertion { pod =>
+        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
+      }
+      .withExecutorPodAssertion { pod =>
+        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+      }
+      .run()
+  }
+
   private def loadProperties(): Properties = {
     val props = new Properties()
 
