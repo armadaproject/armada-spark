@@ -75,14 +75,15 @@ class TestOrchestrator(
   private def runAssertionsWhileJobRunning(
       assertions: Seq[TestAssertion],
       context: TestContext,
+      queueName: String,
       jobCompleted: () => Boolean
   ): Map[String, AssertionResult] = {
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
     val assertionContext = AssertionContext(
-      context.testId,
       context.namespace,
+      queueName,
       context.testId,
       k8sClient,
       armadaClient
@@ -96,12 +97,12 @@ class TestOrchestrator(
 
     while (!driverRunning && !jobCompleted() && attempts < maxWaitAttempts) {
       try {
-        val driverPod = Await.result(
-          k8sClient.getPodByLabel(driverSelector, context.namespace),
+        val driverPods = Await.result(
+          k8sClient.getPodsByLabel(driverSelector, context.namespace),
           10.seconds
         )
-        driverPod match {
-          case Some(pod) if pod.status.phase == "Running" =>
+        driverPods.headOption match {
+          case Some(pod) if pod.getStatus != null && pod.getStatus.getPhase == "Running" =>
             driverRunning = true
           case Some(_) =>
           case None    =>
@@ -119,8 +120,7 @@ class TestOrchestrator(
     if (!driverRunning) {
       return assertions.map { assertion =>
         assertion.name -> AssertionResult.Failure(
-          "Driver pod never started, Armada may not have scheduled it",
-          None
+          "Driver pod never started, Armada may not have scheduled it"
         )
       }.toMap
     }
@@ -143,7 +143,7 @@ class TestOrchestrator(
     val maxWaitTime                 = 30.seconds
     val startTime                   = System.currentTimeMillis()
     var attempts                    = 0
-    var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked", None)
+    var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked")
 
     while (!jobCompleted() && (System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
       attempts += 1
@@ -154,12 +154,12 @@ class TestOrchestrator(
         result match {
           case AssertionResult.Success =>
             return result
-          case AssertionResult.Failure(_, _) =>
+          case AssertionResult.Failure(_) =>
           // For the first few attempts, be patient - resources may still be scheduling
         }
       } catch {
         case ex: Exception =>
-          lastResult = AssertionResult.Failure(ex.getMessage, Some(ex))
+          lastResult = AssertionResult.Failure(ex.getMessage)
         // Don't log retries to avoid clutter
       }
 
@@ -169,11 +169,10 @@ class TestOrchestrator(
     lastResult match {
       case AssertionResult.Success =>
         lastResult
-      case AssertionResult.Failure(_, cause) =>
+      case AssertionResult.Failure(msg) =>
         if (jobCompleted()) {
           AssertionResult.Failure(
-            s"${assertion.name}: Job completed before assertion could pass",
-            cause
+            s"${assertion.name}: Job completed before assertion could pass"
           )
         } else {
           lastResult
@@ -375,6 +374,7 @@ class TestOrchestrator(
         assertionResults = runAssertionsWhileJobRunning(
           config.assertions,
           context,
+          queueName,
           jobCompleted = () => jobCompleted
         )
       })
@@ -420,9 +420,8 @@ class TestOrchestrator(
       // Add failure results for all assertions that didn't complete
       config.assertions.foreach { assertion =>
         if (!assertionResults.contains(assertion.name)) {
-          assertionResults += (assertion.name -> AssertionResult.Failure(
-            "Assertion did not complete within timeout or was interrupted",
-            None
+          assertionResults = assertionResults + (assertion.name -> AssertionResult.Failure(
+            "Assertion did not complete within timeout or was interrupted"
           ))
         }
       }
@@ -447,7 +446,7 @@ class TestOrchestrator(
         println("[DEBUG] Failed assertions:")
         assertionResults.foreach { case (name, result) =>
           result match {
-            case AssertionResult.Failure(msg, _) =>
+            case AssertionResult.Failure(msg) =>
               println(s"  - $name: $msg")
             case _ =>
           }
