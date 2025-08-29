@@ -116,7 +116,7 @@ init-cluster() {
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
-    err "Rebuild the image (cd '$scripts/..' && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
+    err "Rebuild the image (cd '$scripts/..' && mvn test-compile && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
     exit 1
   fi
 
