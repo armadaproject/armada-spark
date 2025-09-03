@@ -156,6 +156,22 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("Basic python SparkPi job", E2ETest) {
+    E2ETestBuilder("python-spark-pi")
+      .withBaseConfig(baseConfig)
+      .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.file.upload.path"          -> "/tmp",
+          "spark.kubernetes.executor.disableConfigMap" -> "true"
+        )
+      )
+      .withExecutors(2)
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .run()
+  }
+
   test("SparkPi job using job templates", E2ETest) {
     E2ETestBuilder("spark-pi-templates")
       .withBaseConfig(baseConfig)
