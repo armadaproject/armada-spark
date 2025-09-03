@@ -36,15 +36,16 @@ import org.scalatest.Assertions._
   * }}}
   */
 class E2ETestBuilder(testName: String) {
-  private var sparkConfs           = Map.empty[String, String]
-  private var assertions           = Seq.empty[TestAssertion]
-  private var baseQueueName        = "e2e-template"
-  private var imageName            = "spark:armada"
-  private var masterUrl            = "armada://localhost:30002"
-  private var lookoutUrl           = "http://localhost:30000"
-  private var scalaVersion         = "2.13"
-  private var sparkVersion         = "3.5.5"
-  private var failFastOnPodFailure = true
+  private var sparkConfs                   = Map.empty[String, String]
+  private var assertions                   = Seq.empty[TestAssertion]
+  private var baseQueueName                = "e2e-template"
+  private var imageName                    = "spark:armada"
+  private var masterUrl                    = "armada://localhost:30002"
+  private var lookoutUrl                   = "http://localhost:30000"
+  private var scalaVersion                 = "2.13"
+  private var sparkVersion                 = "3.5.5"
+  private var failFastOnPodFailure         = true
+  private var pythonScript: Option[String] = None
 
   // Helper to merge labels with existing configuration
   private def addLabels(configKey: String, newLabels: Map[String, String]): E2ETestBuilder = {
@@ -78,6 +79,12 @@ class E2ETestBuilder(testName: String) {
 
   def withExecutors(count: Int): E2ETestBuilder = {
     withSparkConf("spark.executor.instances", count.toString)
+  }
+
+  /** Use Python script instead of Scala class */
+  def withPythonScript(script: String): E2ETestBuilder = {
+    pythonScript = Some(script)
+    this
   }
 
   /** Enable driver ingress with annotations */
@@ -237,7 +244,8 @@ class E2ETestBuilder(testName: String) {
       sparkVersion = sparkVersion,
       sparkConfs = sparkConfs,
       assertions = assertions,
-      failFastOnPodFailure = failFastOnPodFailure
+      failFastOnPodFailure = failFastOnPodFailure,
+      pythonScript = pythonScript
     )
   }
 
