@@ -92,7 +92,7 @@ object K8sValidator {
       else if (value.isEmpty) true
       else
         value.length <= maxNameLength &&
-        namePattern.matcher(value).matches()
+        this.namePattern.matcher(value).matches()
     }
   }
 
