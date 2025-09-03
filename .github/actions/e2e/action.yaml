@@ -71,6 +71,14 @@ runs:
       mvn --batch-mode --update-snapshots dependency:go-offline
       echo "::endgroup::"
     shell: bash
+  - name: Build test jars
+    working-directory: armada-spark
+    run: |
+      # Build test jars
+      echo "::group::mvn test-compile"
+      mvn --batch-mode test-compile
+      echo "::endgroup::"
+    shell: bash
   - name: Build package
     working-directory: armada-spark
     run: |

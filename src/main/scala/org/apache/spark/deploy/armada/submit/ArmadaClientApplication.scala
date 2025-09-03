@@ -57,27 +57,29 @@ import org.apache.spark.deploy.armada.Config.{
   commaSeparatedLabelsToMap
 }
 import io.armadaproject.armada.ArmadaClient
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import io.fabric8.kubernetes.client.utils.Serialization
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.armada.submit.ArmadaClientApplication.DRIVER_PORT
 import org.apache.spark.deploy.k8s.submit.{
   JavaMainAppResource,
-  KubernetesDriverBuilder,
   MainAppResource,
   PythonMainAppResource,
   RMainAppResource
 }
-import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
+import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf, SparkPod}
 import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
-import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.deploy.k8s.features.{
+  KubernetesDriverCustomFeatureConfigStep,
+  KubernetesExecutorCustomFeatureConfigStep,
+  KubernetesFeatureConfigStep
+}
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
-import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
+import org.apache.spark.util.Utils
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -238,125 +240,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .orElse(jobTemplate.map(_.jobSetId).filter(_.nonEmpty))
       .getOrElse(conf.getAppId)
 
-    val (driverPodSpec, driverContainer)     = getDriverFeatureSteps(conf, clientArguments)
-    val (executorPodSpec, executorContainer) = getExecutorFeatureSteps(conf, clientArguments)
     ArmadaJobConfig(
       queue = finalQueue,
       jobSetId = finalJobSetId,
       jobTemplate = jobTemplate,
       driverJobItemTemplate = driverJobItemTemplate,
       executorJobItemTemplate = executorJobItemTemplate,
-      cliConfig = cliConfig,
-      driverFeatureStepPodSpec = driverPodSpec,
-      driverFeatureStepContainer = driverContainer,
-      executorFeatureStepPodSpec = executorPodSpec,
-      executorFeatureStepContainer = executorContainer
+      cliConfig = cliConfig
     )
-  }
-
-  /** Creates Kubernetes PodSpec and Container configurations for Spark executors.
-    *
-    * This method builds the executor specifications using Kubernetes feature steps. These use the
-    * fabric8 api which Armada doesn't support, so we then convert them to YAML, and then unmarshal
-    * them back to Kubernetes api used in Armada.
-    *
-    * @param conf
-    *   The Spark configuration
-    * @param clientArguments
-    *   The client arguments containing application details
-    * @return
-    *   A tuple of (Some(PodSpec), Some(Container)) for the executor
-    */
-  private[spark] def getExecutorFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
-    // Generate the feature step specs (in the fabric8 api)
-    val executorConf = new KubernetesExecutorConf(
-      sparkConf = conf.clone(),
-      appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
-      executorId = "0",
-      driverPod = None
-    )
-    val executorSpec = new KubernetesExecutorBuilder().buildFromFeatures(
-      executorConf,
-      new SecurityManager(conf),
-      new DefaultKubernetesClient(),
-      ResourceProfile.getOrCreateDefaultProfile(conf)
-    )
-
-    // Convert the fs pod to our api
-    val execPodString = Serialization.asYaml(executorSpec.pod.pod)
-    val execPod: k8s.io.api.core.v1.generated.Pod =
-      JobTemplateLoader.unmarshal(execPodString, classOf[Pod], "executor pod")
-
-    // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
-    executorSpec.pod.container.setVolumeMounts(null)
-
-    // Convert the fs container to our api
-    val execContainerString = Serialization.asYaml(executorSpec.pod.container)
-    val execContainer: k8s.io.api.core.v1.generated.Container =
-      JobTemplateLoader.unmarshal(execContainerString, classOf[Container], "executor container")
-    (Some(execPod.getSpec), Some(execContainer))
-  }
-
-  /** Creates Kubernetes PodSpec and Container configurations for Spark drivers.
-    *
-    * This method builds the driver specifications using Kubernetes feature steps. These use the
-    * fabric8 api which Armada doesn't support, so we then convert them to YAML, and then unmarshal
-    * them back to Kubernetes api used in Armada. The volume mounts are set to null due to
-    * unmarshalling issues. For Python applications, it handles special processing of spark-upload
-    * paths.
-    *
-    * @param conf
-    *   The Spark configuration
-    * @param clientArguments
-    *   The client arguments containing application details
-    * @return
-    *   A tuple of (Some(PodSpec), Some(Container)) for the driver
-    */
-  private[spark] def getDriverFeatureSteps(conf: SparkConf, clientArguments: ClientArguments) = {
-
-    // Generate the feature step specs, (in the fabric8 api
-    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
-      new KubernetesDriverConf(
-        sparkConf = conf.clone(),
-        appId = conf.get("spark.app.id", ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
-        mainAppResource = clientArguments.mainAppResource,
-        mainClass = clientArguments.mainClass,
-        appArgs = clientArguments.driverArgs,
-        proxyUser = clientArguments.proxyUser
-      ),
-      new DefaultKubernetesClient()
-    )
-
-    // Convert the fs pod to our api
-    val yamlString = Serialization.asYaml(driverSpec.pod.pod)
-    val pod: k8s.io.api.core.v1.generated.Pod =
-      JobTemplateLoader.unmarshal(yamlString, classOf[Pod], "driver")
-
-    // TODO_GBJ: volumes not unmarshalling correctly; maybe related to: https://github.com/G-Research/spark/issues/109
-    driverSpec.pod.container.setVolumeMounts(null)
-
-    // Convert the fs container to our api
-    val containerString = Serialization.asYaml(driverSpec.pod.container)
-    val container: k8s.io.api.core.v1.generated.Container = {
-      JobTemplateLoader.unmarshal(containerString, classOf[Container], "driver")
-    }
-
-    // TODO_GBJ: spark-k8s supports uploading local files, but armada doesn't seem to.
-    // For example, it tries to upload: /opt/spark/examples/src/main/python/pi.py
-    // to something like: /tmp/spark-upload-47a261f4-4277-4484-b04e-2994b41f01dd/pi.py
-
-    // We need to investigate further.  For now, just revert the upload directory to
-    // the initial app resource.
-    val newArgs = container.args
-      .map(arg =>
-        if (arg.contains("spark-upload"))
-          clientArguments.mainAppResource match {
-            case PythonMainAppResource(resource) => resource
-            case _                               => arg
-          }
-        else arg
-      )
-    (Some(pod.getSpec), Some(container.withArgs(newArgs)))
   }
 
   private[submit] def submitArmadaJob(
@@ -405,7 +296,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator,
       clientArguments,
       primaryResource,
-      confSeq
+      confSeq,
+      conf
     )
     val driverJobId =
       submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
@@ -416,10 +308,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.cliConfig.executorLabels
     )
 
+    val executorAnnotations = buildAnnotations(
+      configGenerator,
+      templateAnnotations,
+      armadaJobConfig.cliConfig.nodeUniformityLabel,
+      executorCount
+    )
+
     val executorResolvedConfig = resolveJobConfig(
       armadaJobConfig.cliConfig,
       armadaJobConfig.executorJobItemTemplate,
-      runtimeAnnotations,
+      executorAnnotations,
       executorLabels,
       conf
     )
@@ -431,7 +330,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator,
       driverHostname,
       executorCount,
-      conf
+      conf,
+      driver
     )
     val executorJobIds = submitExecutors(
       armadaClient,
@@ -769,11 +669,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobTemplate: Option[api.submit.JobSubmitRequest],
       driverJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
       executorJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
-      cliConfig: CLIConfig,
-      driverFeatureStepPodSpec: Option[PodSpec] = None,
-      driverFeatureStepContainer: Option[Container] = None,
-      executorFeatureStepPodSpec: Option[PodSpec] = None,
-      executorFeatureStepContainer: Option[Container] = None
+      cliConfig: CLIConfig
   )
 
   private def removeAuthToken(seq: Seq[String]): Seq[String] = {
@@ -786,11 +682,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       clientArguments: ClientArguments,
       primaryResource: Seq[String],
-      confSeq: Seq[String]
+      confSeq: Seq[String],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
     val driverArgs = removeAuthToken(confSeq) ++ primaryResource ++ clientArguments.driverArgs
 
-    mergeDriverTemplate(
+    val driverJobItem = mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
@@ -800,6 +697,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator.getVolumeMounts,
       driverArgs
     )
+
+    applyFeatureSteps(driverJobItem, conf, isDriver = true, Some(clientArguments))
   }
 
   private[submit] def createExecutorJobs(
@@ -808,10 +707,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       driverHostname: String,
       executorCount: Int,
-      conf: SparkConf
+      conf: SparkConf,
+      driverJobItem: api.submit.JobSubmitRequestItem
   ): Seq[api.submit.JobSubmitRequestItem] = {
     ArmadaUtils.getExecutorRange(executorCount).map { index =>
-      mergeExecutorTemplate(
+      val executorJobItem = mergeExecutorTemplate(
         armadaJobConfig.executorJobItemTemplate,
         index,
         resolvedConfig,
@@ -821,6 +721,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ArmadaClientApplication.DRIVER_PORT,
         configGenerator.getVolumes,
         conf
+      )
+
+      applyFeatureSteps(
+        executorJobItem,
+        conf,
+        isDriver = false,
+        None,
+        Some(index),
+        Some(driverJobItem)
       )
     }
   }
@@ -874,7 +783,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       additionalDriverArgs: Seq[String]
   ): api.submit.JobSubmitRequestItem = {
 
-    val workingTemplate = getWorkingTemplate(template, armadaJobConfig.driverFeatureStepPodSpec)
+    // Start with template or blank template - no feature steps yet
+    val workingTemplate                         = template.getOrElse(createBlankTemplate())
     val (templateVolumes, templateVolumeMounts) = extractTemplateVolumesAndMounts(workingTemplate)
     val mergedVolumes                           = templateVolumes ++ volumes
     val mergedVolumeMounts                      = templateVolumeMounts ++ volumeMounts
@@ -911,7 +821,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     )
 
-    val finalTemplate = workingTemplate
+    val templateBeforeFeatureSteps = workingTemplate
       .withPriority(resolvedConfig.priority)
       .withNamespace(resolvedConfig.namespace)
       .withLabels(resolvedConfig.labels)
@@ -920,25 +830,147 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withServices(finalServices)
 
     resolvedConfig.driverIngress match {
-      case Some(ingress) => finalTemplate.withIngress(Seq(ingress))
-      case None          => finalTemplate
+      case Some(ingress) => templateBeforeFeatureSteps.withIngress(Seq(ingress))
+      case None          => templateBeforeFeatureSteps
     }
   }
 
-  // Create a blank template if none provided
-  private def getWorkingTemplate(
-      template: Option[JobSubmitRequestItem],
-      featureStepPodSpec: Option[PodSpec]
+  private def createBlankTemplate(): JobSubmitRequestItem = {
+    api.submit
+      .JobSubmitRequestItem()
+      .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
+      .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
+      .withLabels(Map.empty)
+      .withAnnotations(Map.empty)
+      .withPodSpec(PodSpec().withNodeSelector(Map.empty))
+  }
+
+  /** Apply Kubernetes feature steps to a JobSubmitRequestItem.
+    *
+    * This method takes a fully configured job (with template, CLI overrides, and defaults applied)
+    * and runs the configured feature steps on it. Feature steps can modify any aspect of the Pod,
+    * including adding sidecars, volumes, labels, annotations, etc.
+    *
+    * For executor feature steps that implement KubernetesExecutorCustomFeatureConfigStep, the
+    * driver Pod is created from the driver's JobSubmitRequestItem. This provides feature steps with
+    * access to the driver's pod specification.
+    *
+    * @param jobItem
+    *   The complete JobSubmitRequestItem
+    * @param conf
+    *   Spark configuration
+    * @param isDriver
+    *   Whether this is for a driver (true) or executor (false)
+    * @param clientArguments
+    *   Client arguments (only needed for driver)
+    * @param executorIndex
+    *   The executor index (only for executor pods)
+    * @param driverJobItem
+    *   The driver's JobSubmitRequestItem (only for executor pods)
+    * @return
+    *   The JobSubmitRequestItem with feature step modifications applied
+    */
+  private def applyFeatureSteps(
+      jobItem: JobSubmitRequestItem,
+      conf: SparkConf,
+      isDriver: Boolean,
+      clientArguments: Option[ClientArguments] = None,
+      executorIndex: Option[Int] = None,
+      driverJobItem: Option[JobSubmitRequestItem] = None
   ): JobSubmitRequestItem = {
-    template.getOrElse {
-      api.submit
-        .JobSubmitRequestItem()
-        .withPriority(ArmadaClientApplication.DEFAULT_PRIORITY)
-        .withNamespace(ArmadaClientApplication.DEFAULT_NAMESPACE)
-        .withLabels(Map.empty)
-        .withAnnotations(Map.empty)
-        .withPodSpec(featureStepPodSpec.getOrElse(PodSpec().withNodeSelector(Map.empty)))
+    val featureStepConfig = if (isDriver) {
+      "spark.kubernetes.driver.pod.featureSteps"
+    } else {
+      "spark.kubernetes.executor.pod.featureSteps"
     }
+
+    if (!conf.contains(featureStepConfig)) {
+      return jobItem
+    }
+
+    val fabric8Pod = createFabric8PodFromJobItem(jobItem)
+    var sparkPod   = SparkPod(fabric8Pod, fabric8Pod.getSpec.getContainers.get(0))
+
+    val featureStepClassNames = conf.get(featureStepConfig).split(",").map(_.trim)
+
+    featureStepClassNames.foreach { className =>
+      val feature = Utils.classForName[Any](className).getConstructor().newInstance()
+
+      val featureStep = feature match {
+        // For driver-specific feature steps
+        case d: KubernetesDriverCustomFeatureConfigStep if isDriver =>
+          d.init(
+            new KubernetesDriverConf(
+              sparkConf = conf.clone(),
+              appId = conf.getAppId,
+              mainAppResource = clientArguments.get.mainAppResource,
+              mainClass = clientArguments.get.mainClass,
+              appArgs = clientArguments.get.driverArgs,
+              proxyUser = clientArguments.flatMap(_.proxyUser)
+            )
+          )
+          d
+        // For executor-specific feature steps
+        case e: KubernetesExecutorCustomFeatureConfigStep if !isDriver =>
+          val driverPod = driverJobItem.map(createFabric8PodFromJobItem)
+          e.init(
+            new KubernetesExecutorConf(
+              sparkConf = conf.clone(),
+              appId = conf.getAppId,
+              executorId = executorIndex.getOrElse(0).toString,
+              driverPod = driverPod
+            )
+          )
+          e
+        // For generic feature steps
+        case f: KubernetesFeatureConfigStep =>
+          f
+        case _ =>
+          throw new SparkException(s"Failed to initialize feature step: $className")
+      }
+
+      sparkPod = featureStep.configurePod(sparkPod)
+    }
+
+    updateJobItemFromFabric8Pod(jobItem, sparkPod.pod)
+  }
+
+  /** Create a fabric8 Pod from a JobSubmitRequestItem */
+  private def createFabric8PodFromJobItem(
+      jobItem: JobSubmitRequestItem
+  ): io.fabric8.kubernetes.api.model.Pod = {
+    val pod      = new io.fabric8.kubernetes.api.model.Pod()
+    val metadata = new io.fabric8.kubernetes.api.model.ObjectMeta()
+
+    metadata.setLabels(jobItem.labels.asJava)
+    metadata.setAnnotations(jobItem.annotations.asJava)
+    metadata.setNamespace(jobItem.namespace)
+    pod.setMetadata(metadata)
+
+    jobItem.podSpec.foreach { protobufSpec =>
+      val fabric8Spec = PodSpecConverter.protobufToFabric8(protobufSpec)
+      pod.setSpec(fabric8Spec)
+    }
+
+    pod
+  }
+
+  /** Update a JobSubmitRequestItem from a modified fabric8 Pod */
+  private def updateJobItemFromFabric8Pod(
+      jobItem: JobSubmitRequestItem,
+      fabric8Pod: io.fabric8.kubernetes.api.model.Pod
+  ): JobSubmitRequestItem = {
+    val metadata = fabric8Pod.getMetadata
+
+    val updatedLabels = Option(metadata.getLabels).map(_.asScala.toMap).getOrElse(Map.empty)
+    val updatedAnnotations =
+      Option(metadata.getAnnotations).map(_.asScala.toMap).getOrElse(Map.empty)
+    val updatedPodSpec = PodSpecConverter.fabric8ToProtobuf(fabric8Pod.getSpec)
+
+    jobItem
+      .withLabels(updatedLabels)
+      .withAnnotations(updatedAnnotations)
+      .withPodSpec(updatedPodSpec)
   }
 
   /** Merges an executor job item template with runtime configuration. If no template is provided,
@@ -956,7 +988,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
-    val workingTemplate = getWorkingTemplate(template, armadaJobConfig.executorFeatureStepPodSpec)
+    val workingTemplate = template.getOrElse(createBlankTemplate())
 
     val resolvedTimeout = resolvedConfig.executorConnectionTimeout
     val finalInitContainer = newExecutorInitContainer(
@@ -1059,8 +1091,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       }
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
 
-    val fsEnvVars = armadaJobConfig.driverFeatureStepContainer.get.env
-    armadaJobConfig.driverFeatureStepContainer.get
+    val containerImage = armadaJobConfig.cliConfig.containerImage
+      .orElse(extractContainerImageFromTemplate(armadaJobConfig.driverJobItemTemplate))
+      .get // Safe to use .get because validation ensures container image exists
+    Container()
+      .withName("spark-kubernetes-driver")
+      .withImage(containerImage)
+      .withImagePullPolicy("IfNotPresent")
       .withArgs(
         Seq(
           "driver",
@@ -1076,11 +1113,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(volumeMounts)
-      .withEnv(mergeEnvVars(fsEnvVars, envVars))
+      .withEnv(envVars)
       .withResources(
         ResourceRequirements(
           requests = driverRequests,
           limits = driverLimits
+        )
+      )
+      .withPorts(
+        Seq(
+          ContainerPort(
+            containerPort = Some(port),
+            name = Some("driver"),
+            protocol = Some("TCP")
+          )
         )
       )
   }
@@ -1141,6 +1187,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           .getOrElse(Quantity(Option(DEFAULT_CORES)))
       }
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
+
     val envVars = Seq(
       EnvVar().withName("SPARK_EXECUTOR_ID").withValue(index.toString),
       EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
@@ -1156,9 +1203,26 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_POD_IP").withValueFrom(source)
     ) ++ nodeUniformityLabel
       .map(label => EnvVar().withName("ARMADA_SPARK_GANG_NODE_UNIFORMITY_LABEL").withValue(label))
-    val fsEnvVars = armadaJobConfig.executorFeatureStepContainer.get.env
-    armadaJobConfig.executorFeatureStepContainer.get
-      .withEnv(mergeEnvVars(fsEnvVars, envVars ++ javaOptEnvVars))
+
+    val containerImage = armadaJobConfig.cliConfig.containerImage
+      .orElse(extractContainerImageFromTemplate(armadaJobConfig.executorJobItemTemplate))
+      .get // Safe to use .get because validation ensures container image exists
+    Container()
+      .withName("spark-kubernetes-executor")
+      .withImage(containerImage)
+      .withImagePullPolicy("IfNotPresent")
+      .withArgs(
+        Seq(
+          "executor",
+          "--cores",
+          sparkExecutorCores,
+          "--app-id",
+          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
+          "--hostname",
+          "$(SPARK_EXECUTOR_POD_IP)"
+        )
+      )
+      .withEnv(envVars ++ javaOptEnvVars)
       .withResources(
         ResourceRequirements(
           requests = executorRequests,

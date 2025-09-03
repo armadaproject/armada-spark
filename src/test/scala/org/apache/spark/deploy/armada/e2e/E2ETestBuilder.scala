@@ -17,6 +17,7 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import io.fabric8.kubernetes.api.model.Pod
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import org.scalatest.Assertions._
@@ -115,14 +116,12 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert exact executor count */
   def assertExecutorCount(expected: Int): E2ETestBuilder = {
-    // Ensure executors have spark-role label for assertions to work
     addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorCountAssertion(expected)
     this
   }
 
   def assertDriverExists(): E2ETestBuilder = {
-    // Ensure driver has spark-role label for assertions to work
     addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverExistsAssertion()
     this
@@ -130,7 +129,6 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert driver has specific label */
   def assertDriverHasLabel(key: String, value: String): E2ETestBuilder = {
-    // Ensure driver has spark-role label for assertions to work
     addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverLabelAssertion(Map(key -> value))
     this
@@ -138,7 +136,6 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert executors have specific label */
   def assertExecutorsHaveLabel(key: String, value: String): E2ETestBuilder = {
-    // Ensure executors have spark-role label for assertions to work
     addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorLabelAssertion(Map(key -> value))
     this
@@ -195,7 +192,6 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert driver has specific annotation */
   def assertDriverHasAnnotation(key: String, value: String): E2ETestBuilder = {
-    // Ensure driver has spark-role label for assertions to work
     addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverAnnotationAssertion(Map(key -> value))
     this
@@ -203,7 +199,6 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert executors have specific annotation */
   def assertExecutorsHaveAnnotation(key: String, value: String): E2ETestBuilder = {
-    // Ensure executors have spark-role label for assertions to work
     addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorAnnotationAssertion(Map(key -> value))
     this
@@ -222,6 +217,20 @@ class E2ETestBuilder(testName: String) {
     annotations.foreach { case (key, value) =>
       assertExecutorsHaveAnnotation(key, value)
     }
+    this
+  }
+
+  /** Assert driver pod matches a predicate */
+  def withDriverPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
+    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
+    assertions :+= new DriverPodAssertion(predicate)
+    this
+  }
+
+  /** Assert executor pods match a predicate */
+  def withExecutorPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
+    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
+    assertions :+= new ExecutorPodAssertion(predicate)
     this
   }
 
