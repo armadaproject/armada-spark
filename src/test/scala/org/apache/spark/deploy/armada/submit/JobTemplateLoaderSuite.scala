@@ -17,9 +17,6 @@
 
 package org.apache.spark.deploy.armada.submit
 
-import api.submit.{JobSubmitRequest, JobSubmitRequestItem}
-import k8s.io.api.core.v1.generated.{PodSpec, SecretKeySelector}
-import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -173,6 +170,28 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
         |      operator: "Equal"
         |      value: "spark"
         |      effect: "NoSchedule"
+        |  containers:
+        |    - name: spark-executor
+        |      image: spark:3.5.0
+        |      resources:
+        |        requests:
+        |          cpu: "500m"
+        |          memory: "1Gi"
+        |        limits:
+        |          cpu: "2"
+        |          memory: "4Gi"
+        |          nvidia.com/gpu: "1"
+        |      env:
+        |        - name: SECRET_ENV
+        |          valueFrom:
+        |            secretKeyRef:
+        |              name: my-secret
+        |              key: password
+        |        - name: CONFIG_VALUE
+        |          valueFrom:
+        |            configMapKeyRef:
+        |              name: my-config
+        |              key: database-url
         |""".stripMargin
 
     val templateFile = createTemplateFile("podspec-template.yaml", yamlContent)
@@ -182,9 +201,29 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.namespace shouldBe "default"
     result.labels should contain("app" -> "spark-executor")
     result.podSpec should not be empty
-    result.podSpec.get.restartPolicy shouldBe Some("Never")
-    result.podSpec.get.terminationGracePeriodSeconds shouldBe Some(30)
-    result.podSpec.get.nodeSelector should contain("kubernetes.io/hostname" -> "worker-node-1")
+    val podSpec = result.podSpec.get
+    podSpec.restartPolicy shouldBe Some("Never")
+    podSpec.terminationGracePeriodSeconds shouldBe Some(30)
+    podSpec.nodeSelector should contain("kubernetes.io/hostname" -> "worker-node-1")
+
+    val container = podSpec.containers.head
+    val resources = container.resources.get
+    resources.requests("cpu").getString shouldBe "500m"
+    resources.requests("memory").getString shouldBe "1Gi"
+    resources.limits("cpu").getString shouldBe "2"
+    resources.limits("memory").getString shouldBe "4Gi"
+    resources.limits("nvidia.com/gpu").getString shouldBe "1"
+
+    container.env should have size 2
+    val secretEnv = container.env.find(_.name.contains("SECRET_ENV")).get
+    secretEnv.valueFrom.get.secretKeyRef.get.getLocalObjectReference.getName shouldBe "my-secret"
+    secretEnv.valueFrom.get.secretKeyRef.get.getKey shouldBe "password"
+
+    val configEnv = container.env.find(_.name.contains("CONFIG_VALUE")).get
+    configEnv.valueFrom.get.configMapKeyRef.get.localObjectReference.flatMap(_.name) shouldBe Some(
+      "my-config"
+    )
+    configEnv.valueFrom.get.configMapKeyRef.get.key shouldBe Some("database-url")
   }
 
   test("should fail with clear errors for invalid inputs") {
@@ -250,91 +289,65 @@ class JobTemplateLoaderSuite extends AnyFunSuite with BeforeAndAfter with Matche
     result.labels should contain("source" -> "file-uri-test")
   }
 
-  test("should correctly deserialize Quantity values") {
-    // Define expected resource values
-    val expectedRequestCpu     = "500m"
-    val expectedRequestMemory  = "1Gi"
-    val expectedRequestStorage = "2Gi"
-    val expectedLimitCpu       = "2"
-    val expectedLimitMemory    = "4Gi"
-    val expectedLimitGpu       = "1"
-
+  test("should support all Kubernetes volume types through fabric8 parsing") {
     val yamlContent =
-      s"""priority: 1.0
+      """priority: 1.0
         |namespace: default
         |podSpec:
-        |  containers:
-        |    - name: test-container
-        |      resources:
-        |        requests:
-        |          cpu: $expectedRequestCpu
-        |          memory: $expectedRequestMemory
-        |          ephemeral-storage: $expectedRequestStorage
-        |        limits:
-        |          cpu: "$expectedLimitCpu"
-        |          memory: $expectedLimitMemory
-        |          nvidia.com/gpu: "$expectedLimitGpu"
+        |  volumes:
+        |    - name: config-volume
+        |      configMap:
+        |        name: my-config
+        |        defaultMode: 420
+        |        optional: false
+        |    - name: host-volume
+        |      hostPath:
+        |        path: /data
+        |        type: Directory
+        |    - name: csi-volume
+        |      csi:
+        |        driver: csi.example.com
+        |        fsType: ext4
+        |        readOnly: false
+        |        volumeAttributes:
+        |          key1: value1
+        |          key2: value2
+        |    - name: empty-dir
+        |      emptyDir:
+        |        medium: Memory
+        |        sizeLimit: 1Gi
         |""".stripMargin
 
-    val templateFile = createTemplateFile("quantity-test.yaml", yamlContent)
+    val templateFile = createTemplateFile("volumes-test.yaml", yamlContent)
     val result       = JobTemplateLoader.loadJobItemTemplate(templateFile.getAbsolutePath)
 
-    // Verify podSpec is not empty
     result.podSpec should not be empty
+    val podSpec = result.podSpec.get
 
-    // Get the container resources
-    val container = result.podSpec.get.containers.head
-    container.resources should not be empty
-    val resources = container.resources.get
+    podSpec.volumes should have size 4
 
-    // Verify requests
-    resources.requests should contain key "cpu"
-    resources.requests should contain key "memory"
-    resources.requests should contain key "ephemeral-storage"
+    val configVolume = podSpec.volumes.find(_.name.contains("config-volume")).get
+    val configMap    = configVolume.volumeSource.get.configMap.get
+    configMap.localObjectReference.flatMap(_.name) shouldBe Some("my-config")
+    configMap.defaultMode shouldBe Some(420)
+    configMap.optional shouldBe Some(false)
 
-    // Verify limits
-    resources.limits should contain key "cpu"
-    resources.limits should contain key "memory"
-    resources.limits should contain key "nvidia.com/gpu"
+    val hostVolume = podSpec.volumes.find(_.name.contains("host-volume")).get
+    val hostPath   = hostVolume.volumeSource.get.hostPath.get
+    hostPath.path shouldBe Some("/data")
+    hostPath.`type` shouldBe Some("Directory")
 
-    resources.requests("cpu").getString shouldBe expectedRequestCpu
-    resources.requests("memory").getString shouldBe expectedRequestMemory
-    resources.requests("ephemeral-storage").getString shouldBe expectedRequestStorage
-    resources.limits("cpu").getString shouldBe expectedLimitCpu
-    resources.limits("memory").getString shouldBe expectedLimitMemory
-    resources.limits("nvidia.com/gpu").getString shouldBe expectedLimitGpu
-  }
+    val csiVolume = podSpec.volumes.find(_.name.contains("csi-volume")).get
+    val csi       = csiVolume.volumeSource.get.csi.get
+    csi.driver shouldBe Some("csi.example.com")
+    csi.fsType shouldBe Some("ext4")
+    csi.readOnly shouldBe Some(false)
+    csi.volumeAttributes should contain("key1" -> "value1")
+    csi.volumeAttributes should contain("key2" -> "value2")
 
-  test("should correctly deserialize SecretKeySelector with elided LocalObjectReference ") {
-    val secretName = "secretName"
-    val secretKey  = "secretKey"
-    val yamlWithCompleteSecretKeySelector =
-      s"""priority: 1.0
-        |namespace: default
-        |podSpec:
-        |  containers:
-        |    - name: test-container
-        |      env:
-        |        - name: SECRET_ENV
-        |          valueFrom:
-        |            secretKeyRef:
-        |              name: $secretName
-        |              key: $secretKey
-        |""".stripMargin
-
-    val completeFile =
-      createTemplateFile("complete-secret-key-selector.yaml", yamlWithCompleteSecretKeySelector)
-    val completeResult = JobTemplateLoader.loadJobItemTemplate(completeFile.getAbsolutePath)
-
-    val secretKeyRef = for {
-      podSpec      <- completeResult.podSpec
-      container    <- podSpec.containers.headOption
-      env          <- container.env.headOption
-      valueFrom    <- env.valueFrom
-      secretKeyRef <- valueFrom.secretKeyRef
-    } yield secretKeyRef
-
-    secretKeyRef.get.getLocalObjectReference.getName shouldBe secretName
-    secretKeyRef.get.getKey shouldBe secretKey
+    val emptyDirVolume = podSpec.volumes.find(_.name.contains("empty-dir")).get
+    val emptyDir       = emptyDirVolume.volumeSource.get.emptyDir.get
+    emptyDir.medium shouldBe Some("Memory")
+    emptyDir.sizeLimit should not be empty
   }
 }
