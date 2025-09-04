@@ -28,10 +28,10 @@ import com.fasterxml.jackson.databind.{
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
-import k8s.io.api.core.v1.generated.{LocalObjectReference, SecretKeySelector}
+import k8s.io.api.core.v1.generated.PodSpec
+import io.fabric8.kubernetes.api.model
 
-import java.io.{File, InputStream}
+import java.io.File
 import java.net.{HttpURLConnection, URL}
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -53,47 +53,29 @@ private[spark] object JobTemplateLoader {
     mapper.registerModule(DefaultScalaModule)
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    // Register custom deserializers
+    // The generated Scala classes from the PodSpec proto differ from standard Kubernetes PodSpec manifest and fabric8 PodSpec model.
+    // We use a custom mapper which first deserializes to fabric8 PodSpec, then converts to the protobuf PodSpec using PodSpecConverter.
     val module = new SimpleModule()
-    module.addDeserializer(classOf[Quantity], new QuantityDeserializer())
-    module.addDeserializer(classOf[SecretKeySelector], new SecretKeySelectorDeserializer())
+    module.addDeserializer(classOf[PodSpec], new PodSpecDeserializer())
     mapper.registerModule(module)
 
     mapper
   }
 
-  /** Custom deserializer for Quantity objects. Handles converting string values like '1433Mi' into
-    * Quantity objects.
+  /** Custom deserializer for PodSpec objects.
+    *
+    * Uses fabric8 Kubernetes client models, then converts to protobuf using PodSpecConverter.
     */
-  private class QuantityDeserializer extends JsonDeserializer[Quantity] {
+  private class PodSpecDeserializer extends JsonDeserializer[PodSpec] {
     @throws(classOf[JsonProcessingException])
-    override def deserialize(p: JsonParser, ctxt: DeserializationContext): Quantity = {
-      Some(p.getValueAsString)
-        .filter(s => s != null && s.nonEmpty)
-        .map(s => new Quantity(Option(s)))
-        .orNull
-    }
-  }
-
-  /** Custom deserializer for SecretKeySelector objects. Handles the case where the
-    * localObjectReference is elided.
-    */
-  private class SecretKeySelectorDeserializer extends JsonDeserializer[SecretKeySelector] {
-    @throws(classOf[JsonProcessingException])
-    override def deserialize(p: JsonParser, ctxt: DeserializationContext): SecretKeySelector = {
-      // Use the codec to read the JSON as a tree
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): PodSpec = {
       val node = p.getCodec.readTree(p).asInstanceOf[JsonNode]
 
-      // Extract the key field
-      val key = Option(node.get("key")).map(_.asText())
+      // Convert JsonNode directly to fabric8 PodSpec using Jackson's treeToValue
+      val mapper         = p.getCodec.asInstanceOf[ObjectMapper]
+      val fabric8PodSpec = mapper.treeToValue(node, classOf[model.PodSpec])
 
-      // Extract the localObjectReference (which might be elided)
-      val localObjectRef = Option(node.get("name"))
-        .filter(n => Option(n.asText()).exists(_.nonEmpty))
-        .map(n => new LocalObjectReference(Option(n.asText())))
-
-      // Create a new SecretKeySelector with the extracted fields
-      new SecretKeySelector(localObjectRef, key)
+      PodSpecConverter.fabric8ToProtobuf(fabric8PodSpec)
     }
   }
 
@@ -152,7 +134,7 @@ private[spark] object JobTemplateLoader {
       connection.setConnectTimeout(10000) // 10 seconds
       connection.setReadTimeout(30000)    // 30 seconds
 
-      val inputStream: InputStream = connection.getInputStream
+      val inputStream = connection.getInputStream
       try {
         Source.fromInputStream(inputStream, "UTF-8").mkString
       } finally {
@@ -161,7 +143,10 @@ private[spark] object JobTemplateLoader {
     } match {
       case Success(content) => content
       case Failure(exception) =>
-        throw new RuntimeException(s"Failed to load template from URL: $url", exception)
+        throw new RuntimeException(
+          s"Failed to load template from URL: $url (${exception.getClass.getSimpleName}: ${exception.getMessage})",
+          exception
+        )
     }
   }
 
@@ -179,7 +164,7 @@ private[spark] object JobTemplateLoader {
         throw new RuntimeException(s"Cannot read template file: $filePath")
       }
 
-      val source: Source = Source.fromFile(file, "UTF-8")
+      val source = Source.fromFile(file, "UTF-8")
       try {
         source.mkString
       } finally {
@@ -188,7 +173,10 @@ private[spark] object JobTemplateLoader {
     } match {
       case Success(content) => content
       case Failure(exception) =>
-        throw new RuntimeException(s"Failed to load template from file: $filePath", exception)
+        throw new RuntimeException(
+          s"Failed to load template from file: $filePath (${exception.getClass.getSimpleName}: ${exception.getMessage})",
+          exception
+        )
     }
   }
 
@@ -205,15 +193,15 @@ private[spark] object JobTemplateLoader {
     * @return
     *   Parsed template object
     */
-  def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
+  private def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
     Try {
       yamlMapper.readValue(content, clazz)
     } match {
       case Success(template) => template
       case Failure(exception) =>
         throw new RuntimeException(
-          s"Failed to parse template as YAML from: $templatePath. " +
-            s"Error: ${exception.getMessage}",
+          s"Failed to parse template as YAML from: $templatePath " +
+            s"(${exception.getClass.getSimpleName}: ${exception.getMessage})",
           exception
         )
     }
