@@ -252,6 +252,12 @@ private[spark] object Config {
       )
       .createOptional
 
+  val ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.initContainer.image")
+      .doc("The container image to use for executor init containers. Defaults to busybox.")
+      .stringConf
+      .createWithDefault("busybox")
+
   val ARMADA_SPARK_POD_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.pod.labels")
       .doc(

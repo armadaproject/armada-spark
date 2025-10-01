@@ -18,6 +18,7 @@
 package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
+import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import org.scalatest.Assertions._
@@ -114,29 +115,30 @@ class E2ETestBuilder(testName: String) {
     withSparkConf("spark.armada.scheduling.nodeSelectors", selectorString)
   }
 
+  /** Submit the job as a gang-scheduled job with the specified node uniformity label */
+  def withGangJob(nodeUniformityLabel: String): E2ETestBuilder = {
+    withSparkConf("spark.armada.scheduling.nodeUniformity", nodeUniformityLabel)
+  }
+
   /** Assert exact executor count */
   def assertExecutorCount(expected: Int): E2ETestBuilder = {
-    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorCountAssertion(expected)
     this
   }
 
   def assertDriverExists(): E2ETestBuilder = {
-    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverExistsAssertion()
     this
   }
 
   /** Assert driver has specific label */
   def assertDriverHasLabel(key: String, value: String): E2ETestBuilder = {
-    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverLabelAssertion(Map(key -> value))
     this
   }
 
   /** Assert executors have specific label */
   def assertExecutorsHaveLabel(key: String, value: String): E2ETestBuilder = {
-    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorLabelAssertion(Map(key -> value))
     this
   }
@@ -192,14 +194,12 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert driver has specific annotation */
   def assertDriverHasAnnotation(key: String, value: String): E2ETestBuilder = {
-    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverAnnotationAssertion(Map(key -> value))
     this
   }
 
   /** Assert executors have specific annotation */
   def assertExecutorsHaveAnnotation(key: String, value: String): E2ETestBuilder = {
-    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorAnnotationAssertion(Map(key -> value))
     this
   }
@@ -222,16 +222,29 @@ class E2ETestBuilder(testName: String) {
 
   /** Assert driver pod matches a predicate */
   def withDriverPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
-    addLabels("spark.armada.driver.labels", Map("spark-role" -> "driver"))
     assertions :+= new DriverPodAssertion(predicate)
     this
   }
 
   /** Assert executor pods match a predicate */
   def withExecutorPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
-    addLabels("spark.armada.executor.labels", Map("spark-role" -> "executor"))
     assertions :+= new ExecutorPodAssertion(predicate)
     this
+  }
+
+  /** Assert that driver and all executors have correct gang scheduling annotations */
+  def assertGangJob(nodeUniformityLabel: String, expectedCardinality: Int): E2ETestBuilder = {
+    def hasValidGangAnnotations(pod: Pod): Boolean = {
+      val annotations = pod.getMetadata.getAnnotations
+      Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+      Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
+        .contains(expectedCardinality.toString) &&
+      Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+        .contains(nodeUniformityLabel)
+    }
+
+    withDriverPodAssertion(hasValidGangAnnotations)
+    withExecutorPodAssertion(hasValidGangAnnotations)
   }
 
   def build(): TestConfig = {

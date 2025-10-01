@@ -25,6 +25,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_DRIVER_REQUEST_CORES,
   ARMADA_DRIVER_REQUEST_MEMORY,
   ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
+  ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE,
   ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
   ARMADA_EXECUTOR_LIMIT_CORES,
   ARMADA_EXECUTOR_LIMIT_MEMORY,
@@ -274,11 +275,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
 
     val (templateAnnotations, templateLabels) = extractTemplateMetadata(armadaJobConfig.jobTemplate)
+
+    val maybeGangId =
+      armadaJobConfig.cliConfig.nodeUniformityLabel.map(_ => java.util.UUID.randomUUID.toString)
+
     val runtimeAnnotations = buildAnnotations(
       configGenerator,
       templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
-      executorCount
+      executorCount,
+      maybeGangId
     )
     val runtimeLabels = buildLabels(
       armadaJobConfig.cliConfig.podLabels,
@@ -316,7 +322,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator,
       templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
-      executorCount
+      executorCount,
+      maybeGangId
     )
 
     val executorResolvedConfig = resolveJobConfig(
@@ -999,7 +1006,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val finalInitContainer = newExecutorInitContainer(
       driverHostname,
       driverPort,
-      resolvedTimeout
+      resolvedTimeout,
+      conf.get(ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE)
     )
 
     val (templateVolumes, templateVolumeMounts) = extractTemplateVolumesAndMounts(workingTemplate)
@@ -1239,12 +1247,24 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private def newExecutorInitContainer(
       driverHost: String,
       driverPort: Int,
-      connectionTimeout: Duration
+      connectionTimeout: Duration,
+      image: String
   ) = {
+    val initContainerResources = ResourceRequirements(
+      requests = Map(
+        "cpu"    -> Quantity(Option("64m")),
+        "memory" -> Quantity(Option("64Mi"))
+      ),
+      limits = Map(
+        "cpu"    -> Quantity(Option("64m")),
+        "memory" -> Quantity(Option("64Mi"))
+      )
+    )
+
     Container()
       .withName("init")
       .withImagePullPolicy("IfNotPresent")
-      .withImage("busybox")
+      .withImage(image)
       .withResources(
         ResourceRequirements(
           requests =
@@ -1265,6 +1285,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withArgs(
         Seq(ArmadaUtils.initContainerCommand)
       )
+      .withResources(initContainerResources)
   }
 
   // Resolves a value based on precedence: CLI > Template > Default
@@ -1454,12 +1475,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       templateAnnotations: Map[String, String],
       nodeUniformityLabel: Option[String],
-      executorCount: Int
+      executorCount: Int,
+      gangId: Option[String]
   ): Map[String, String] = {
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .map(label =>
         GangSchedulingAnnotations(
-          None,
+          gangId,
           1 + executorCount,
           label
         )

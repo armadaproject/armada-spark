@@ -181,6 +181,7 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 - `spark.armada.executor.limit.memory` - Specify the hard memory limit for each executor pod.  (k8s syntax)
 - `spark.armada.executor.request.memory` - Specify the memory request for each executor pod.   (k8s syntax)
 - `spark.armada.executor.connectionTimeout` - Time to wait for the executor to connect to the driver. (Duration string)
+- `spark.armada.executor.initContainer.image` - The container image to use for executor init containers. Defaults to busybox.
 - `spark.armada.queue` - The name of the job queue to use for the Armada job.
 - `spark.armada.jobSetId` - The JobSet ID for which the driver and executor pods will be part of. 
           If not set, it will be derived from the Spark application name.
