@@ -60,6 +60,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     var success                      = false
     var lastError: Option[Exception] = None
 
+    Thread.sleep(60000) // 60 second delay before queue creation
     while (!success && attempts < 3) {
       try {
         val cmd = buildCommand(s"create queue $name")
