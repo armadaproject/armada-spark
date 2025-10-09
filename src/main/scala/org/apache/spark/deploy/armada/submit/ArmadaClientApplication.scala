@@ -1245,6 +1245,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withName("init")
       .withImagePullPolicy("IfNotPresent")
       .withImage("busybox")
+      .withResources(
+        ResourceRequirements(
+          requests = Map(
+            "memory" -> Quantity(Option(DEFAULT_MEM)),
+            "cpu" -> Quantity(Option(DEFAULT_CORES))),
+          limits = Map(
+            "memory" -> Quantity(Option(DEFAULT_MEM)),
+            "cpu" -> Quantity(Option(DEFAULT_CORES)))
+        )
+      )
       .withEnv(
         Seq(
           EnvVar().withName("SPARK_DRIVER_HOST").withValue(driverHost),
