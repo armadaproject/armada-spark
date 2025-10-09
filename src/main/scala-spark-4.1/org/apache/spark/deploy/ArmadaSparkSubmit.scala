@@ -1271,7 +1271,7 @@ object ArmadaSparkSubmit extends CommandLineUtils with Logging {
           super.doSubmit(args)
         } catch {
           case e: SparkUserAppException =>
-            exitFn(e.exitCode)
+            exitFn(e.exitCode, Some(e))
         }
       }
 
