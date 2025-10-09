@@ -1247,12 +1247,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withImage("busybox")
       .withResources(
         ResourceRequirements(
-          requests = Map(
-            "memory" -> Quantity(Option(DEFAULT_MEM)),
-            "cpu" -> Quantity(Option("100m"))),
-          limits = Map(
-            "memory" -> Quantity(Option(DEFAULT_MEM)),
-            "cpu" -> Quantity(Option("100m")))
+          requests =
+            Map("memory" -> Quantity(Option(DEFAULT_MEM)), "cpu" -> Quantity(Option("100m"))),
+          limits = Map("memory" -> Quantity(Option(DEFAULT_MEM)), "cpu" -> Quantity(Option("100m")))
         )
       )
       .withEnv(
