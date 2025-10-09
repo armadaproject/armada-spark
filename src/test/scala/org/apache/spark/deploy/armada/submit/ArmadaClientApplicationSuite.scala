@@ -447,7 +447,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
@@ -610,7 +611,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -887,7 +889,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -1022,7 +1025,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -1133,7 +1137,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val runtimeAnnotations = Map("runtime-key" -> "runtime-value")
@@ -1224,7 +1229,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1331,7 +1337,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None, // No template provided
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1454,7 +1461,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1536,7 +1544,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       jobTemplate = None,
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id"
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1622,7 +1631,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         runAsUser = None,
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
         executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
-      )
+      ),
+      applicationId = "armada-spark-app-id"
     )
 
     sparkConf.set("spark.executor.instances", "0")

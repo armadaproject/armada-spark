@@ -20,17 +20,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkSubmitOperation
 import org.apache.spark.util.CommandLineLoggingUtils
 
-private sealed trait ArmadaSubmitOperation extends CommandLineLoggingUtils {
-  // TODO: Tear this out
-}
-
-private class KillApplication extends ArmadaSubmitOperation {
-  // TODO: Fill in.
-}
-
-private class ListStatus extends ArmadaSubmitOperation {
-  // TODO: Fill in.
-}
+private sealed trait ArmadaSubmitOperation extends CommandLineLoggingUtils {}
 
 private[spark] class ArmadaSparkSubmitOperation
     extends SparkSubmitOperation
@@ -45,16 +35,14 @@ private[spark] class ArmadaSparkSubmitOperation
       sparkConf: SparkConf,
       op: ArmadaSubmitOperation
   ): Unit = {
-    printMessage("TODO!! ArmadaSparkSubmitOperation:execute!")
+    printMessage("Not yet implemented for Armada.")
     ()
   }
 
   override def kill(submissionId: String, conf: SparkConf): Unit = {
     printMessage(
-      s"TODO!! IMPLEMENT!! Armada: Submitting a request to kill submission " +
-        s"$submissionId in ${conf.get("spark.master")}. "
+      s"Kill not yet implemented in Armada."
     )
-    execute(submissionId, conf, new KillApplication)
   }
 
   override def printSubmissionStatus(
@@ -62,10 +50,8 @@ private[spark] class ArmadaSparkSubmitOperation
       conf: SparkConf
   ): Unit = {
     printMessage(
-      s"TODO!! IMPLEMENT!! Armada: Submitting a request for the status of submission" +
-        s" $submissionId in ${conf.get("spark.master")}."
+      s"Request Status not yet implemented in Armada."
     )
-    execute(submissionId, conf, new ListStatus)
   }
 
   override def supports(master: String): Boolean = {

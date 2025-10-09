@@ -325,7 +325,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     val isKubernetesClusterModeDriver = isKubernetesClient &&
       sparkConf.getBoolean("spark.kubernetes.submitInDriver", false)
     val isArmadaCluster = clusterManager == ARMADA && deployMode == CLUSTER
-    // TODO: Support armada & client?
     val isCustomClasspathInClusterModeDisallowed =
       !sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE) &&
         args.proxyUser != null &&
@@ -419,7 +418,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         downloadFileList(_, targetDir, sparkConf, hadoopConf)
       }.orNull
 
-      // TODO: May have to do the same/similar for Armada
       if (isKubernetesClusterModeDriver) {
         // Replace with the downloaded local jar path to avoid propagating hadoop compatible uris.
         // Executors will get the jars from the Spark file server.
@@ -592,12 +590,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       }
     }
 
-    // TODO: Support distributing R packages with standalone cluster
     if (args.isR && clusterManager == STANDALONE && !RUtils.rPackages.isEmpty) {
       error("Distributing R packages with standalone cluster is not supported.")
     }
 
-    // TODO: Support distributing R packages with mesos cluster
     if (args.isR && clusterManager == MESOS && !RUtils.rPackages.isEmpty) {
       error("Distributing R packages with mesos cluster is not supported.")
     }
@@ -660,7 +656,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       OptionAssigner(args.keytab, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = KEYTAB.key),
       OptionAssigner(args.pyFiles, ALL_CLUSTER_MGRS, CLUSTER, confKey = SUBMIT_PYTHON_FILES.key),
 
-      // TODO: Add Armada where appropriate.
       // Propagate attributes for dependency resolution at the driver side
       OptionAssigner(
         args.packages,

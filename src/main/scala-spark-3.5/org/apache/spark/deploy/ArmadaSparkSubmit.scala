@@ -336,7 +336,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
     val isKubernetesClusterModeDriver = isKubernetesClient &&
       sparkConf.getBoolean("spark.kubernetes.submitInDriver", false)
     val isArmadaCluster = clusterManager == ARMADA && deployMode == CLUSTER
-    // TODO: Support armada & client?
     val isCustomClasspathInClusterModeDisallowed =
       !sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE) &&
         args.proxyUser != null &&
@@ -432,7 +431,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
         downloadFileList(_, targetDir, sparkConf, hadoopConf)
       }.orNull
 
-      // TODO: May have to do the same/similar for Armada
       if (isKubernetesClusterModeDriver) {
         // SPARK-33748: this mimics the behaviour of Yarn cluster mode. If the driver is running
         // in cluster mode, the archives should be available in the driver's current working
@@ -619,12 +617,10 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       }
     }
 
-    // TODO: Support distributing R packages with standalone cluster
     if (args.isR && clusterManager == STANDALONE && !RUtils.rPackages.isEmpty) {
       error("Distributing R packages with standalone cluster is not supported.")
     }
 
-    // TODO: Support distributing R packages with mesos cluster
     if (args.isR && clusterManager == MESOS && !RUtils.rPackages.isEmpty) {
       error("Distributing R packages with mesos cluster is not supported.")
     }
@@ -703,7 +699,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
       OptionAssigner(args.keytab, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, confKey = KEYTAB.key),
       OptionAssigner(args.pyFiles, ALL_CLUSTER_MGRS, CLUSTER, confKey = SUBMIT_PYTHON_FILES.key),
 
-      // TODO: Add Armada where appropriate.
       // Propagate attributes for dependency resolution at the driver side
       OptionAssigner(
         args.packages,
@@ -1150,7 +1145,6 @@ private[spark] class ArmadaSparkSubmit extends Logging {
           logInfo("You need to build Spark with -Phive and -Phive-thriftserver.")
         } else if (childMainClass.contains("org.apache.spark.sql.connect")) {
           logInfo(s"Failed to load main class $childMainClass.")
-          // TODO(SPARK-42375): Should point out the user-facing page here instead.
           logInfo("You need to specify Spark Connect jars with --jars or --packages.")
         }
         throw new SparkUserAppException(CLASS_NOT_FOUND_EXIT_STATUS)

@@ -261,10 +261,6 @@ the added layer of Armada and its job system on top.
 A great overview of what a "cluster" is from Spark's perspective can be found
 [here](https://spark.apache.org/docs/latest/cluster-overview.html).
 
-```
-// TODO: armada-spark Architecture overview diagram.
-```
-
 The basic flow of an `armada-spark` execution is as follows:
 
 1. End-user calls `ArmadaSparkSubmit.main` via `spark-submit` or `spark-class`.
