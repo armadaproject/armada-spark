@@ -1249,10 +1249,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         ResourceRequirements(
           requests = Map(
             "memory" -> Quantity(Option(DEFAULT_MEM)),
-            "cpu" -> Quantity(Option(DEFAULT_CORES))),
+            "cpu" -> Quantity(Option("100m"))),
           limits = Map(
             "memory" -> Quantity(Option(DEFAULT_MEM)),
-            "cpu" -> Quantity(Option(DEFAULT_CORES)))
+            "cpu" -> Quantity(Option("100m")))
         )
       )
       .withEnv(
