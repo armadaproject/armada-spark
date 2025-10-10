@@ -30,7 +30,6 @@ import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import scala.collection.mutable
 
-// TODO: Implement for Armada
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext,
@@ -38,14 +37,11 @@ private[spark] class ArmadaClusterManagerBackend(
     masterURL: String
 ) extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
 
-  // FIXME
-  private val appId = "fake_app_id_FIXME"
-
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker  = new ExecutorTracker(new SystemClock(), initialExecutors)
 
   override def applicationId(): String = {
-    conf.getOption("spark.app.id").getOrElse(appId)
+    conf.getAppId
   }
 
   override def start(): Unit = {

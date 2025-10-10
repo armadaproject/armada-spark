@@ -82,6 +82,7 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import java.util.UUID
 
 /** Encapsulates arguments to the submission client.
   *
@@ -140,18 +141,22 @@ private[spark] object ClientArguments {
 }
 
 private[spark] object ArmadaClientApplication {
-  private[submit] val DRIVER_PORT   = 7078
-  private val DEFAULT_PRIORITY      = 0.0
-  private val DEFAULT_NAMESPACE     = "default"
-  private val DEFAULT_ARMADA_APP_ID = "armada-spark-app-id"
-  private val DEFAULT_RUN_AS_USER   = 185
+  private[submit] val DRIVER_PORT = 7078
+  private val DEFAULT_PRIORITY    = 0.0
+  private val DEFAULT_NAMESPACE   = "default"
+  private val DEFAULT_ARMADA_APP_ID =
+    s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
+  private val DEFAULT_RUN_AS_USER = 185
 
 }
 
 /** Main class and entry point of application submission in KUBERNETES mode.
   */
 private[spark] class ArmadaClientApplication extends SparkApplication {
-  // FIXME: Find the real way to log properly.
+
+  private def getApplicationId(conf: SparkConf) =
+    conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+
   private def log(msg: String): Unit = {
     // scalastyle:off println
     System.err.println(msg)
@@ -187,8 +192,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     }
 
-    // # FIXME: Need to check how this is launched whether to submit a job or
-    // to turn into driver / cluster manager mode.
     val (driverJobId, _) =
       submitArmadaJob(armadaClient, clientArguments, armadaJobConfig, sparkConf)
 
@@ -238,7 +241,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val finalJobSetId = cliConfig.jobSetId
       .filter(_.nonEmpty)
       .orElse(jobTemplate.map(_.jobSetId).filter(_.nonEmpty))
-      .getOrElse(conf.getAppId)
+      .getOrElse(getApplicationId(conf))
 
     ArmadaJobConfig(
       queue = finalQueue,
@@ -246,7 +249,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobTemplate = jobTemplate,
       driverJobItemTemplate = driverJobItemTemplate,
       executorJobItemTemplate = executorJobItemTemplate,
-      cliConfig = cliConfig
+      cliConfig = cliConfig,
+      applicationId = getApplicationId(conf)
     )
   }
 
@@ -669,7 +673,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       jobTemplate: Option[api.submit.JobSubmitRequest],
       driverJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
       executorJobItemTemplate: Option[api.submit.JobSubmitRequestItem],
-      cliConfig: CLIConfig
+      cliConfig: CLIConfig,
+      applicationId: String
   )
 
   private def removeAuthToken(seq: Seq[String]): Seq[String] = {
@@ -902,7 +907,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           d.init(
             new KubernetesDriverConf(
               sparkConf = conf.clone(),
-              appId = conf.getAppId,
+              appId = getApplicationId(conf),
               mainAppResource = clientArguments.get.mainAppResource,
               mainClass = clientArguments.get.mainClass,
               appArgs = clientArguments.get.driverArgs,
@@ -916,7 +921,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           e.init(
             new KubernetesExecutorConf(
               sparkConf = conf.clone(),
-              appId = conf.getAppId,
+              appId = getApplicationId(conf),
               executorId = executorIndex.getOrElse(0).toString,
               driverPod = driverPod
             )
@@ -1109,6 +1114,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--conf",
           s"spark.driver.port=$port",
           "--conf",
+          s"spark.app.id=${armadaJobConfig.applicationId}",
+          "--conf",
           "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ additionalDriverArgs
       )
@@ -1194,9 +1201,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(podName),
       EnvVar()
         .withName("SPARK_APPLICATION_ID")
-        .withValue(
-          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
-        ),
+        .withValue(armadaJobConfig.applicationId),
       EnvVar().withName("SPARK_EXECUTOR_CORES").withValue(sparkExecutorCores),
       EnvVar().withName("SPARK_EXECUTOR_MEMORY").withValue(sparkExecutorMemory),
       EnvVar().withName("SPARK_DRIVER_URL").withValue(driverURL),
@@ -1217,7 +1222,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--cores",
           sparkExecutorCores,
           "--app-id",
-          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID),
+          armadaJobConfig.applicationId,
           "--hostname",
           "$(SPARK_EXECUTOR_POD_IP)"
         )
@@ -1240,6 +1245,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withName("init")
       .withImagePullPolicy("IfNotPresent")
       .withImage("busybox")
+      .withResources(
+        ResourceRequirements(
+          requests =
+            Map("memory" -> Quantity(Option(DEFAULT_MEM)), "cpu" -> Quantity(Option("100m"))),
+          limits = Map("memory" -> Quantity(Option(DEFAULT_MEM)), "cpu" -> Quantity(Option("100m")))
+        )
+      )
       .withEnv(
         Seq(
           EnvVar().withName("SPARK_DRIVER_HOST").withValue(driverHost),
@@ -1334,7 +1346,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // entrypoint.sh then adds those to the jvm command line here:
     // https://github.com/apache/spark/blob/v3.5.3/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh#L96
-    // TODO: this configuration option appears to not be set... is that a problem?
     val javaOpts =
       conf
         .getOption("spark.executor.extraJavaOptions")
