@@ -17,7 +17,7 @@
 
 package org.apache.spark.deploy.armada.e2e.featurestep
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder}
+import io.fabric8.kubernetes.api.model._
 import org.apache.spark.deploy.k8s.SparkPod
 import org.apache.spark.deploy.k8s.features.KubernetesFeatureConfigStep
 
@@ -29,6 +29,23 @@ class DriverFeatureStep extends KubernetesFeatureConfigStep {
       .withImage("alpine:latest")
       .withCommand("/bin/sh", "-c")
       .withArgs("echo 'Hello from driver init container!'")
+      .withNewResources()
+      .addToRequests("cpu", new Quantity("100m"))
+      .addToRequests("memory", new Quantity("128Mi"))
+      .addToLimits("cpu", new Quantity("100m"))
+      .addToLimits("memory", new Quantity("128Mi"))
+      .endResources()
+      .build()
+
+    val configuredContainer = new ContainerBuilder(pod.container)
+      .addNewEnv()
+      .withName("DRIVER_FEATURE_STEP_ENV")
+      .withValue("driver-feature-value")
+      .endEnv()
+      .addNewVolumeMount()
+      .withName("driver-feature-volume")
+      .withMountPath("/mnt/driver-feature")
+      .endVolumeMount()
       .build()
 
     val configuredPod = new PodBuilder(pod.pod)
@@ -40,9 +57,14 @@ class DriverFeatureStep extends KubernetesFeatureConfigStep {
       .editOrNewSpec()
       .withActiveDeadlineSeconds(3600L)
       .addToInitContainers(initContainer)
+      .addNewVolume()
+      .withName("driver-feature-volume")
+      .withNewEmptyDir()
+      .endEmptyDir()
+      .endVolume()
       .endSpec()
       .build()
 
-    SparkPod(configuredPod, pod.container)
+    SparkPod(configuredPod, configuredContainer)
   }
 }

@@ -155,11 +155,25 @@ Option `-P` allows you to run your own Python scripts.  Run Scala / Java program
 
 
 ### Running the Spark UI
-To run the spark ui, you must get access to port 4040 on the driver, like so:
+
+The Spark Driver WebUI provides monitoring and debugging capabilities. Access methods include:
+
+**Direct Access (port-forward):**
+```bash
+kubectl -n <namespace> port-forward <driver-pod-name> 4040:4040
 ```
-kubectl --context <cluster> -n <namespace> port-forward <spark-driver-pod-name> 4040:4040
+
+**OAuth-Protected Access (recommended for production):**
+```bash
+--conf spark.armada.oauth.enabled=true \
+--conf spark.armada.oauth.clientId=<client-id> \
+--conf spark.armada.oauth.clientSecretK8s=<k8s-secret> \
+--conf spark.armada.oauth.issuerUrl=<oidc-issuer-url> \
+--conf spark.armada.driver.ingress.enabled=true \
+--conf spark.armada.driver.ingress.tls.enabled=true
 ```
-You can get the specific cluster, namespace, podName details on the driver job's "Commands" page in the Lookout UI. The "driver" container on the Lookout UI "Details" page refers to the driver job.
+
+For detailed UI access instructions, OAuth configuration, and troubleshooting, see [UI Access Documentation](./ui.md).
 
 ## Configuration Options
 
@@ -232,6 +246,50 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
     Annotations should be in the format key=value, e.g. `nginx.ingress.kubernetes.io/rewrite-target=/`.
 - `spark.armada.driver.ingress.certName` - The name of the TLS certificate to use for the Ingress resource.
     This is used when `spark.armada.driver.ingress.tls.enabled` is set to true.
+- `spark.armada.driver.ingress.port` - The port to expose via Ingress. If not set, defaults to OAuth proxy port (if enabled) or Spark UI port.
+
+### OAuth2 Authentication Configuration
+
+`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI using OAuth2-Proxy as a native sidecar.
+For detailed setup instructions and examples, see [UI Access Documentation](./ui.md).
+
+- `spark.armada.oauth.enabled` - Enable OAuth2 authentication for Spark UI.
+- `spark.armada.oauth.clientId` - OAuth2 client ID.
+- `spark.armada.oauth.clientSecret` - OAuth2 client secret.
+- `spark.armada.oauth.clientSecretK8s` - Name of Kubernetes secret containing client secret.
+- `spark.armada.oauth.issuerUrl` - OIDC issuer URL.
+- `spark.armada.oauth.redirectUrl` - OAuth redirect URL.
+- `spark.armada.oauth.proxy.image` - OAuth2-proxy Docker image.
+- `spark.armada.oauth.proxy.port` - Port for OAuth2-proxy to listen on.
+- `spark.armada.oauth.providerDisplayName` - Provider name shown in OAuth UI.
+- `spark.armada.oauth.skipProviderDiscovery` - Skip OIDC discovery and use explicit endpoints.
+- `spark.armada.oauth.loginUrl` - OIDC authorization endpoint.
+- `spark.armada.oauth.redeemUrl` - OIDC token endpoint.
+- `spark.armada.oauth.validateUrl` - OIDC userinfo endpoint.
+- `spark.armada.oauth.jwksUrl` - OIDC JWKS endpoint.
+- `spark.armada.oauth.extraAudiences` - Comma-separated list of additional OIDC audiences.
+- `spark.armada.oauth.emailDomain` - Allowed email domains.
+- `spark.armada.oauth.skipJwtBearerTokens` - Skip JWT bearer token validation.
+- `spark.armada.oauth.skipProviderButton` - Skip provider selection button.
+- `spark.armada.oauth.skipAuthPreflight` - Skip authentication for OPTIONS requests.
+- `spark.armada.oauth.passHostHeader` - Pass Host header to upstream.
+- `spark.armada.oauth.whitelistDomain` - Whitelist redirect domains.
+- `spark.armada.oauth.cookieName` - OAuth session cookie name.
+- `spark.armada.oauth.cookiePath` - Cookie path.
+- `spark.armada.oauth.cookieSecure` - Require HTTPS for cookies.
+- `spark.armada.oauth.cookieSamesite` - SameSite cookie attribute.
+- `spark.armada.oauth.cookieCsrfPerRequest` - Enable CSRF per request.
+- `spark.armada.oauth.cookieCsrfExpire` - CSRF cookie expiration duration.
+- `spark.armada.oauth.tls.caCertPath` - Path to CA certificate for custom TLS validation.
+- `spark.armada.oauth.tls.caBundlePath` - Path to CA bundle for custom TLS validation.
+- `spark.armada.oauth.skipVerify` - Skip TLS certificate verification.
+- `spark.armada.oauth.insecureSkipIssuerVerification` - Skip OIDC issuer verification.
+- `spark.armada.oauth.insecureAllowUnverifiedEmail` - Allow unverified email addresses.
+- `spark.armada.oauth.codeChallengeMethod` - PKCE code challenge method.
+- `spark.armada.oauth.resources.cpu` - CPU resource limit/request for OAuth proxy.
+- `spark.armada.oauth.resources.memory` - Memory resource limit/request for OAuth proxy.
+
+See [UI Access Documentation](./ui.md) for examples and troubleshooting.
 
 # Building `armada-spark`
 

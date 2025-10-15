@@ -30,6 +30,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import k8s.io.api.core.v1.generated.PodSpec
 import io.fabric8.kubernetes.api.model
+import io.fabric8.kubernetes.client.utils.Serialization
 
 import java.io.File
 import java.net.{HttpURLConnection, URL}
@@ -54,7 +55,8 @@ private[spark] object JobTemplateLoader {
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     // The generated Scala classes from the PodSpec proto differ from standard Kubernetes PodSpec manifest and fabric8 PodSpec model.
-    // We use a custom mapper which first deserializes to fabric8 PodSpec, then converts to the protobuf PodSpec using PodSpecConverter.
+    // We use a custom deserializer which uses fabric8's Serialization to parse YAML to fabric8 PodSpec,
+    // then converts to protobuf using PodSpecConverter.
     val module = new SimpleModule()
     module.addDeserializer(classOf[PodSpec], new PodSpecDeserializer())
     mapper.registerModule(module)
@@ -64,16 +66,20 @@ private[spark] object JobTemplateLoader {
 
   /** Custom deserializer for PodSpec objects.
     *
-    * Uses fabric8 Kubernetes client models, then converts to protobuf using PodSpecConverter.
+    * Uses fabric8's Serialization.unmarshal() to parse YAML to fabric8 PodSpec, then converts to
+    * protobuf using PodSpecConverter.
     */
   private class PodSpecDeserializer extends JsonDeserializer[PodSpec] {
     @throws(classOf[JsonProcessingException])
     override def deserialize(p: JsonParser, ctxt: DeserializationContext): PodSpec = {
       val node = p.getCodec.readTree(p).asInstanceOf[JsonNode]
 
-      // Convert JsonNode directly to fabric8 PodSpec using Jackson's treeToValue
-      val mapper         = p.getCodec.asInstanceOf[ObjectMapper]
-      val fabric8PodSpec = mapper.treeToValue(node, classOf[model.PodSpec])
+      // Convert JsonNode to YAML string, then use fabric8's Serialization to parse it
+      val mapper     = new ObjectMapper(new YAMLFactory())
+      val yamlString = mapper.writeValueAsString(node)
+
+      // Use fabric8's Serialization.unmarshal() which handles all Kubernetes types (including Quantity)
+      val fabric8PodSpec = Serialization.unmarshal(yamlString, classOf[model.PodSpec])
 
       PodSpecConverter.fabric8ToProtobuf(fabric8PodSpec)
     }
@@ -193,7 +199,7 @@ private[spark] object JobTemplateLoader {
     * @return
     *   Parsed template object
     */
-  private def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
+  private[submit] def unmarshal[T](content: String, clazz: Class[T], templatePath: String): T = {
     Try {
       yamlMapper.readValue(content, clazz)
     } match {

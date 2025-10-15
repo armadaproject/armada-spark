@@ -25,6 +25,7 @@ import org.scalatest.time.{Seconds, Span}
 
 import java.util.Properties
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.jdk.CollectionConverters._
 import TestConstants._
 
 class ArmadaSparkE2E
@@ -303,10 +304,139 @@ class ArmadaSparkE2E
       )
       .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
       .withDriverPodAssertion { pod =>
-        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
+        // Assert active deadline is set
+        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue) shouldBe Some(3600L)
+
+        // Assert init container is present
+        val initContainers =
+          Option(pod.getSpec.getInitContainers).map(_.asScala).getOrElse(Seq.empty)
+        val driverInitContainer = initContainers.find(_.getName == "driver-init")
+        driverInitContainer should not be empty
+
+        // Assert env var is present in main container
+        val containers = Option(pod.getSpec.getContainers).map(_.asScala).getOrElse(Seq.empty)
+        val envVars = containers.flatMap { container =>
+          Option(container.getEnv).map(_.asScala).getOrElse(Seq.empty)
+        }
+        val driverFeatureEnv = envVars.find(_.getName == "DRIVER_FEATURE_STEP_ENV")
+        driverFeatureEnv should not be empty
+        driverFeatureEnv.get.getValue shouldBe "driver-feature-value"
+
+        // Assert volume mount is present in main container
+        val volumeMounts = containers.flatMap { container =>
+          Option(container.getVolumeMounts).map(_.asScala).getOrElse(Seq.empty)
+        }
+        val driverFeatureMount = volumeMounts.find(_.getName == "driver-feature-volume")
+        driverFeatureMount should not be empty
+        driverFeatureMount.get.getMountPath shouldBe "/mnt/driver-feature"
+
+        // Assert volume is present in pod spec
+        val volumes             = Option(pod.getSpec.getVolumes).map(_.asScala).getOrElse(Seq.empty)
+        val driverFeatureVolume = volumes.find(_.getName == "driver-feature-volume")
+        driverFeatureVolume should not be empty
+        driverFeatureVolume.get.getEmptyDir should not be null
+
+        true
       }
       .withExecutorPodAssertion { pod =>
-        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue) shouldBe Some(1800L)
+
+        val initContainers =
+          Option(pod.getSpec.getInitContainers).map(_.asScala).getOrElse(Seq.empty)
+        val executorInitContainer = initContainers.find(_.getName == "executor-init")
+        executorInitContainer should not be empty
+
+        true
+      }
+      .run()
+  }
+
+  test("SparkPi job with feature steps and templates", E2ETest) {
+    E2ETestBuilder("spark-pi-feature-steps-templates")
+      .withBaseConfig(baseConfig)
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.driver.pod.featureSteps" ->
+            "org.apache.spark.deploy.armada.e2e.featurestep.DriverFeatureStep",
+          "spark.kubernetes.executor.pod.featureSteps" ->
+            "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep",
+          "spark.armada.driver.jobItemTemplate" -> templatePath(
+            "spark-pi-driver-feature-step-template.yaml"
+          ),
+          "spark.armada.executor.jobItemTemplate" -> templatePath(
+            "spark-pi-executor-feature-step-template.yaml"
+          )
+        )
+      )
+      .withPodLabels(Map("test-type" -> "feature-step-template"))
+      .assertDriverExists()
+      .assertExecutorCount(2)
+      .withDriverPodAssertion { pod =>
+        // Assert env var from feature step is present
+        val containers = Option(pod.getSpec.getContainers).map(_.asScala).getOrElse(Seq.empty)
+        val envVars = containers.flatMap { container =>
+          Option(container.getEnv).map(_.asScala).getOrElse(Seq.empty)
+        }
+        val driverFeatureEnv = envVars.find(_.getName == "DRIVER_FEATURE_STEP_ENV")
+        driverFeatureEnv should not be empty
+        driverFeatureEnv.get.getValue shouldBe "driver-feature-value"
+
+        // Assert volume from template is present
+        val volumes             = Option(pod.getSpec.getVolumes).map(_.asScala).getOrElse(Seq.empty)
+        val driverFeatureVolume = volumes.find(_.getName == "driver-feature-volume")
+        driverFeatureVolume should not be empty
+        driverFeatureVolume.get.getEmptyDir should not be null
+
+        // Assert volume mount from feature step is present
+        val volumeMounts = containers.flatMap { container =>
+          Option(container.getVolumeMounts).map(_.asScala).getOrElse(Seq.empty)
+        }
+        val driverFeatureMount = volumeMounts.find(_.getName == "driver-feature-volume")
+        driverFeatureMount should not be empty
+        driverFeatureMount.get.getMountPath shouldBe "/mnt/driver-feature"
+
+        // Assert template labels are present
+        val metadata = pod.getMetadata
+        metadata.getLabels.get("app") shouldBe "spark-pi"
+        metadata.getLabels.get("component") shouldBe "driver"
+        metadata.getLabels.get("template-source") shouldBe "e2e-test"
+
+        // Assert feature step labels ARE also present (merged with template)
+        metadata.getLabels.get("feature-step") shouldBe "driver-applied"
+        metadata.getLabels.get("feature-step-role") shouldBe "driver"
+
+        // Assert feature step annotation is present
+        metadata.getAnnotations.get("driver-feature-step") shouldBe "configured"
+
+        // Assert init container from feature step IS present (merged with template)
+        val initContainers =
+          Option(pod.getSpec.getInitContainers).map(_.asScala).getOrElse(Seq.empty)
+        val driverInitContainer = initContainers.find(_.getName == "driver-init")
+        driverInitContainer should not be empty
+
+        true
+      }
+      .withExecutorPodAssertion { pod =>
+        // Assert template labels are present
+        val metadata = pod.getMetadata
+        metadata.getLabels.get("app") shouldBe "spark-pi"
+        metadata.getLabels.get("component") shouldBe "executor"
+
+        // Assert feature step labels ARE also present (merged with template)
+        metadata.getLabels.get("feature-step") shouldBe "executor-applied"
+        metadata.getLabels.get("feature-step-role") shouldBe "executor"
+
+        // Assert feature step annotation is present
+        metadata.getAnnotations.get("executor-feature-step") shouldBe "configured"
+
+        // Assert init container from feature step IS present (merged with template)
+        val initContainers =
+          Option(pod.getSpec.getInitContainers).map(_.asScala).getOrElse(Seq.empty)
+        val executorInitContainer = initContainers.find(_.getName == "executor-init")
+        executorInitContainer should not be empty
+
+        true
       }
       .run()
   }

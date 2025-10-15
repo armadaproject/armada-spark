@@ -144,6 +144,23 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  val ARMADA_SPARK_DRIVER_INGRESS_PORT: OptionalConfigEntry[Int] =
+    ConfigBuilder("spark.armada.driver.ingress.port")
+      .doc(
+        "The port to expose via the driver Ingress. Defaults to spark.ui.port (4040)."
+      )
+      .intConf
+      .createOptional
+
+  val ARMADA_SPARK_DRIVER_SERVICE_ADDITIONAL_PORTS: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.driver.service.additionalPorts")
+      .doc(
+        "Comma-separated list of additional ports to expose in the driver Service. " +
+          "Useful for sidecars that need their own ports (e.g., '4180' for OAuth proxy)."
+      )
+      .stringConf
+      .createOptional
+
   /** Configuration for specifying an executor job item template file to customize executor pods.
     *
     * The template file should contain a JobSubmitRequestItem structure in YAML format that will be
@@ -386,6 +403,218 @@ private[spark] object Config {
       .doc("Armada auth token, (specific to the OIDC server being used.)")
       .stringConf
       .createOptional
+
+  // OAuth2 Authentication Configuration
+  val ARMADA_OAUTH_ENABLED: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.enabled")
+      .doc("Enable OAuth2 authentication for Spark Driver UI")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_CLIENT_ID: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.clientId")
+      .doc("OAuth2 client ID")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_CLIENT_SECRET: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.clientSecret")
+      .doc("OAuth2 client secret")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_CLIENT_SECRET_K8S: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.clientSecretK8s")
+      .doc("Kubernetes secret name containing OAuth2 client secret")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_ISSUER_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.issuerUrl")
+      .doc("OIDC issuer URL")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_REDIRECT_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.redirectUrl")
+      .doc("OAuth2 redirect URL (auto-detected if not set)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_PROXY_IMAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.proxy.image")
+      .doc("oauth2-proxy Docker image")
+      .stringConf
+      .createWithDefault("quay.io/oauth2-proxy/oauth2-proxy:v7.5.1")
+
+  val ARMADA_OAUTH_PROXY_PORT: ConfigEntry[Int] =
+    ConfigBuilder("spark.armada.oauth.proxy.port")
+      .doc("oauth2-proxy listen port")
+      .intConf
+      .checkValue(_ > 0, "Port must be positive")
+      .createWithDefault(4180)
+
+  val ARMADA_OAUTH_PROVIDER_DISPLAY_NAME: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.providerDisplayName")
+      .doc("Provider name shown in OAuth UI")
+      .stringConf
+      .createWithDefault("OAuth Provider")
+
+  val ARMADA_OAUTH_EMAIL_DOMAIN: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.emailDomain")
+      .doc("Allowed email domains (* for all)")
+      .stringConf
+      .createWithDefault("*")
+
+  val ARMADA_OAUTH_SKIP_PROVIDER_DISCOVERY: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.skipProviderDiscovery")
+      .doc("Skip OIDC discovery and use explicit endpoints")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_LOGIN_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.loginUrl")
+      .doc("OIDC authorization endpoint (required if skipProviderDiscovery=true)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_REDEEM_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.redeemUrl")
+      .doc("OIDC token endpoint (required if skipProviderDiscovery=true)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_VALIDATE_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.validateUrl")
+      .doc("OIDC userinfo endpoint (required if skipProviderDiscovery=true)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_JWKS_URL: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.jwksUrl")
+      .doc("OIDC JWKS endpoint (required if skipProviderDiscovery=true)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_INSECURE_SKIP_ISSUER_VERIFICATION: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.insecureSkipIssuerVerification")
+      .doc("Skip OIDC issuer verification (dev/test only)")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_INSECURE_ALLOW_UNVERIFIED_EMAIL: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.insecureAllowUnverifiedEmail")
+      .doc("Allow unverified email addresses (dev/test only)")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_SKIP_JWT_BEARER_TOKENS: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.skipJwtBearerTokens")
+      .doc("Skip JWT bearer token validation")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_SKIP_VERIFY: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.skipVerify")
+      .doc("Skip TLS certificate verification (dev only)")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_EXTRA_AUDIENCES: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.extraAudiences")
+      .doc("Comma-separated list of additional OIDC audiences")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_CODE_CHALLENGE_METHOD: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.codeChallengeMethod")
+      .doc("PKCE code challenge method")
+      .stringConf
+      .createWithDefault("S256")
+
+  val ARMADA_OAUTH_COOKIE_NAME: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.cookieName")
+      .doc("OAuth session cookie name")
+      .stringConf
+      .createWithDefault("_oauth2_proxy")
+
+  val ARMADA_OAUTH_COOKIE_PATH: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.cookiePath")
+      .doc("OAuth cookie path")
+      .stringConf
+      .createWithDefault("/")
+
+  val ARMADA_OAUTH_COOKIE_SECURE: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.cookieSecure")
+      .doc("Require HTTPS for cookies")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_COOKIE_SAMESITE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.cookieSamesite")
+      .doc("SameSite cookie attribute (none/lax/strict)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_COOKIE_CSRF_PER_REQUEST: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.cookieCsrfPerRequest")
+      .doc("Enable CSRF per request")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_COOKIE_CSRF_EXPIRE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.cookieCsrfExpire")
+      .doc("CSRF cookie expiration duration")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_SKIP_PROVIDER_BUTTON: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.skipProviderButton")
+      .doc("Skip provider selection button")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_SKIP_AUTH_PREFLIGHT: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.skipAuthPreflight")
+      .doc("Skip authentication for OPTIONS requests")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_PASS_HOST_HEADER: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.passHostHeader")
+      .doc("Pass Host header to upstream")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_WHITELIST_DOMAIN: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.whitelistDomain")
+      .doc("Whitelist redirect domains")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_TLS_CA_CERT_PATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.tls.caCertPath")
+      .doc("Path to CA certificate for TLS validation")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_TLS_CA_BUNDLE_PATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.tls.caBundlePath")
+      .doc("Path to CA bundle for TLS validation")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_RESOURCES_CPU: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.resources.cpu")
+      .doc("CPU resource limit/request for oauth2-proxy")
+      .stringConf
+      .createWithDefault("100m")
+
+  val ARMADA_OAUTH_RESOURCES_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.resources.memory")
+      .doc("Memory resource limit/request for oauth2-proxy")
+      .stringConf
+      .createWithDefault("128Mi")
 
   def commaSeparatedLabelsToMap(labelList: String): Map[String, String] = {
     parseCommaSeparatedK8sValue(labelList, K8sValidator.Label).map(_.get).toMap
