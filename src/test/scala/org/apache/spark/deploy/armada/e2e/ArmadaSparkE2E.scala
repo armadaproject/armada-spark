@@ -254,6 +254,7 @@ class ArmadaSparkE2E
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
+          "spark.armada.driver.ingress.enabled" -> "true",
           "spark.armada.driver.jobItemTemplate" -> templatePath(
             "spark-pi-driver-ingress-template.yaml"
           ),

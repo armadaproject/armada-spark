@@ -228,6 +228,7 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 - `spark.armada.driver.ingress.enabled` - If set to true, the driver will be
     exposed via an Ingress resource. This is useful for accessing the Spark UI
     and other services running on the driver pod.
+- `spark.armada.driver.ingress.port` - Port for driver ingress
 - `spark.armada.driver.ingress.tls.enabled` - If set to true, the Ingress resource
     for the driver will be configured to use TLS.
 - `spark.armada.driver.ingress.annotations` - A comma-separated list of annotations to apply to the Ingress resource for the driver.
