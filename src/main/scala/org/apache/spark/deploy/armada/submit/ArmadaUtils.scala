@@ -27,7 +27,7 @@ object ArmadaUtils {
 
   def parseMasterUrl(masterUrl: String): (String, Int) = {
     Some(masterUrl)
-      .map(_.substring("armada://".length).split(":").toSeq)
+      .map(_.substring("local://armada://".length).split(":").toSeq)
       .filter(_.length == 2)
       .map { case Seq(host: String, portString: String) =>
         (host, Try(portString.toInt).getOrElse(-1))

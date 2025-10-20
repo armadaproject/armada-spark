@@ -17,11 +17,8 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
-  ARMADA_EXECUTOR_TRACKER_TIMEOUT
-}
-import org.apache.spark.deploy.armada.submit.ArmadaUtils
+import org.apache.spark.deploy.armada.Config.{ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL, ARMADA_EXECUTOR_TRACKER_TIMEOUT}
+import org.apache.spark.deploy.armada.submit.{ArmadaClientApplication, ArmadaUtils}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
@@ -47,7 +44,8 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     // NOTE: armada-spark driver submits executors alongside driver.
     // No need to start them here.
-    logInfo("Armada Cluster Backend: starting")
+    logInfo("gbj1: Armada Cluster Backend: starting")
+    new ArmadaClientApplication().start(new Array[String](0), conf)
     executorTracker.start()
   }
 

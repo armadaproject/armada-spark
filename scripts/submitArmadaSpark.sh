@@ -48,7 +48,7 @@ DISABLE_CONFIG_MAP=true
 # Run Armada Spark via docker image
 docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
-    --master $ARMADA_MASTER --deploy-mode cluster \
+    --master $ARMADA_MASTER --deploy-mode client \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
     $AUTH_ARG \

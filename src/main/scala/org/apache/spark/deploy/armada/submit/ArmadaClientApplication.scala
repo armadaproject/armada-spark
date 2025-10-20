@@ -126,14 +126,14 @@ private[spark] object ClientArguments {
         throw new RuntimeException(s"Unknown arguments: $invalid")
     }
 
-    require(
-      mainClass.isDefined,
-      "Main class must be specified via --main-class"
-    )
+    // require(
+    //   mainClass.isDefined,
+    //   "Main class must be specified via --main-class"
+    // )
 
     ClientArguments(
       mainAppResource,
-      mainClass.get,
+      mainClass.getOrElse(""),
       driverArgs.toArray,
       proxyUser
     )
@@ -303,8 +303,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq,
       conf
     )
-    val driverJobId =
-      submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
+    val driverJobId = "driverJobId"
+      //submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
 
     val executorLabels = buildLabels(
       armadaJobConfig.cliConfig.podLabels,
@@ -322,12 +322,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorResolvedConfig = resolveJobConfig(
       armadaJobConfig.cliConfig,
       armadaJobConfig.executorJobItemTemplate,
-      executorAnnotations,
+      runtimeAnnotations,
       executorLabels,
       conf
     )
 
-    val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    val driverHostname = conf.get("spark.driver.host")
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
@@ -1034,6 +1034,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(finalContainer))
       .withVolumes(mergedVolumes)
       .withNodeSelector(mergedNodeSelectors)
+      .withHostNetwork(true)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
 
     workingTemplate
@@ -1460,7 +1461,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .map(label =>
         GangSchedulingAnnotations(
           None,
-          1 + executorCount,
+          executorCount,
           label
         )
       )
