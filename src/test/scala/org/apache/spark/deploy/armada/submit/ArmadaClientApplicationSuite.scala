@@ -913,7 +913,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
       Seq("--arg1", "--arg2"),
-      new SparkConf()
+      sparkConf
     )
 
     result.priority shouldBe RUNTIME_PRIORITY
@@ -933,26 +933,27 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       "tier"             -> "production"
     )
 
-    podSpec.containers should have size 1
-    val container = podSpec.containers.head
-    container.name shouldBe Some(DRIVER_CONTAINER_NAME)
-    container.image shouldBe Some(DEFAULT_IMAGE_NAME)
-    container.args should contain("driver")
-    container.args should contain("--class")
-    container.args should contain("org.example.TestClass")
-    container.args should contain allOf ("--arg1", "--arg2")
+    // After OAuth integration, template sidecars are properly preserved alongside the main driver container
+    podSpec.containers should have size 2
+    val driverContainer = podSpec.containers.find(_.name.contains(DRIVER_CONTAINER_NAME)).get
+    driverContainer.name shouldBe Some(DRIVER_CONTAINER_NAME)
+    driverContainer.image shouldBe Some(DEFAULT_IMAGE_NAME)
+    driverContainer.args should contain("driver")
+    driverContainer.args should contain("--class")
+    driverContainer.args should contain("org.example.TestClass")
+    driverContainer.args should contain allOf ("--arg1", "--arg2")
 
-    container.env should not be empty
-    val envVars = container.env
+    driverContainer.env should not be empty
+    val envVars = driverContainer.env
       .filter(e => e.name.isDefined && e.value.isDefined)
       .map(e => e.name.get -> e.value.get)
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
     // Driver container defines ports for listening
-    container.ports should have size 2
-    container.ports.head.containerPort shouldBe Some(7078)
-    container.ports(1).containerPort shouldBe Some(4040)
+    driverContainer.ports should not be empty
+    driverContainer.ports should have size 1
+    driverContainer.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
     val service = result.services.head
@@ -1055,7 +1056,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
       Seq.empty[String],
-      new SparkConf()
+      sparkConf
     )
 
     result.podSpec should not be empty
@@ -1080,10 +1081,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    // Driver container defines ports for listening
-    container.ports should have size 2
+    // Driver container defines ports for listening (OAuth disabled by default)
+    container.ports should have size 1
     container.ports.head.containerPort shouldBe Some(7078)
-    container.ports(1).containerPort shouldBe Some(4040)
 
     result.services should have size 1
     val service = result.services.head
@@ -1205,6 +1205,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       sparkConf
     )
 
+    // Port should use Spark UI port since OAuth is disabled
     result.ports shouldBe Seq(7078)
 
     result.annotations should contain("foo" -> "template")
@@ -1214,10 +1215,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("resolveIngressConfig should use defaults when no CLI or template values") {
-    sparkConf.set("spark.ui.port", "7078")
     val result = armadaClientApp.resolveIngressConfig(None, None, sparkConf)
 
-    result.ports shouldBe Seq(7078)
+    result.ports shouldBe Seq(4040)
     result.annotations shouldBe Map.empty
     result.tlsEnabled shouldBe false
     result.certName shouldBe ""
@@ -1291,7 +1291,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       volumes = Seq.empty,
       volumeMounts = Seq.empty,
       additionalDriverArgs = Seq("--arg1", "value1"),
-      conf = new SparkConf()
+      conf = sparkConf
     )
 
     result.priority shouldBe RUNTIME_PRIORITY
@@ -1321,10 +1321,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    // Driver container defines ports for listening
-    container.ports should have size 2
+    // Driver container defines ports for listening (OAuth disabled by default)
+    container.ports should have size 1
     container.ports.head.containerPort shouldBe Some(7078)
-    container.ports(1).containerPort shouldBe Some(4040)
 
     container.resources should not be empty
     val resources = container.resources.get
@@ -1537,10 +1536,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    // Driver container defines ports for listening
-    container.ports should have size 2
+    // Driver container defines ports for listening (OAuth disabled by default)
+    container.ports should have size 1
     container.ports.head.containerPort shouldBe Some(7078)
-    container.ports(1).containerPort shouldBe Some(4040)
 
     result.services should have size 1
   }

@@ -127,6 +127,19 @@ private[submit] object PodMerger {
   def mergeByName[T](base: Seq[T], overriding: Seq[T])(
       getName: T => Option[String]
   ): Seq[T] = {
+    val baseMap       = base.flatMap(item => getName(item).map(_ -> item)).toMap
+    val overridingMap = overriding.flatMap(item => getName(item).map(_ -> item)).toMap
+    (baseMap ++ overridingMap).values.toSeq
+  }
+
+  /** Generic helper to merge parts of PodSpec objects by extracting and merging collections. */
+  def mergePartByName[T](getPart: io.fabric8.kubernetes.api.model.PodSpec => java.util.List[T])(
+      baseSpec: io.fabric8.kubernetes.api.model.PodSpec,
+      overridingSpec: io.fabric8.kubernetes.api.model.PodSpec
+  )(getName: T => Option[String]): Seq[T] = {
+    import scala.jdk.CollectionConverters._
+    val base            = Option(getPart(baseSpec)).map(_.asScala.toSeq).getOrElse(Seq.empty)
+    val overriding      = Option(getPart(overridingSpec)).map(_.asScala.toSeq).getOrElse(Seq.empty)
     val overridingNames = overriding.flatMap(getName(_).toSeq).toSet
     val uniqueBase      = base.filterNot(item => getName(item).exists(overridingNames.contains))
     uniqueBase ++ overriding
