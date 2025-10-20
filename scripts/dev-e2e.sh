@@ -145,6 +145,9 @@ init-cluster() {
 
   # configure the defaults for the e2e test
   cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
+
+  log "Waiting 60 seconds for Armada to stabilize ..."
+  sleep 60
 }
 
 run-test() {
