@@ -17,18 +17,36 @@
 
 package org.apache.spark.deploy.armada.e2e.featurestep
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder}
+import io.fabric8.kubernetes.api.model.{
+  ContainerBuilder,
+  PodBuilder,
+  Quantity,
+  ResourceRequirements
+}
 import org.apache.spark.deploy.k8s.SparkPod
 import org.apache.spark.deploy.k8s.features.KubernetesFeatureConfigStep
+import java.util.HashMap
 
 class DriverFeatureStep extends KubernetesFeatureConfigStep {
 
   override def configurePod(pod: SparkPod): SparkPod = {
+    val resources = new ResourceRequirements()
+    val limits    = new HashMap[String, Quantity]()
+    limits.put("cpu", new Quantity("64m"))
+    limits.put("memory", new Quantity("64Mi"))
+    resources.setLimits(limits)
+
+    val requests = new HashMap[String, Quantity]()
+    requests.put("cpu", new Quantity("64m"))
+    requests.put("memory", new Quantity("64Mi"))
+    resources.setRequests(requests)
+
     val initContainer = new ContainerBuilder()
       .withName("driver-init")
       .withImage("alpine:latest")
       .withCommand("/bin/sh", "-c")
       .withArgs("echo 'Hello from driver init container!'")
+      .withResources(resources)
       .build()
 
     val configuredPod = new PodBuilder(pod.pod)

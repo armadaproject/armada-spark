@@ -40,6 +40,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_JOB_SET_ID,
   ARMADA_JOB_TEMPLATE,
   ARMADA_LOOKOUTURL,
+  ARMADA_OAUTH_ENABLED,
   ARMADA_RUN_AS_USER,
   ARMADA_SERVER_INTERNAL_URL,
   ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS,
@@ -64,7 +65,6 @@ import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.armada.submit.ArmadaClientApplication.DRIVER_PORT
 import org.apache.spark.deploy.k8s.submit.{
   JavaMainAppResource,
   MainAppResource,
@@ -632,7 +632,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         Some(
           resolveIngressConfig(
             cliConfig.driverIngress,
-            template.flatMap(_.ingress.headOption)
+            template.flatMap(_.ingress.headOption),
+            conf
           )
         )
       } else {
@@ -709,7 +710,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
-      driverArgs
+      driverArgs,
+      conf
     )
 
     applyFeatureSteps(driverJobItem, conf, isDriver = true, Some(clientArguments))
@@ -794,7 +796,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       mainClass: String,
       volumes: Seq[Volume],
       volumeMounts: Seq[VolumeMount],
-      additionalDriverArgs: Seq[String]
+      additionalDriverArgs: Seq[String],
+      conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
 
     // Start with template or blank template - no feature steps yet
@@ -819,7 +822,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       templateNodeSelectors
     }
 
-    val finalPodSpec = workingTemplate.podSpec
+    val basePodSpec = workingTemplate.podSpec
       .getOrElse(PodSpec())
       .withTerminationGracePeriodSeconds(0)
       .withRestartPolicy("Never")
@@ -828,10 +831,40 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withNodeSelector(mergedNodeSelectors)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
 
+    // Extract sidecars from template (if any) and add OAuth sidecar
+    val sidecars     = extractSidecarContainers(workingTemplate.podSpec)
+    val oauthSidecar = OAuthSidecarBuilder.buildOAuthSidecar(conf)
+
+    // Convert to fabric8 for merging, then back to protobuf with OAuth integration
+    val fabric8Pod        = PodMerger.protobufToFabric8Pod(basePodSpec)
+    val currentPodSpec    = PodMerger.fabric8PodToProtobuf(fabric8Pod)
+    val allInitContainers = currentPodSpec.initContainers ++ oauthSidecar.toSeq
+
+    val finalPodSpecWithOAuth = currentPodSpec
+      .withRestartPolicy("Never")
+      .withTerminationGracePeriodSeconds(0)
+      .withContainers(Seq(finalContainer) ++ sidecars)
+      .withInitContainers(allInitContainers)
+      .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
+      .withNodeSelector(
+        if (mergedNodeSelectors.nonEmpty) mergedNodeSelectors
+        else currentPodSpec.nodeSelector
+      )
+
+    val requiredPorts = scala.collection.mutable.LinkedHashSet(driverPort)
+
+    OAuthSidecarBuilder.getOAuthProxyPort(conf) match {
+      case Some(oauthPort) =>
+        requiredPorts += oauthPort
+      case None =>
+        val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
+        requiredPorts += uiPort
+    }
+
     val finalServices = Seq(
       api.submit.ServiceConfig(
         api.submit.ServiceType.Headless,
-        Seq(driverPort)
+        requiredPorts.toSeq
       )
     )
 
@@ -840,7 +873,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withNamespace(resolvedConfig.namespace)
       .withLabels(resolvedConfig.labels)
       .withAnnotations(resolvedConfig.annotations)
-      .withPodSpec(finalPodSpec)
+      .withPodSpec(finalPodSpecWithOAuth)
       .withServices(finalServices)
 
     resolvedConfig.driverIngress match {
@@ -1297,9 +1330,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   // Resolves ingress configuration based precedence: CLI > Template > Default
+  // Ingress routing: If OAuth is enabled, routes to OAuth proxy port; otherwise routes to Spark UI port
   private[submit] def resolveIngressConfig(
       cliIngress: Option[IngressConfig],
-      templateIngress: Option[api.submit.IngressConfig]
+      templateIngress: Option[api.submit.IngressConfig],
+      conf: SparkConf
   ): api.submit.IngressConfig = {
     val mergedAnnotations = templateIngress
       .map(_.annotations)
@@ -1308,8 +1343,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .map(_.annotations)
         .getOrElse(Map.empty)
 
+    // Ingress routes to OAuth proxy if enabled, otherwise Spark UI
+    val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
+    val ingressPort = if (conf.get(ARMADA_OAUTH_ENABLED)) {
+      OAuthSidecarBuilder.getOAuthProxyPort(conf).getOrElse(4180)
+    } else {
+      uiPort
+    }
+    val ports = Seq(ingressPort)
+
     api.submit.IngressConfig(
-      ports = Seq(DRIVER_PORT),
+      ports = ports,
       annotations = mergedAnnotations,
       tlsEnabled = resolveValue(
         cliIngress.flatMap(_.tls),
@@ -1494,5 +1538,23 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       roleSpecificLabels: Map[String, String]
   ): Map[String, String] = {
     podLabels ++ templateLabels ++ roleSpecificLabels
+  }
+
+  /** Extract non-Spark containers (sidecars) from a PodSpec. Filters out the main Spark
+    * driver/executor container added by buildFromFeatures(). Spark's basic feature steps use
+    * reserved names "driver" and "executor" for main containers. All other containers are
+    * considered sidecars and preserved.
+    */
+  private def extractSidecarContainers(podSpec: Option[PodSpec]): Seq[Container] = {
+    podSpec
+      .map(_.containers)
+      .getOrElse(Seq.empty)
+      .filterNot(c =>
+        c.name.exists { name =>
+          val lowerName = name.toLowerCase
+          // Spark's basic feature steps use these exact names for main containers
+          lowerName == "driver" || lowerName == "executor"
+        }
+      )
   }
 }
