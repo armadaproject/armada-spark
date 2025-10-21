@@ -514,7 +514,9 @@ class TestOrchestrator(
       "spark.armada.executor.request.cores"  -> "100m",
       "spark.armada.executor.request.memory" -> "510Mi",
       "spark.local.dir"                      -> "/tmp",
-      "spark.home"                           -> "/opt/spark"
+      "spark.home"                           -> "/opt/spark",
+      "spark.driver.extraJavaOptions"        -> "-XX:-UseContainerSupport",
+      "spark.executor.extraJavaOptions"      -> "-XX:-UseContainerSupport"
     )
 
     val allConfs = defaultConfs ++ sparkConfs
