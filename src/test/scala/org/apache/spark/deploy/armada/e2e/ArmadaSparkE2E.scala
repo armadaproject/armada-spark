@@ -69,7 +69,11 @@ class ArmadaSparkE2E
       masterUrl = props.getProperty("armada.master", "armada://localhost:30002"),
       lookoutUrl = props.getProperty("armada.lookout.url", "http://localhost:30000"),
       scalaVersion = scalaBinaryVersion,
-      sparkVersion = finalSparkVersion
+      sparkVersion = finalSparkVersion,
+      sparkConfs = Map(
+        "spark.armada.driver.labels"   -> "spark-role=driver",
+        "spark.armada.executor.labels" -> "spark-role=executor"
+      )
     )
 
     println(s"Test configuration loaded: $baseConfig")
@@ -133,14 +137,16 @@ class ArmadaSparkE2E
 
   implicit val orch: TestOrchestrator = orchestrator
 
-  test("Basic SparkPi job", E2ETest) {
-    E2ETestBuilder("basic-spark-pi")
+  test("Basic SparkPi job with gang scheduling", E2ETest) {
+    E2ETestBuilder("basic-spark-pi-gang")
       .withBaseConfig(baseConfig)
+      .withGangJob("armada-spark")
       .withExecutors(3)
       .withPodLabels(Map("test-type" -> "basic"))
       .assertDriverExists()
       .assertExecutorCount(3)
       .assertPodLabels(Map("test-type" -> "basic"))
+      .assertGangJob("armada-spark", 4) // 1 driver + 3 executors
       .run()
   }
 

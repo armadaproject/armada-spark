@@ -252,6 +252,30 @@ private[spark] object Config {
       )
       .createOptional
 
+  val ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.initContainer.image")
+      .doc("The container image to use for executor init containers. Defaults to 'busybox'.")
+      .stringConf
+      .createWithDefault("busybox")
+
+  val ARMADA_EXECUTOR_INIT_CONTAINER_CPU: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.initContainer.cpu")
+      .doc(
+        "CPU request and limit for executor init containers (e.g., '100m', '0.1'). " +
+          "In Armada, requests must equal limits. Defaults to 100m."
+      )
+      .stringConf
+      .createWithDefault("100m")
+
+  val ARMADA_EXECUTOR_INIT_CONTAINER_MEMORY: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.initContainer.memory")
+      .doc(
+        "Memory request and limit for executor init containers (e.g., '128Mi', '1Gi'). " +
+          "In Armada, requests must equal limits. Defaults to 128Mi."
+      )
+      .stringConf
+      .createWithDefault("128Mi")
+
   val ARMADA_SPARK_POD_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.pod.labels")
       .doc(
