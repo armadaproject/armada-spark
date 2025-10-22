@@ -212,6 +212,12 @@ private[spark] object Config {
       )
       .createWithDefaultString("300s")
 
+  val ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE: ConfigEntry[String] =
+    ConfigBuilder("spark.armada.executor.initContainer.image")
+      .doc("Container image for the executor init container.")
+      .stringConf
+      .createWithDefaultString("busybox")
+
   val ARMADA_LOOKOUTURL: ConfigEntry[String] =
     ConfigBuilder("spark.armada.lookouturl")
       .doc("URL base for the Armada Lookout UI.")
@@ -251,12 +257,6 @@ private[spark] object Config {
         "Only a valid RFC 1123 label key is allowed!"
       )
       .createOptional
-
-  val ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE: ConfigEntry[String] =
-    ConfigBuilder("spark.armada.executor.initContainer.image")
-      .doc("The container image to use for executor init containers. Defaults to 'busybox'.")
-      .stringConf
-      .createWithDefault("busybox")
 
   val ARMADA_EXECUTOR_INIT_CONTAINER_CPU: ConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.initContainer.cpu")
@@ -447,4 +447,10 @@ private[spark] object Config {
       .map(_.trim)
       .toSeq
   }
+
+  val ARMADA_SPARK_DRIVER_INGRESS_PORT: OptionalConfigEntry[Int] =
+    ConfigBuilder("spark.armada.driver.ingress.port")
+      .doc("Port for driver ingress")
+      .intConf
+      .createOptional
 }

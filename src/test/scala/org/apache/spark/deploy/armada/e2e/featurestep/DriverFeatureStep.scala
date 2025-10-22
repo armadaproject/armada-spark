@@ -17,7 +17,12 @@
 
 package org.apache.spark.deploy.armada.e2e.featurestep
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder}
+import io.fabric8.kubernetes.api.model.{
+  ContainerBuilder,
+  PodBuilder,
+  Quantity,
+  ResourceRequirementsBuilder
+}
 import org.apache.spark.deploy.k8s.SparkPod
 import org.apache.spark.deploy.k8s.features.KubernetesFeatureConfigStep
 
@@ -29,6 +34,14 @@ class DriverFeatureStep extends KubernetesFeatureConfigStep {
       .withImage("alpine:latest")
       .withCommand("/bin/sh", "-c")
       .withArgs("echo 'Hello from driver init container!'")
+      .withResources(
+        new ResourceRequirementsBuilder()
+          .addToRequests("cpu", new Quantity("64m"))
+          .addToRequests("memory", new Quantity("64Mi"))
+          .addToLimits("cpu", new Quantity("64m"))
+          .addToLimits("memory", new Quantity("64Mi"))
+          .build()
+      )
       .build()
 
     val configuredPod = new PodBuilder(pod.pod)

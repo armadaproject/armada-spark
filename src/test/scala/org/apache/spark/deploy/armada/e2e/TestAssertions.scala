@@ -248,7 +248,7 @@ class ExecutorAnnotationAssertion(expectedAnnotations: Map[String, String]) exte
   */
 class IngressAssertion(
     requiredAnnotations: Map[String, String],
-    requiredPort: Int = 7078
+    requiredPort: Int = 4040
 ) extends TestAssertion {
 
   override val name = "Ingress annotations verification"

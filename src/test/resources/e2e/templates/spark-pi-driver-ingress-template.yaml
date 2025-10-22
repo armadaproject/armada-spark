@@ -9,7 +9,7 @@ labels:
   template-source: e2e-test-ingress
 ingress:
   - ports:
-      - 7078
+      - 4040
     annotations:
       nginx.ingress.kubernetes.io/rewrite-target: /
       nginx.ingress.kubernetes.io/backend-protocol: HTTP
