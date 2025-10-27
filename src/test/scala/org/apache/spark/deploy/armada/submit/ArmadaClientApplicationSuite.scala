@@ -36,6 +36,7 @@ import org.scalatest.matchers.should.Matchers
 import java.io.{File, FileWriter}
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -2208,6 +2209,83 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Additional verification: count each specific mount
     volumeMountNames.count(_ == "template-volume") shouldBe 1
     volumeMountNames.count(_ == "feature-step-volume") shouldBe 1
+  }
+
+  test("PodMerger should preserve base fields when overriding pod doesn't set them") {
+    // Test for field preservation during pod merging
+    import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}
+
+    // Base pod has serviceAccount and hostname set
+    val basePod = new PodBuilder()
+      .withNewMetadata()
+      .withName("base")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("base-service-account")
+      .withHostname("base-hostname")
+      .addNewVolume()
+      .withName("base-volume")
+      .withNewEmptyDir()
+      .endEmptyDir()
+      .endVolume()
+      .endSpec()
+      .build()
+
+    // Overriding pod has NO serviceAccount or hostname but has volumes
+    val overridingPod = new PodBuilder()
+      .withNewMetadata()
+      .withName("overriding")
+      .endMetadata()
+      .withNewSpec()
+      .addNewVolume()
+      .withName("template-volume")
+      .withNewEmptyDir()
+      .endEmptyDir()
+      .endVolume()
+      .endSpec()
+      .build()
+
+    val merged = PodMerger.mergePods(base = basePod, overriding = overridingPod)
+
+    // Base fields should be preserved when not set in overriding
+    merged.getSpec.getServiceAccount shouldBe "base-service-account"
+    merged.getSpec.getHostname shouldBe "base-hostname"
+
+    // Arrays should be strategically merged
+    val volumeNames = merged.getSpec.getVolumes.asScala.map(_.getName).toSet
+    volumeNames should contain("base-volume")
+    volumeNames should contain("template-volume")
+    volumeNames.size shouldBe 2
+  }
+
+  test("PodMerger should override base fields when overriding pod sets them") {
+    import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}
+
+    val basePod = new PodBuilder()
+      .withNewMetadata()
+      .withName("base")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("base-service-account")
+      .withHostname("base-hostname")
+      .endSpec()
+      .build()
+
+    val overridingPod = new PodBuilder()
+      .withNewMetadata()
+      .withName("overriding")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("template-service-account")
+      .withHostname("template-hostname")
+      .endSpec()
+      .build()
+
+    val merged = PodMerger.mergePods(base = basePod, overriding = overridingPod)
+
+    // Overriding values should win when explicitly set
+    merged.getSpec.getServiceAccount shouldBe "template-service-account"
+    merged.getSpec.getHostname shouldBe "template-hostname"
   }
 
 }

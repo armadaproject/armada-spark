@@ -24,26 +24,13 @@ import scala.jdk.CollectionConverters._
 
 /** Converts between fabric8 PodSpec and protobuf PodSpec.
   *
-  * WHY THIS EXISTS: Protobuf generated classes have DIFFERENT field structures than standard K8s
-  * YAML/JSON. Direct YAML → protobuf parsing fails or loses data due to structural mismatches
-  * (flattened fields, different naming, incompatible nested types). fabric8 is specifically
-  * designed to parse K8s YAML correctly, so we must: YAML → fabric8 → protobuf → Armada gRPC.
-  *
-  * IMPORTANT: This converter must support multiple Spark versions (3.3.x, 3.5.x) which bundle
-  * different fabric8 Kubernetes client versions. Some fields (e.g., hostUsers from K8s 1.25+,
-  * dnsConfig, ephemeralContainers) may not be available in older fabric8 versions and are
-  * intentionally hardcoded to None/empty to maintain compatibility.
-  *
-  * Maps ALL fields that exist in BOTH the protobuf-generated API AND the fabric8 API. Fields that
-  * don't exist in one or both are hardcoded to None/empty with explanatory comments.
+  * Required because protobuf and fabric8 have different field structures. fabric8 correctly parses
+  * K8s YAML while protobuf is needed for Armada gRPC. Some fields hardcoded to None/empty for
+  * compatibility across Spark versions (3.3.x, 3.5.x) with different fabric8 versions.
   */
 object PodSpecConverter {
 
-  /** Converts a fabric8 PodSpec to protobuf PodSpec.
-    *
-    * Note: Some fields are intentionally hardcoded to None/empty due to fabric8 version
-    * compatibility constraints across Spark versions. See class-level docs.
-    */
+  /** Converts a fabric8 PodSpec to protobuf PodSpec. */
   def fabric8ToProtobuf(fabric8Spec: model.PodSpec): generated.PodSpec = {
     if (fabric8Spec == null) {
       return generated.PodSpec()
@@ -57,11 +44,11 @@ object PodSpecConverter {
       containers = Option(fabric8Spec.getContainers)
         .map(_.asScala.toSeq.map(convertContainer))
         .getOrElse(Seq.empty),
-      // dnsConfig not converted - complex nested type, rarely used, not in older fabric8 versions
+      // dnsConfig: K8s 1.10+, not supported in fabric8 versions used by Spark 3.3.x
       dnsConfig = None,
       dnsPolicy = Option(fabric8Spec.getDnsPolicy),
       enableServiceLinks = Option(fabric8Spec.getEnableServiceLinks).map(_.booleanValue()),
-      // ephemeralContainers not converted - K8s 1.23+ feature, not available in Spark 3.3.x fabric8
+      // ephemeralContainers: K8s 1.23+, not supported in fabric8 versions used by Spark 3.3.x
       ephemeralContainers = Seq.empty,
       hostAliases = Option(fabric8Spec.getHostAliases)
         .map(
@@ -76,8 +63,7 @@ object PodSpecConverter {
       hostIPC = Option(fabric8Spec.getHostIPC).map(_.booleanValue()),
       hostNetwork = Option(fabric8Spec.getHostNetwork).map(_.booleanValue()),
       hostPID = Option(fabric8Spec.getHostPID).map(_.booleanValue()),
-      // hostUsers field is not supported - it was added in K8s 1.25+ and is not available
-      // in the client versions used by Spark 3.3.x. This field is rarely needed for Spark workloads.
+      // hostUsers: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
       hostUsers = None,
       hostname = Option(fabric8Spec.getHostname),
       imagePullSecrets = Option(fabric8Spec.getImagePullSecrets)
@@ -90,21 +76,21 @@ object PodSpecConverter {
       nodeSelector = Option(fabric8Spec.getNodeSelector)
         .map(_.asScala.toMap)
         .getOrElse(Map.empty),
-      // os not converted - K8s 1.25+ field, not in Spark 3.3.x fabric8
+      // os: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
       os = None,
-      // overhead not converted - rarely used, not critical for Spark workloads
+      // overhead: K8s 1.18+, not supported in fabric8 versions used by Spark 3.3.x
       overhead = Map.empty,
       preemptionPolicy = Option(fabric8Spec.getPreemptionPolicy),
       priority = Option(fabric8Spec.getPriority).map(_.intValue()),
       priorityClassName = Option(fabric8Spec.getPriorityClassName),
-      // readinessGates not converted - rarely used, not critical for Spark workloads
+      // readinessGates: K8s 1.14+, not supported in fabric8 versions used by Spark 3.3.x
       readinessGates = Seq.empty,
-      // resourceClaims not converted - K8s 1.26+ feature for dynamic resource allocation
+      // resourceClaims: K8s 1.26+, not supported in fabric8 versions used by Spark 3.3.x
       resourceClaims = Seq.empty,
       restartPolicy = Option(fabric8Spec.getRestartPolicy),
       runtimeClassName = Option(fabric8Spec.getRuntimeClassName),
       schedulerName = Option(fabric8Spec.getSchedulerName),
-      // schedulingGates not converted - K8s 1.27+ feature for pod scheduling control
+      // schedulingGates: K8s 1.27+, not supported in fabric8 versions used by Spark 3.3.x
       schedulingGates = Seq.empty,
       securityContext = Option(fabric8Spec.getSecurityContext).map(sc =>
         generated.PodSecurityContext(
@@ -177,9 +163,7 @@ object PodSpecConverter {
     )
   }
 
-  /** Converts a protobuf PodSpec back to fabric8 PodSpec. Maps ALL fields that exist in protobuf
-    * API back to fabric8.
-    */
+  /** Converts a protobuf PodSpec back to fabric8 PodSpec. */
   def protobufToFabric8(protobufSpec: generated.PodSpec): model.PodSpec = {
     if (protobufSpec == null) {
       return new model.PodSpec()
@@ -212,7 +196,7 @@ object PodSpecConverter {
     protobufSpec.hostIPC.foreach(v => spec.setHostIPC(v))
     protobufSpec.hostNetwork.foreach(v => spec.setHostNetwork(v))
     protobufSpec.hostPID.foreach(v => spec.setHostPID(v))
-    // hostUsers field is not set - not available in K8s client versions used by Spark 3.3.x
+    // hostUsers: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
     protobufSpec.hostname.foreach(spec.setHostname)
 
     if (protobufSpec.hostAliases.nonEmpty) {
@@ -1580,11 +1564,7 @@ object PodSpecConverter {
             if (spec.accessModes.nonEmpty) {
               pvcSpec.setAccessModes(spec.accessModes.asJava)
             }
-            // Note: PVC resources setting is commented out due to incompatibility between
-            // fabric8 6.7.2 (used by Spark 3.x) and fabric8 6.13+ (used by Spark 4.1.0).
-            // In 6.7.2, setResources expects ResourceRequirements
-            // In 6.13+, setResources expects VolumeResourceRequirements
-            // This field is optional and rarely used in ephemeral volumes.
+            // PVC resources: incompatible between fabric8 6.7.2 (Spark 3.x) and 6.13+ (Spark 4.x)
             //
             // spec.resources.foreach { res =>
             //   val resources = new model.ResourceRequirements() // or VolumeResourceRequirements in 6.13+
@@ -1608,5 +1588,20 @@ object PodSpecConverter {
     }
 
     Some(volume)
+  }
+
+  /** Convert protobuf PodSpec to fabric8 Pod with empty metadata. */
+  def protobufPodSpecToFabric8Pod(protobufPodSpec: generated.PodSpec): model.Pod = {
+    val fabric8Spec = protobufToFabric8(protobufPodSpec)
+    new model.PodBuilder()
+      .withNewMetadata()
+      .endMetadata()
+      .withSpec(fabric8Spec)
+      .build()
+  }
+
+  /** Convert fabric8 Pod to protobuf PodSpec. */
+  def fabric8PodToProtobufPodSpec(pod: model.Pod): generated.PodSpec = {
+    fabric8ToProtobuf(pod.getSpec)
   }
 }

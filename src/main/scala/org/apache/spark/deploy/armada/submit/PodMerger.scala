@@ -1,87 +1,134 @@
 package org.apache.spark.deploy.armada.submit
 
-import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}
-import k8s.io.api.core.v1.generated.{PodSpec => ProtobufPodSpec}
+import io.fabric8.kubernetes.api.model.Pod
+import io.fabric8.kubernetes.client.utils.Serialization
+import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
+import com.fasterxml.jackson.databind.node.{ArrayNode, ObjectNode}
+import k8s.io.api.core.v1.generated.PodSpec
 import scala.jdk.CollectionConverters._
 
-/** Clean, simple Pod merging using fabric8 builder pattern.
+/** Pod merging using JSON deep merge with Kubernetes strategic merge semantics.
   *
-  * Key insight: PodBuilder(pod) preserves ALL fields automatically. We only override the 3 arrays
-  * that need strategic merge by name. Everything else (40+ fields) is handled generically by
-  * fabric8.
-  *
-  * This solves the duplicate volume/initContainer bug via mergeByName.
+  * Preserves base fields when overriding doesn't set them, ensuring serviceAccount, tolerations,
+  * etc. from feature steps are kept when templates don't specify them.
   */
 private[submit] object PodMerger {
 
-  /** Strategic merge of two fabric8 Pods.
-    *
-    * Arrays (volumes, containers, initContainers) merge by name - overriding wins for duplicates.
-    * All other fields automatically preserved from overriding Pod via PodBuilder.
-    *
-    * This is truly generic - works for ANY Pod fields without enumeration!
-    */
-  def mergePods(base: Pod, overriding: Pod): Pod = {
-    val baseSpec = Option(base.getSpec).getOrElse(new io.fabric8.kubernetes.api.model.PodSpec())
-    val overridingSpec =
-      Option(overriding.getSpec).getOrElse(new io.fabric8.kubernetes.api.model.PodSpec())
+  private val mapper = new ObjectMapper()
 
-    val mergedVolumes = mergeByName(
-      Option(baseSpec.getVolumes).map(_.asScala.toSeq).getOrElse(Seq.empty),
-      Option(overridingSpec.getVolumes).map(_.asScala.toSeq).getOrElse(Seq.empty)
-    )(v => Option(v.getName))
-
-    val mergedInitContainers = mergeByName(
-      Option(baseSpec.getInitContainers).map(_.asScala.toSeq).getOrElse(Seq.empty),
-      Option(overridingSpec.getInitContainers).map(_.asScala.toSeq).getOrElse(Seq.empty)
-    )(c => Option(c.getName))
-
-    val mergedContainers = mergeByName(
-      Option(baseSpec.getContainers).map(_.asScala.toSeq).getOrElse(Seq.empty),
-      Option(overridingSpec.getContainers).map(_.asScala.toSeq).getOrElse(Seq.empty)
-    )(c => Option(c.getName))
-
-    val baseNodeSelector =
-      Option(baseSpec.getNodeSelector).map(_.asScala.toMap).getOrElse(Map.empty)
-    val overridingNodeSelector =
-      Option(overridingSpec.getNodeSelector).map(_.asScala.toMap).getOrElse(Map.empty)
-    val mergedNodeSelector = baseNodeSelector ++ overridingNodeSelector
-
-    new PodBuilder(overriding)
-      .editOrNewSpec()
-      .withVolumes(mergedVolumes.asJava)
-      .withInitContainers(mergedInitContainers.asJava)
-      .withContainers(mergedContainers.asJava)
-      .withNodeSelector(if (mergedNodeSelector.nonEmpty) mergedNodeSelector.asJava else null)
-      .endSpec()
-      .build()
+  /** Strategic merge of protobuf PodSpecs: optimized to minimize conversions. */
+  def mergePodSpecs(base: PodSpec, overriding: PodSpec): PodSpec = {
+    val basePod       = PodSpecConverter.protobufPodSpecToFabric8Pod(base)
+    val overridingPod = PodSpecConverter.protobufPodSpecToFabric8Pod(overriding)
+    val mergedPod     = mergePods(basePod, overridingPod)
+    PodSpecConverter.fabric8PodToProtobufPodSpec(mergedPod)
   }
 
-  /** Merge arrays by name - simple strategic merge. Items from 'overriding' replace items from
-    * 'base' with same name.
+  /** Strategic merge of fabric8 Pods (for compatibility with existing fabric8-based volume
+    * merging).
     */
+  def mergePods(base: Pod, overriding: Pod): Pod = {
+    val merged = deepMerge(
+      mapper.readTree(Serialization.asJson(base)).asInstanceOf[ObjectNode],
+      mapper.readTree(Serialization.asJson(overriding)).asInstanceOf[ObjectNode],
+      mapper
+    )
+    Serialization.unmarshal(merged.toString, classOf[Pod])
+  }
+
+  /** Deep merge JSON nodes: objects merge recursively, strategic arrays merge by name, null
+    * preserves base.
+    */
+  private def deepMerge(
+      base: JsonNode,
+      overriding: JsonNode,
+      mapper: ObjectMapper,
+      path: String = ""
+  ): JsonNode = {
+    if (overriding == null || overriding.isNull) {
+      return base
+    }
+
+    if (base == null || base.isNull) {
+      return overriding
+    }
+
+    if (overriding.isObject && base.isObject) {
+      val baseObj       = base.asInstanceOf[ObjectNode]
+      val overridingObj = overriding.asInstanceOf[ObjectNode]
+      val result        = mapper.createObjectNode()
+
+      val baseFields = baseObj.fieldNames()
+      while (baseFields.hasNext) {
+        val fieldName = baseFields.next()
+        result.set(fieldName, baseObj.get(fieldName))
+      }
+
+      val overridingFields = overridingObj.fieldNames()
+      while (overridingFields.hasNext) {
+        val fieldName       = overridingFields.next()
+        val overridingValue = overridingObj.get(fieldName)
+        val baseValue       = baseObj.get(fieldName)
+
+        val newPath = if (path.isEmpty) fieldName else s"$path.$fieldName"
+        result.set(fieldName, deepMerge(baseValue, overridingValue, mapper, newPath))
+      }
+
+      result
+    } else if (overriding.isArray && base.isArray) {
+      path match {
+        case "spec.volumes" | "spec.containers" | "spec.initContainers" =>
+          strategicMergeArray(
+            base.asInstanceOf[ArrayNode],
+            overriding.asInstanceOf[ArrayNode],
+            "name",
+            mapper
+          )
+        case _ =>
+          overriding
+      }
+    } else {
+      overriding
+    }
+  }
+
+  /** Merge arrays by key field - overriding items replace base items with same key. */
+  private def strategicMergeArray(
+      base: ArrayNode,
+      overriding: ArrayNode,
+      keyField: String,
+      mapper: ObjectMapper
+  ): ArrayNode = {
+    val result = mapper.createArrayNode()
+
+    val overridingKeys = overriding
+      .elements()
+      .asScala
+      .filter(item => item.isObject && item.has(keyField))
+      .map(_.get(keyField).asText())
+      .toSet
+
+    // Add base items that don't conflict
+    base.elements().asScala.foreach { item =>
+      val shouldAdd = if (item.isObject && item.has(keyField)) {
+        !overridingKeys.contains(item.get(keyField).asText())
+      } else true
+
+      if (shouldAdd) result.add(item)
+    }
+
+    // Add all overriding items
+    overriding.elements().asScala.foreach(result.add)
+
+    result
+  }
+
+  /** Merge arrays by name - overriding items replace base items with same name. */
   def mergeByName[T](base: Seq[T], overriding: Seq[T])(
       getName: T => Option[String]
   ): Seq[T] = {
     val overridingNames = overriding.flatMap(getName(_).toSeq).toSet
     val uniqueBase      = base.filterNot(item => getName(item).exists(overridingNames.contains))
     uniqueBase ++ overriding
-  }
-
-  /** Convert protobuf PodSpec to fabric8 Pod for merging.
-    */
-  def protobufToFabric8Pod(protobufPodSpec: ProtobufPodSpec): Pod = {
-    val fabric8Spec = PodSpecConverter.protobufToFabric8(protobufPodSpec)
-    new PodBuilder()
-      .withNewMetadata()
-      .endMetadata()
-      .withSpec(fabric8Spec)
-      .build()
-  }
-
-  /** Convert fabric8 Pod back to protobuf PodSpec.
-    */
-  def fabric8PodToProtobuf(pod: Pod): ProtobufPodSpec = {
-    PodSpecConverter.fabric8ToProtobuf(pod.getSpec)
   }
 }
