@@ -19,7 +19,10 @@ package org.apache.spark.scheduler.cluster.armada
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL,
-  ARMADA_EXECUTOR_TRACKER_TIMEOUT
+  ARMADA_EXECUTOR_TRACKER_TIMEOUT,
+  ARMADA_JOB_QUEUE,
+  ARMADA_JOB_SET_ID,
+  ARMADA_SERVER_INTERNAL_URL
 }
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
@@ -28,6 +31,8 @@ import org.apache.spark.scheduler.{ExecutorDecommission, TaskSchedulerImpl}
 import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
+import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import scala.collection.mutable
 
 private[spark] class ArmadaClusterManagerBackend(
@@ -40,6 +45,11 @@ private[spark] class ArmadaClusterManagerBackend(
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   private val executorTracker  = new ExecutorTracker(new SystemClock(), initialExecutors)
 
+  // Armada event watching
+  private var grpcChannel: Option[ManagedChannel] = None
+  private var eventWatcher: Option[ArmadaEventWatcher] = None
+  private var jobIdToExecutor: Option[ConcurrentHashMap[String, String]] = None
+
   override def applicationId(): String = {
     conf.getAppId
   }
@@ -49,6 +59,36 @@ private[spark] class ArmadaClusterManagerBackend(
     // No need to start them here.
     logInfo("Armada Cluster Backend: starting")
     executorTracker.start()
+
+    // Initialize Armada event watcher if queue and jobSetId are provided
+    val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
+    val jobSetIdOpt = conf.get(ARMADA_JOB_SET_ID)
+
+    (queueOpt, jobSetIdOpt) match {
+      case (Some(queue), Some(jobSetId)) =>
+        try {
+          val serverUrl = conf.get(ARMADA_SERVER_INTERNAL_URL).getOrElse(masterURL)
+          val (host, port) = ArmadaUtils.parseMasterUrl(serverUrl)
+
+          // Build gRPC channel to Armada server
+          val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
+          grpcChannel = Option(channel)
+
+          val mapping = new ConcurrentHashMap[String, String]()
+          jobIdToExecutor = Some(mapping)
+
+          val watcher = new ArmadaEventWatcher(channel, queue, jobSetId, this, mapping)
+          eventWatcher = Some(watcher)
+          watcher.start()
+          logInfo(s"Armada Event Watcher started for queue=$queue jobSetId=$jobSetId at $host:$port")
+        } catch {
+          case e: Throwable =>
+            logWarning(s"Failed to start Armada Event Watcher: ${e.getMessage}", e)
+        }
+
+      case _ =>
+        logInfo("Armada queue or jobSetId not configured; event watcher not started")
+    }
   }
 
   // Track executors to make sure we have the expected number
@@ -100,6 +140,15 @@ private[spark] class ArmadaClusterManagerBackend(
 
   override def stop(): Unit = {
     executorTracker.stop()
+    // Stop event watcher and shutdown channel
+    eventWatcher.foreach { w =>
+      try w.stop() catch { case e: Throwable => logWarning("Error stopping Armada event watcher", e) }
+    }
+    eventWatcher = None
+    grpcChannel.foreach { ch =>
+      try if (ch != null) ch.shutdownNow() catch { case _: Throwable => () }
+    }
+    grpcChannel = None
   }
 
   /*
@@ -154,5 +203,19 @@ private[spark] class ArmadaClusterManagerBackend(
           }
       }
     }
+  }
+
+  // ===== Callbacks for ArmadaEventWatcher =====
+  private[spark] def onExecutorRunning(jobId: String, executorId: String): Unit = {
+    logInfo(s"[Armada] Executor running: execId=$executorId jobId=$jobId")
+  }
+  private[spark] def onExecutorFailed(jobId: String, executorId: String, exitCode: Int, reason: String): Unit = {
+    logWarning(s"[Armada] Executor failed: execId=$executorId jobId=$jobId code=$exitCode reason=$reason")
+  }
+  private[spark] def onExecutorCancelled(jobId: String, executorId: String): Unit = {
+    logInfo(s"[Armada] Executor cancelled: execId=$executorId jobId=$jobId")
+  }
+  private[spark] def onArmadaPreempting(jobId: String): Unit = {
+    logInfo(s"[Armada] Executor preempting: jobId=$jobId")
   }
 }
