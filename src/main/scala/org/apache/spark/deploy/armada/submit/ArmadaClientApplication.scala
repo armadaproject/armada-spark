@@ -339,7 +339,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorResolvedConfig = resolveJobConfig(
       armadaJobConfig.cliConfig,
       armadaJobConfig.executorJobItemTemplate,
-      executorAnnotations,
+      runtimeAnnotations,
       executorLabels,
       conf
     )

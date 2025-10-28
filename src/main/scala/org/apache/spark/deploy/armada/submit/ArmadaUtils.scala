@@ -26,7 +26,12 @@ object ArmadaUtils {
   import ArmadaUtilsExceptions._
 
   def parseMasterUrl(masterUrl: String): (String, Int) = {
-    Some(masterUrl)
+    val url = if (masterUrl.startsWith("local://")) {
+      masterUrl.substring("local://".length)
+    } else {
+      masterUrl
+    }
+    Some(url)
       .map(_.substring("armada://".length).split(":").toSeq)
       .filter(_.length == 2)
       .map { case Seq(host: String, portString: String) =>

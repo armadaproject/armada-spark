@@ -152,31 +152,31 @@ private[spark] class ArmadaEventWatcher(
 
 
       case EventMessage.Events.Leased(_) =>
-        logDebug("Job leased event received")
+        logInfo("Job leased event received")
 
       case EventMessage.Events.LeaseReturned(_) =>
-        logDebug("Job lease returned event received")
+        logInfo("Job lease returned event received")
 
       case EventMessage.Events.LeaseExpired(_) =>
-        logDebug("Job lease expired event received")
+        logInfo("Job lease expired event received")
 
       case EventMessage.Events.Reprioritized(_) =>
-        logDebug("Job reprioritized event received")
+        logInfo("Job reprioritized event received")
 
       case EventMessage.Events.Reprioritizing(_) =>
-        logDebug("Job reprioritizing event received")
+        logInfo("Job reprioritizing event received")
 
       case EventMessage.Events.Cancelling(_) =>
-        logDebug("Job cancelling event received")
+        logInfo("Job cancelling event received")
 
       case EventMessage.Events.Utilisation(_) =>
-        logDebug("Job utilisation event received")
+        logInfo("Job utilisation event received")
 
       case EventMessage.Events.IngressInfo(_) =>
-        logDebug("Job ingress info event received")
+        logInfo("Job ingress info event received")
 
       case EventMessage.Events.Empty =>
-        logDebug("Empty event received")
+        logInfo("Empty event received")
     }
   }
 
@@ -184,7 +184,7 @@ private[spark] class ArmadaEventWatcher(
     val jobId = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
-      logDebug(s"Executor $executorId (job $jobId) submitted to Armada")
+      logInfo(s"Executor $executorId (job $jobId) submitted to Armada")
     } else {
       logInfo(s"[Armada] Job submitted (jobId=$jobId)")
     }
@@ -194,7 +194,7 @@ private[spark] class ArmadaEventWatcher(
     val jobId = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
-      logDebug(s"Executor $executorId (job $jobId) queued in Armada")
+      logInfo(s"Executor $executorId (job $jobId) queued in Armada")
     }
   }
 
@@ -202,7 +202,7 @@ private[spark] class ArmadaEventWatcher(
     val jobId = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
-      logDebug(s"Executor $executorId (job $jobId) pending (pod creating)")
+      logInfo(s"Executor $executorId (job $jobId) pending (pod creating)")
     }
   }
 
@@ -238,7 +238,7 @@ private[spark] class ArmadaEventWatcher(
       logWarning(s"Executor $executorId (job $jobId) failed: $fullReason (exit code: $exitCode)")
       backend.onExecutorFailed(jobId, executorId, exitCode, fullReason)
     } else {
-      logDebug(s"Received failed event for unknown job $jobId")
+      logInfo(s"Received failed event for unknown job $jobId")
     }
   }
 
@@ -276,7 +276,7 @@ private[spark] class ArmadaEventWatcher(
     val jobId = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
-      logDebug(s"Executor $executorId (job $jobId) terminated")
+      logInfo(s"Executor $executorId (job $jobId) terminated")
     }
   }
 
