@@ -16,13 +16,15 @@
  */
 package org.apache.spark.scheduler.cluster.armada
 
-import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.util.control.NonFatal
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 import api.event.{EventGrpc, EventStreamMessage, WatchRequest, EventMessage, JobSubmittedEvent, JobQueuedEvent, JobPendingEvent, JobRunningEvent, JobSucceededEvent, JobFailedEvent, JobCancelledEvent, JobPreemptingEvent, JobPreemptedEvent, JobTerminatedEvent}
 import io.grpc.ManagedChannel
-import io.grpc.stub.StreamObserver
+// import io.grpc.stub.StreamObserver  // no longer needed; switched to blocking API
 import org.apache.spark.internal.Logging
 
 /**
@@ -37,7 +39,8 @@ private[spark] class ArmadaEventWatcher(
     queue: String,
     jobSetId: String,
     backend: ArmadaClusterManagerBackend,
-    jobIdToExecutor: ConcurrentHashMap[String, String]) extends Logging {
+    jobIdToExecutor: ConcurrentHashMap[String, String],
+    submitClient: io.armadaproject.armada.ArmadaClient) extends Logging {
 
   @volatile private var running = false
   private val watcherThread = new Thread("armada-event-watcher") {
@@ -63,34 +66,22 @@ private[spark] class ArmadaEventWatcher(
   private def watchEvents(): Unit = {
     var lastMessageId: String = ""
 
+    // Ensure submit service is healthy before starting to watch events
+    waitForSubmitHealth()
+
     while (running) {
       try {
         logInfo(s"Connecting to Armada event stream: queue=$queue, jobSetId=$jobSetId")
 
-        val eventStub = EventGrpc.stub(grpcChannel)
+        val eventStub = EventGrpc.blockingStub(grpcChannel)
         val watchRequest = WatchRequest(queue = queue, jobSetId = jobSetId, fromId = lastMessageId)
 
-        val eventQueue = new LinkedBlockingQueue[EventStreamMessage]()
-        @volatile var streamCompleted = false
-        val responseObserver = new StreamObserver[EventStreamMessage] {
-          override def onNext(value: EventStreamMessage): Unit = eventQueue.put(value)
-          override def onError(t: Throwable): Unit = {
-            logWarning(s"Armada event stream error: ${t.getMessage}", t)
-            streamCompleted = true
-          }
-          override def onCompleted(): Unit = {
-            logInfo("Armada event stream completed")
-            streamCompleted = true
-          }
-        }
+        logInfo("Connected to Armada event stream (blocking)")
 
-        // Start streaming
-        eventStub.watch(watchRequest, responseObserver)
-        logInfo("Connected to Armada event stream")
-
-        while (running && !streamCompleted) {
+        val iterator = eventStub.watch(watchRequest)
+        while (running && iterator.hasNext) {
           try {
-            val streamMessage = eventQueue.poll(1, TimeUnit.SECONDS)
+            val streamMessage = iterator.next()
             if (streamMessage != null) {
               lastMessageId = streamMessage.id
               streamMessage.message.foreach(processEventMessage)
@@ -119,6 +110,30 @@ private[spark] class ArmadaEventWatcher(
     }
 
     logInfo("Event watcher stopped")
+  }
+
+  private def waitForSubmitHealth(): Unit = {
+    val timeout = 10.seconds
+    while (running) {
+      try {
+        logInfo(s"Checking Armada submit service health (timeout: $timeout)...")
+        val resp = Await.result(submitClient.submitHealth(), timeout)
+        if (resp.status.isServing) {
+          logInfo("Armada submit service is healthy; starting event watch.")
+          return
+        } else {
+          logWarning("Armada submit service is not serving; retrying in 5s...")
+          Thread.sleep(5000)
+        }
+      } catch {
+        case _: InterruptedException =>
+          running = false
+          return
+        case NonFatal(e) =>
+          logWarning(s"Submit health check failed: ${e.getMessage}", e)
+          Thread.sleep(5000)
+      }
+    }
   }
 
   private def processEventMessage(eventMessage: EventMessage): Unit = {

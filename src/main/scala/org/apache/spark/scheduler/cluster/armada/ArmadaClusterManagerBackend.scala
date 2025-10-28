@@ -22,7 +22,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_TRACKER_TIMEOUT,
   ARMADA_JOB_QUEUE,
   ARMADA_JOB_SET_ID,
-  ARMADA_SERVER_INTERNAL_URL
+  ARMADA_SERVER_INTERNAL_URL,
+  ARMADA_AUTH_TOKEN
 }
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext}
@@ -34,6 +35,7 @@ import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 import java.util.concurrent.ConcurrentHashMap
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import scala.collection.mutable
+import io.armadaproject.armada.ArmadaClient
 
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
@@ -77,7 +79,10 @@ private[spark] class ArmadaClusterManagerBackend(
           val mapping = new ConcurrentHashMap[String, String]()
           jobIdToExecutor = Some(mapping)
 
-          val watcher = new ArmadaEventWatcher(channel, queue, jobSetId, this, mapping)
+          val token = conf.get(ARMADA_AUTH_TOKEN)
+          val submitClient = ArmadaClient(host, port, useSsl = false, token)
+
+          val watcher = new ArmadaEventWatcher(channel, queue, jobSetId, this, mapping, submitClient)
           eventWatcher = Some(watcher)
           watcher.start()
           logInfo(s"Armada Event Watcher started for queue=$queue jobSetId=$jobSetId at $host:$port")
