@@ -36,6 +36,7 @@ import org.scalatest.matchers.should.Matchers
 import java.io.{File, FileWriter}
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -50,8 +51,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val DEFAULT_RUN_AS_USER        = 185
 
   // Constants for container and image names
-  private val EXECUTOR_CONTAINER_NAME = "spark-kubernetes-executor"
-  private val DRIVER_CONTAINER_NAME   = "spark-kubernetes-driver"
+  private val EXECUTOR_CONTAINER_NAME = "executor"
+  private val DRIVER_CONTAINER_NAME   = "driver"
   private val DEFAULT_IMAGE_NAME      = "spark:3.5.0"
   private val CUSTOM_IMAGE_NAME       = "custom-spark:latest"
 
@@ -448,7 +449,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
@@ -498,7 +503,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.initContainers should have size 1
     val initContainer = podSpec.initContainers.head
-    initContainer.name shouldBe Some("init")
+    initContainer.name shouldBe Some("wait-for-driver")
     initContainer.image shouldBe Some("busybox")
     initContainer.command.take(2) shouldBe Seq("sh", "-c")
 
@@ -612,7 +617,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = Some(template),
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -652,7 +661,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.initContainers should have size 1
     val initContainer = podSpec.initContainers.head
-    initContainer.name shouldBe Some("init")
+    initContainer.name shouldBe Some("wait-for-driver")
     initContainer.image shouldBe Some("busybox")
     initContainer.command.take(2) shouldBe Seq("sh", "-c")
 
@@ -890,7 +899,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -901,7 +914,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq("--arg1", "--arg2")
+      Seq("--arg1", "--arg2"),
+      new SparkConf()
     )
 
     result.priority shouldBe RUNTIME_PRIORITY
@@ -937,9 +951,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    container.ports should not be empty
-    container.ports should have size 1
+    // Driver container defines ports for listening
+    container.ports should have size 2
     container.ports.head.containerPort shouldBe Some(7078)
+    container.ports(1).containerPort shouldBe Some(4040)
 
     result.services should have size 1
     val service = result.services.head
@@ -1026,7 +1041,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = Some(template),
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -1037,7 +1056,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       "org.example.TestClass",
       Seq.empty[Volume],
       Seq.empty[VolumeMount],
-      Seq.empty[String]
+      Seq.empty[String],
+      new SparkConf()
     )
 
     result.podSpec should not be empty
@@ -1062,9 +1082,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    container.ports should not be empty
-    container.ports should have size 1
+    // Driver container defines ports for listening
+    container.ports should have size 2
     container.ports.head.containerPort shouldBe Some(7078)
+    container.ports(1).containerPort shouldBe Some(4040)
 
     result.services should have size 1
     val service = result.services.head
@@ -1138,7 +1159,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val runtimeAnnotations = Map("runtime-key" -> "runtime-value")
@@ -1161,6 +1186,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("resolveIngressConfig should follow CLI > template > default precedence") {
+    sparkConf.set("spark.ui.port", "7078")
+    sparkConf.set("spark.armada.driver.ingress.port", "7078")
     val templateIngress = IngressConfig(
       ports = Seq(8080),
       annotations = Map("foo" -> "template"),
@@ -1176,10 +1203,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.resolveIngressConfig(
       Some(cliIngress),
-      Some(templateIngress)
+      Some(templateIngress),
+      sparkConf
     )
 
-    // Port should always be overriden to Seq(7078)
     result.ports shouldBe Seq(7078)
 
     result.annotations should contain("foo" -> "template")
@@ -1189,7 +1216,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   }
 
   test("resolveIngressConfig should use defaults when no CLI or template values") {
-    val result = armadaClientApp.resolveIngressConfig(None, None)
+    sparkConf.set("spark.ui.port", "7078")
+    val result = armadaClientApp.resolveIngressConfig(None, None, sparkConf)
 
     result.ports shouldBe Seq(7078)
     result.annotations shouldBe Map.empty
@@ -1230,7 +1258,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1260,7 +1292,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       mainClass = "org.example.SparkApp",
       volumes = Seq.empty,
       volumeMounts = Seq.empty,
-      additionalDriverArgs = Seq("--arg1", "value1")
+      additionalDriverArgs = Seq("--arg1", "value1"),
+      conf = new SparkConf()
     )
 
     result.priority shouldBe RUNTIME_PRIORITY
@@ -1290,9 +1323,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    container.ports should not be empty
-    container.ports should have size 1
+    // Driver container defines ports for listening
+    container.ports should have size 2
     container.ports.head.containerPort shouldBe Some(7078)
+    container.ports(1).containerPort shouldBe Some(4040)
 
     container.resources should not be empty
     val resources = container.resources.get
@@ -1338,7 +1372,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None, // No template provided
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1385,7 +1423,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.initContainers should have size 1
     val initContainer = podSpec.initContainers.head
-    initContainer.name shouldBe Some("init")
+    initContainer.name shouldBe Some("wait-for-driver")
     initContainer.image shouldBe Some("busybox")
     initContainer.command.take(2) shouldBe Seq("sh", "-c")
 
@@ -1462,7 +1500,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1498,9 +1540,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       .toMap
     envVars should contain("SPARK_CONF_DIR" -> "/opt/spark/conf")
 
-    container.ports should not be empty
-    container.ports should have size 1
+    // Driver container defines ports for listening
+    container.ports should have size 2
     container.ports.head.containerPort shouldBe Some(7078)
+    container.ports(1).containerPort shouldBe Some(4040)
 
     result.services should have size 1
   }
@@ -1545,7 +1588,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverJobItemTemplate = None,
       executorJobItemTemplate = None,
       cliConfig = cliConfig,
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1562,8 +1609,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       configGenerator = configGenerator,
       driverHostname = "driver-service",
       executorCount = 2,
-      conf = sparkConf,
-      driverJobItem = driverJobItem
+      conf = sparkConf
     )
 
     results should have size 2
@@ -1579,7 +1625,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
       podSpec.initContainers should have size 1
       val initContainer = podSpec.initContainers.head
-      initContainer.name shouldBe Some("init")
+      initContainer.name shouldBe Some("wait-for-driver")
       initContainer.image shouldBe Some("busybox")
       initContainer.command.take(2) shouldBe Seq("sh", "-c")
 
@@ -1632,7 +1678,11 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
         executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
       ),
-      applicationId = "armada-spark-app-id"
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
     )
 
     sparkConf.set("spark.executor.instances", "0")
@@ -1829,6 +1879,413 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       armadaClientApp.validateArmadaJobConfig(sparkConf, clientArguments)
     configWithMissingJobSetId.queue shouldBe "cli-queue"
     configWithMissingJobSetId.jobSetId shouldBe "template-job-set"
+  }
+
+  test(
+    "mergeExecutorTemplate should not introduce framework-level duplicates with feature steps"
+  ) {
+    // This test verifies that the framework doesn't duplicate resources when merging
+    // templates with feature steps. User mistakes (same resource in both) are NOT our concern.
+    // We only check that the framework doesn't add the same thing twice.
+
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
+      priority = TEMPLATE_PRIORITY,
+      namespace = "template-namespace",
+      annotations = Map("template-annotation" -> "template-value"),
+      labels = Map("template-label" -> "template-value"),
+      podSpec = Some(
+        PodSpec()
+          .withVolumes(
+            Seq(
+              Volume()
+                .withName("template-volume")
+                .withVolumeSource(
+                  k8s.io.api.core.v1.generated.VolumeSource(
+                    emptyDir = Some(k8s.io.api.core.v1.generated.EmptyDirVolumeSource())
+                  )
+                )
+            )
+          )
+          .withContainers(
+            Seq(
+              Container()
+                .withName("template-container")
+                .withImage("executor-template-image:1.0")
+                .withVolumeMounts(
+                  Seq(
+                    VolumeMount()
+                      .withName("template-volume")
+                      .withMountPath("/tmp/template-data")
+                  )
+                )
+            )
+          )
+      )
+    )
+
+    // Feature step with DIFFERENT volumes/mounts (not duplicating template - that's user's fault)
+    val featureStepJobItem = JobSubmitRequestItem(
+      priority = 1.0,
+      namespace = "default",
+      podSpec = Some(
+        PodSpec()
+          .withVolumes(
+            Seq(
+              Volume()
+                .withName("feature-step-volume")
+                .withVolumeSource(
+                  k8s.io.api.core.v1.generated.VolumeSource(
+                    emptyDir = Some(k8s.io.api.core.v1.generated.EmptyDirVolumeSource())
+                  )
+                )
+            )
+          )
+      )
+    )
+
+    val featureStepContainer = Container()
+      .withName(EXECUTOR_CONTAINER_NAME)
+      .withVolumeMounts(
+        Seq(
+          VolumeMount()
+            .withName("feature-step-volume")
+            .withMountPath("/tmp/feature-step-data")
+        )
+      )
+
+    val cliConfig = armadaClientApp.CLIConfig(
+      queue = Some("test-queue"),
+      jobSetId = Some("test-job-set"),
+      namespace = Some("runtime-namespace"),
+      priority = Some(RUNTIME_PRIORITY),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
+      podLabels = Map.empty,
+      driverLabels = Map.empty,
+      executorLabels = Map.empty,
+      armadaClusterUrl = Some("armada://localhost:50051"),
+      nodeSelectors = Map("node-type" -> "compute"),
+      nodeUniformityLabel = Some("zone"),
+      executorConnectionTimeout = Some(300.seconds),
+      runAsUser = Some(RUNTIME_RUN_AS_USER),
+      driverResources = armadaClientApp.ResourceConfig(
+        limitCores = Some("1"),
+        requestCores = Some("1"),
+        limitMemory = Some("1Gi"),
+        requestMemory = Some("1Gi")
+      ),
+      executorResources = armadaClientApp.ResourceConfig(
+        limitCores = Some("1"),
+        requestCores = Some("1"),
+        limitMemory = Some("1Gi"),
+        requestMemory = Some("1Gi")
+      )
+    )
+
+    val armadaJobConfig = armadaClientApp.ArmadaJobConfig(
+      queue = "test-queue",
+      jobSetId = "test-job-set",
+      jobTemplate = None,
+      driverJobItemTemplate = None,
+      executorJobItemTemplate = Some(template),
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = Some(featureStepJobItem),
+      executorFeatureStepContainer = Some(featureStepContainer)
+    )
+
+    val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
+
+    val resolvedConfig = armadaClientApp.ResolvedJobConfig(
+      namespace = "runtime-namespace",
+      priority = RUNTIME_PRIORITY,
+      containerImage = DEFAULT_IMAGE_NAME,
+      armadaClusterUrl = "armada://localhost:50051",
+      executorConnectionTimeout = 300.seconds,
+      runAsUser = RUNTIME_RUN_AS_USER,
+      annotations = Map("runtime-annotation" -> "runtime-value"),
+      labels = Map("runtime-label" -> "runtime-value"),
+      nodeSelectors = Map("node-type" -> "compute"),
+      driverResources =
+        armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi")),
+      executorResources =
+        armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi"))
+    )
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      Some(template),
+      0,
+      resolvedConfig,
+      armadaJobConfig,
+      javaOptEnvVars,
+      "driver-service",
+      7078,
+      Seq.empty, // volumes
+      sparkConf
+    )
+
+    val podSpec = result.podSpec.get
+
+    // Verify volumes: should have both template-volume and feature-step-volume, no duplicates
+    val volumeNames = podSpec.volumes.map(_.name).flatten
+    volumeNames should contain("template-volume")
+    volumeNames should contain("feature-step-volume")
+    volumeNames.size shouldBe volumeNames.distinct.size // No duplicates
+
+    // Verify volume mounts in the executor container
+    val executorContainer =
+      podSpec.containers.find(_.name.contains(EXECUTOR_CONTAINER_NAME)).get
+    val volumeMountNames = executorContainer.volumeMounts.map(_.name).flatten
+    volumeMountNames should contain("template-volume")
+    volumeMountNames should contain("feature-step-volume")
+
+    // CRITICAL: Verify no duplicates introduced by framework
+    volumeMountNames.size shouldBe volumeMountNames.distinct.size
+
+    // Additional verification: count each specific mount
+    volumeMountNames.count(_ == "template-volume") shouldBe 1
+    volumeMountNames.count(_ == "feature-step-volume") shouldBe 1
+  }
+
+  test("mergeDriverTemplate should not introduce framework-level duplicates with feature steps") {
+    // Similar test for driver template merging
+
+    val template: JobSubmitRequestItem = JobSubmitRequestItem(
+      priority = TEMPLATE_PRIORITY,
+      namespace = "template-namespace",
+      annotations = Map("template-annotation" -> "template-value"),
+      labels = Map("template-label" -> "template-value"),
+      podSpec = Some(
+        PodSpec()
+          .withVolumes(
+            Seq(
+              Volume()
+                .withName("template-volume")
+                .withVolumeSource(
+                  k8s.io.api.core.v1.generated.VolumeSource(
+                    emptyDir = Some(k8s.io.api.core.v1.generated.EmptyDirVolumeSource())
+                  )
+                )
+            )
+          )
+          .withContainers(
+            Seq(
+              Container()
+                .withName("template-container")
+                .withImage("driver-template-image:1.0")
+                .withVolumeMounts(
+                  Seq(
+                    VolumeMount()
+                      .withName("template-volume")
+                      .withMountPath("/tmp/template-data")
+                  )
+                )
+            )
+          )
+      )
+    )
+
+    // Feature step with DIFFERENT volumes/mounts
+    val featureStepJobItem = JobSubmitRequestItem(
+      priority = 1.0,
+      namespace = "default",
+      podSpec = Some(
+        PodSpec()
+          .withVolumes(
+            Seq(
+              Volume()
+                .withName("feature-step-volume")
+                .withVolumeSource(
+                  k8s.io.api.core.v1.generated.VolumeSource(
+                    emptyDir = Some(k8s.io.api.core.v1.generated.EmptyDirVolumeSource())
+                  )
+                )
+            )
+          )
+      )
+    )
+
+    val featureStepContainer = Container()
+      .withName(DRIVER_CONTAINER_NAME)
+      .withVolumeMounts(
+        Seq(
+          VolumeMount()
+            .withName("feature-step-volume")
+            .withMountPath("/tmp/feature-step-data")
+        )
+      )
+
+    val cliConfig = armadaClientApp.CLIConfig(
+      queue = Some("test-queue"),
+      jobSetId = Some("test-job-set"),
+      namespace = Some("runtime-namespace"),
+      priority = Some(RUNTIME_PRIORITY),
+      containerImage = Some(DEFAULT_IMAGE_NAME),
+      podLabels = Map.empty,
+      driverLabels = Map.empty,
+      executorLabels = Map.empty,
+      armadaClusterUrl = Some("armada://localhost:50051"),
+      nodeSelectors = Map("node-type" -> "compute"),
+      nodeUniformityLabel = Some("zone"),
+      executorConnectionTimeout = Some(300.seconds),
+      runAsUser = Some(RUNTIME_RUN_AS_USER),
+      driverResources = armadaClientApp.ResourceConfig(
+        limitCores = Some("1"),
+        requestCores = Some("1"),
+        limitMemory = Some("1Gi"),
+        requestMemory = Some("1Gi")
+      ),
+      executorResources = armadaClientApp.ResourceConfig(
+        limitCores = Some("1"),
+        requestCores = Some("1"),
+        limitMemory = Some("1Gi"),
+        requestMemory = Some("1Gi")
+      )
+    )
+
+    val armadaJobConfig = armadaClientApp.ArmadaJobConfig(
+      queue = "test-queue",
+      jobSetId = "test-job-set",
+      jobTemplate = None,
+      driverJobItemTemplate = Some(template),
+      executorJobItemTemplate = None,
+      cliConfig = cliConfig,
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = Some(featureStepJobItem),
+      driverFeatureStepContainer = Some(featureStepContainer),
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
+    )
+
+    val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
+
+    val resolvedConfig = armadaClientApp.ResolvedJobConfig(
+      namespace = "runtime-namespace",
+      priority = RUNTIME_PRIORITY,
+      containerImage = DEFAULT_IMAGE_NAME,
+      armadaClusterUrl = "armada://localhost:50051",
+      executorConnectionTimeout = 300.seconds,
+      runAsUser = RUNTIME_RUN_AS_USER,
+      annotations = Map("runtime-annotation" -> "runtime-value"),
+      labels = Map("runtime-label" -> "runtime-value"),
+      nodeSelectors = Map("node-type" -> "compute"),
+      driverResources =
+        armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi")),
+      executorResources =
+        armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi"))
+    )
+
+    val result = armadaClientApp.mergeDriverTemplate(
+      Some(template),
+      resolvedConfig,
+      armadaJobConfig,
+      7078, // driverPort
+      clientArguments.mainClass,
+      Seq.empty, // volumes
+      Seq.empty, // volumeMounts
+      Seq.empty, // additionalDriverArgs
+      new SparkConf()
+    )
+
+    val podSpec = result.podSpec.get
+
+    // Verify volumes: should have both template-volume and feature-step-volume, no duplicates
+    val volumeNames = podSpec.volumes.map(_.name).flatten
+    volumeNames should contain("template-volume")
+    volumeNames should contain("feature-step-volume")
+    volumeNames.size shouldBe volumeNames.distinct.size // No duplicates
+
+    // Verify volume mounts in the driver container
+    val driverContainer =
+      podSpec.containers.find(_.name.contains(DRIVER_CONTAINER_NAME)).get
+    val volumeMountNames = driverContainer.volumeMounts.map(_.name).flatten
+    volumeMountNames should contain("template-volume")
+    volumeMountNames should contain("feature-step-volume")
+
+    // CRITICAL: Verify no duplicates introduced by framework
+    volumeMountNames.size shouldBe volumeMountNames.distinct.size
+
+    // Additional verification: count each specific mount
+    volumeMountNames.count(_ == "template-volume") shouldBe 1
+    volumeMountNames.count(_ == "feature-step-volume") shouldBe 1
+  }
+
+  test("PodMerger should preserve base fields when overriding pod doesn't set them") {
+    // Test for field preservation during pod merging
+    import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}
+
+    // Base pod has serviceAccount and hostname set
+    val basePod = new PodBuilder()
+      .withNewMetadata()
+      .withName("base")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("base-service-account")
+      .withHostname("base-hostname")
+      .addNewVolume()
+      .withName("base-volume")
+      .withNewEmptyDir()
+      .endEmptyDir()
+      .endVolume()
+      .endSpec()
+      .build()
+
+    // Overriding pod has NO serviceAccount or hostname but has volumes
+    val overridingPod = new PodBuilder()
+      .withNewMetadata()
+      .withName("overriding")
+      .endMetadata()
+      .withNewSpec()
+      .addNewVolume()
+      .withName("template-volume")
+      .withNewEmptyDir()
+      .endEmptyDir()
+      .endVolume()
+      .endSpec()
+      .build()
+
+    val merged = PodMerger.mergePods(base = basePod, overriding = overridingPod)
+
+    // Base fields should be preserved when not set in overriding
+    merged.getSpec.getServiceAccount shouldBe "base-service-account"
+    merged.getSpec.getHostname shouldBe "base-hostname"
+
+    // Arrays should be strategically merged
+    val volumeNames = merged.getSpec.getVolumes.asScala.map(_.getName).toSet
+    volumeNames should contain("base-volume")
+    volumeNames should contain("template-volume")
+    volumeNames.size shouldBe 2
+  }
+
+  test("PodMerger should override base fields when overriding pod sets them") {
+    import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}
+
+    val basePod = new PodBuilder()
+      .withNewMetadata()
+      .withName("base")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("base-service-account")
+      .withHostname("base-hostname")
+      .endSpec()
+      .build()
+
+    val overridingPod = new PodBuilder()
+      .withNewMetadata()
+      .withName("overriding")
+      .endMetadata()
+      .withNewSpec()
+      .withServiceAccount("template-service-account")
+      .withHostname("template-hostname")
+      .endSpec()
+      .build()
+
+    val merged = PodMerger.mergePods(base = basePod, overriding = overridingPod)
+
+    // Overriding values should win when explicitly set
+    merged.getSpec.getServiceAccount shouldBe "template-service-account"
+    merged.getSpec.getHostname shouldBe "template-hostname"
   }
 
 }

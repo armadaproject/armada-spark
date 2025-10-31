@@ -24,13 +24,13 @@ import scala.jdk.CollectionConverters._
 
 /** Converts between fabric8 PodSpec and protobuf PodSpec.
   *
-  * Maps ALL fields that exist in the protobuf-generated Kubernetes API. Note: The protobuf API is a
-  * subset of the full Kubernetes API, so not all fabric8 fields can be mapped.
+  * Required because protobuf and fabric8 have different field structures. fabric8 correctly parses
+  * K8s YAML while protobuf is needed for Armada gRPC. Some fields hardcoded to None/empty for
+  * compatibility across Spark versions (3.3.x, 3.5.x) with different fabric8 versions.
   */
 object PodSpecConverter {
 
-  /** Converts a fabric8 PodSpec to protobuf PodSpec. Maps ALL fields that exist in protobuf API.
-    */
+  /** Converts a fabric8 PodSpec to protobuf PodSpec. */
   def fabric8ToProtobuf(fabric8Spec: model.PodSpec): generated.PodSpec = {
     if (fabric8Spec == null) {
       return generated.PodSpec()
@@ -38,42 +38,59 @@ object PodSpecConverter {
 
     generated.PodSpec(
       activeDeadlineSeconds = Option(fabric8Spec.getActiveDeadlineSeconds).map(_.longValue()),
-      affinity = None,
+      affinity = Option(fabric8Spec.getAffinity).flatMap(convertAffinityFromFabric8),
       automountServiceAccountToken =
         Option(fabric8Spec.getAutomountServiceAccountToken).map(_.booleanValue()),
       containers = Option(fabric8Spec.getContainers)
         .map(_.asScala.toSeq.map(convertContainer))
         .getOrElse(Seq.empty),
+      // dnsConfig: K8s 1.10+, not supported in fabric8 versions used by Spark 3.3.x
       dnsConfig = None,
       dnsPolicy = Option(fabric8Spec.getDnsPolicy),
       enableServiceLinks = Option(fabric8Spec.getEnableServiceLinks).map(_.booleanValue()),
+      // ephemeralContainers: K8s 1.23+, not supported in fabric8 versions used by Spark 3.3.x
       ephemeralContainers = Seq.empty,
-      hostAliases = Seq.empty,
+      hostAliases = Option(fabric8Spec.getHostAliases)
+        .map(
+          _.asScala.toSeq.map(ha =>
+            generated.HostAlias(
+              hostnames = Option(ha.getHostnames).map(_.asScala.toSeq).getOrElse(Seq.empty),
+              ip = Option(ha.getIp)
+            )
+          )
+        )
+        .getOrElse(Seq.empty),
       hostIPC = Option(fabric8Spec.getHostIPC).map(_.booleanValue()),
       hostNetwork = Option(fabric8Spec.getHostNetwork).map(_.booleanValue()),
       hostPID = Option(fabric8Spec.getHostPID).map(_.booleanValue()),
-      // hostUsers field is not supported - it was added in K8s 1.25+ and is not available
-      // in the client versions used by Spark 3.3.x. This field is rarely needed for Spark workloads.
+      // hostUsers: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
       hostUsers = None,
       hostname = Option(fabric8Spec.getHostname),
       imagePullSecrets = Option(fabric8Spec.getImagePullSecrets)
         .map(_.asScala.toSeq.map(ref => generated.LocalObjectReference(name = Option(ref.getName))))
         .getOrElse(Seq.empty),
-      initContainers = Seq.empty,
+      initContainers = Option(fabric8Spec.getInitContainers)
+        .map(_.asScala.toSeq.map(convertContainer))
+        .getOrElse(Seq.empty),
       nodeName = Option(fabric8Spec.getNodeName),
       nodeSelector = Option(fabric8Spec.getNodeSelector)
         .map(_.asScala.toMap)
         .getOrElse(Map.empty),
+      // os: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
       os = None,
+      // overhead: K8s 1.18+, not supported in fabric8 versions used by Spark 3.3.x
       overhead = Map.empty,
       preemptionPolicy = Option(fabric8Spec.getPreemptionPolicy),
       priority = Option(fabric8Spec.getPriority).map(_.intValue()),
       priorityClassName = Option(fabric8Spec.getPriorityClassName),
+      // readinessGates: K8s 1.14+, not supported in fabric8 versions used by Spark 3.3.x
       readinessGates = Seq.empty,
+      // resourceClaims: K8s 1.26+, not supported in fabric8 versions used by Spark 3.3.x
       resourceClaims = Seq.empty,
       restartPolicy = Option(fabric8Spec.getRestartPolicy),
       runtimeClassName = Option(fabric8Spec.getRuntimeClassName),
       schedulerName = Option(fabric8Spec.getSchedulerName),
+      // schedulingGates: K8s 1.27+, not supported in fabric8 versions used by Spark 3.3.x
       schedulingGates = Seq.empty,
       securityContext = Option(fabric8Spec.getSecurityContext).map(sc =>
         generated.PodSecurityContext(
@@ -146,9 +163,7 @@ object PodSpecConverter {
     )
   }
 
-  /** Converts a protobuf PodSpec back to fabric8 PodSpec. Maps ALL fields that exist in protobuf
-    * API back to fabric8.
-    */
+  /** Converts a protobuf PodSpec back to fabric8 PodSpec. */
   def protobufToFabric8(protobufSpec: generated.PodSpec): model.PodSpec = {
     if (protobufSpec == null) {
       return new model.PodSpec()
@@ -157,6 +172,13 @@ object PodSpecConverter {
     val spec = new model.PodSpec()
 
     protobufSpec.activeDeadlineSeconds.foreach(v => spec.setActiveDeadlineSeconds(v))
+
+    // Convert affinity from protobuf to fabric8
+    protobufSpec.affinity.foreach { aff =>
+      val fabric8Affinity = convertAffinityToFabric8(aff)
+      spec.setAffinity(fabric8Affinity)
+    }
+
     protobufSpec.automountServiceAccountToken.foreach(v => spec.setAutomountServiceAccountToken(v))
 
     if (protobufSpec.containers.nonEmpty) {
@@ -164,13 +186,30 @@ object PodSpecConverter {
       spec.setContainers(containers)
     }
 
+    if (protobufSpec.initContainers.nonEmpty) {
+      val initContainers = protobufSpec.initContainers.map(convertContainerToFabric8).asJava
+      spec.setInitContainers(initContainers)
+    }
+
     protobufSpec.dnsPolicy.foreach(spec.setDnsPolicy)
     protobufSpec.enableServiceLinks.foreach(v => spec.setEnableServiceLinks(v))
     protobufSpec.hostIPC.foreach(v => spec.setHostIPC(v))
     protobufSpec.hostNetwork.foreach(v => spec.setHostNetwork(v))
     protobufSpec.hostPID.foreach(v => spec.setHostPID(v))
-    // hostUsers field is not set - not available in K8s client versions used by Spark 3.3.x
+    // hostUsers: K8s 1.25+, not supported in fabric8 versions used by Spark 3.3.x
     protobufSpec.hostname.foreach(spec.setHostname)
+
+    if (protobufSpec.hostAliases.nonEmpty) {
+      val hostAliases = protobufSpec.hostAliases.map { ha =>
+        val hostAlias = new model.HostAlias()
+        ha.ip.foreach(hostAlias.setIp)
+        if (ha.hostnames.nonEmpty) {
+          hostAlias.setHostnames(ha.hostnames.asJava)
+        }
+        hostAlias
+      }.asJava
+      spec.setHostAliases(hostAliases)
+    }
 
     if (protobufSpec.imagePullSecrets.nonEmpty) {
       val refs = protobufSpec.imagePullSecrets
@@ -270,6 +309,194 @@ object PodSpecConverter {
     }
 
     spec
+  }
+
+  private def convertAffinityToFabric8(aff: generated.Affinity): model.Affinity = {
+    val affinity = new model.Affinity()
+
+    // Convert NodeAffinity
+    aff.nodeAffinity.foreach { na =>
+      val nodeAffinity = new model.NodeAffinity()
+
+      // Convert requiredDuringSchedulingIgnoredDuringExecution
+      na.requiredDuringSchedulingIgnoredDuringExecution.foreach { req =>
+        val nodeSelector = new model.NodeSelector()
+        val terms = req.nodeSelectorTerms.map { term =>
+          val nodeSelectorTerm = new model.NodeSelectorTerm()
+          if (term.matchExpressions.nonEmpty) {
+            val matchExpressions = term.matchExpressions.map { me =>
+              val requirement = new model.NodeSelectorRequirement()
+              me.key.foreach(requirement.setKey)
+              me.operator.foreach(requirement.setOperator)
+              if (me.values.nonEmpty) {
+                requirement.setValues(me.values.asJava)
+              }
+              requirement
+            }.asJava
+            nodeSelectorTerm.setMatchExpressions(matchExpressions)
+          }
+          if (term.matchFields.nonEmpty) {
+            val matchFields = term.matchFields.map { mf =>
+              val requirement = new model.NodeSelectorRequirement()
+              mf.key.foreach(requirement.setKey)
+              mf.operator.foreach(requirement.setOperator)
+              if (mf.values.nonEmpty) {
+                requirement.setValues(mf.values.asJava)
+              }
+              requirement
+            }.asJava
+            nodeSelectorTerm.setMatchFields(matchFields)
+          }
+          nodeSelectorTerm
+        }.asJava
+        nodeSelector.setNodeSelectorTerms(terms)
+        nodeAffinity.setRequiredDuringSchedulingIgnoredDuringExecution(nodeSelector)
+      }
+
+      // Convert preferredDuringSchedulingIgnoredDuringExecution
+      if (na.preferredDuringSchedulingIgnoredDuringExecution.nonEmpty) {
+        val prefs = na.preferredDuringSchedulingIgnoredDuringExecution.map { pref =>
+          val preferredTerm = new model.PreferredSchedulingTerm()
+          pref.weight.foreach(w => preferredTerm.setWeight(w))
+          pref.preference.foreach { prefTerm =>
+            val nodeSelectorTerm = new model.NodeSelectorTerm()
+            if (prefTerm.matchExpressions.nonEmpty) {
+              val matchExpressions = prefTerm.matchExpressions.map { me =>
+                val requirement = new model.NodeSelectorRequirement()
+                me.key.foreach(requirement.setKey)
+                me.operator.foreach(requirement.setOperator)
+                if (me.values.nonEmpty) {
+                  requirement.setValues(me.values.asJava)
+                }
+                requirement
+              }.asJava
+              nodeSelectorTerm.setMatchExpressions(matchExpressions)
+            }
+            if (prefTerm.matchFields.nonEmpty) {
+              val matchFields = prefTerm.matchFields.map { mf =>
+                val requirement = new model.NodeSelectorRequirement()
+                mf.key.foreach(requirement.setKey)
+                mf.operator.foreach(requirement.setOperator)
+                if (mf.values.nonEmpty) {
+                  requirement.setValues(mf.values.asJava)
+                }
+                requirement
+              }.asJava
+              nodeSelectorTerm.setMatchFields(matchFields)
+            }
+            preferredTerm.setPreference(nodeSelectorTerm)
+          }
+          preferredTerm
+        }.asJava
+        nodeAffinity.setPreferredDuringSchedulingIgnoredDuringExecution(prefs)
+      }
+
+      affinity.setNodeAffinity(nodeAffinity)
+    }
+
+    // Note: PodAffinity and PodAntiAffinity conversions would be similar but are not currently used
+    // in the tests. They can be added if needed.
+
+    affinity
+  }
+
+  private[submit] def convertAffinityFromFabric8(a: model.Affinity): Option[generated.Affinity] = {
+    if (a == null) return None
+
+    val nodeAffinity = Option(a.getNodeAffinity).map { na =>
+      generated.NodeAffinity(
+        requiredDuringSchedulingIgnoredDuringExecution = Option(
+          na.getRequiredDuringSchedulingIgnoredDuringExecution
+        ).map { req =>
+          generated.NodeSelector(
+            nodeSelectorTerms = Option(req.getNodeSelectorTerms)
+              .map(
+                _.asScala.toSeq.map { term =>
+                  generated.NodeSelectorTerm(
+                    matchExpressions = Option(term.getMatchExpressions)
+                      .map(
+                        _.asScala.toSeq.map { me =>
+                          generated.NodeSelectorRequirement(
+                            key = Option(me.getKey),
+                            operator = Option(me.getOperator),
+                            values = Option(me.getValues).map(_.asScala.toSeq).getOrElse(Seq.empty)
+                          )
+                        }
+                      )
+                      .getOrElse(Seq.empty),
+                    matchFields = Option(term.getMatchFields)
+                      .map(
+                        _.asScala.toSeq.map { mf =>
+                          generated.NodeSelectorRequirement(
+                            key = Option(mf.getKey),
+                            operator = Option(mf.getOperator),
+                            values = Option(mf.getValues).map(_.asScala.toSeq).getOrElse(Seq.empty)
+                          )
+                        }
+                      )
+                      .getOrElse(Seq.empty)
+                  )
+                }
+              )
+              .getOrElse(Seq.empty)
+          )
+        },
+        preferredDuringSchedulingIgnoredDuringExecution = Option(
+          na.getPreferredDuringSchedulingIgnoredDuringExecution
+        )
+          .map(
+            _.asScala.toSeq.map { pref =>
+              generated.PreferredSchedulingTerm(
+                preference = Option(pref.getPreference).map { prefTerm =>
+                  generated.NodeSelectorTerm(
+                    matchExpressions = Option(prefTerm.getMatchExpressions)
+                      .map(
+                        _.asScala.toSeq.map { me =>
+                          generated.NodeSelectorRequirement(
+                            key = Option(me.getKey),
+                            operator = Option(me.getOperator),
+                            values = Option(me.getValues).map(_.asScala.toSeq).getOrElse(Seq.empty)
+                          )
+                        }
+                      )
+                      .getOrElse(Seq.empty),
+                    matchFields = Option(prefTerm.getMatchFields)
+                      .map(
+                        _.asScala.toSeq.map { mf =>
+                          generated.NodeSelectorRequirement(
+                            key = Option(mf.getKey),
+                            operator = Option(mf.getOperator),
+                            values = Option(mf.getValues).map(_.asScala.toSeq).getOrElse(Seq.empty)
+                          )
+                        }
+                      )
+                      .getOrElse(Seq.empty)
+                  )
+                },
+                weight = Option(pref.getWeight).map(_.intValue())
+              )
+            }
+          )
+          .getOrElse(Seq.empty)
+      )
+    }
+
+    // Note: PodAffinity and PodAntiAffinity not implemented yet (not used in current tests)
+    val podAffinity     = None
+    val podAntiAffinity = None
+
+    // Only return Some if at least one affinity type is defined
+    if (nodeAffinity.isDefined || podAffinity.isDefined || podAntiAffinity.isDefined) {
+      Some(
+        generated.Affinity(
+          nodeAffinity = nodeAffinity,
+          podAffinity = podAffinity,
+          podAntiAffinity = podAntiAffinity
+        )
+      )
+    } else {
+      None
+    }
   }
 
   private def convertContainerToFabric8(c: generated.Container): model.Container = {
@@ -381,7 +608,7 @@ object PodSpecConverter {
     container
   }
 
-  private def convertContainer(c: model.Container): generated.Container = {
+  private[submit] def convertContainer(c: model.Container): generated.Container = {
     generated.Container(
       name = Option(c.getName),
       image = Option(c.getImage),
@@ -495,7 +722,7 @@ object PodSpecConverter {
     )
   }
 
-  private def convertVolume(v: model.Volume): Option[generated.Volume] = {
+  private[submit] def convertVolume(v: model.Volume): Option[generated.Volume] = {
     if (v == null) return None
 
     val volumeSource = generated.VolumeSource(
@@ -902,7 +1129,21 @@ object PodSpecConverter {
     )
   }
 
-  private def convertVolumeToFabric8(v: generated.Volume): Option[model.Volume] = {
+  private[submit] def convertVolumeMount(vm: model.VolumeMount): Option[generated.VolumeMount] = {
+    if (vm == null) return None
+    Some(
+      generated.VolumeMount(
+        mountPath = Option(vm.getMountPath),
+        mountPropagation = Option(vm.getMountPropagation),
+        name = Option(vm.getName),
+        readOnly = Option(vm.getReadOnly).map(_.booleanValue()),
+        subPath = Option(vm.getSubPath),
+        subPathExpr = Option(vm.getSubPathExpr)
+      )
+    )
+  }
+
+  private[submit] def convertVolumeToFabric8(v: generated.Volume): Option[model.Volume] = {
     if (v == null) return None
 
     val volume = new model.Volume()
@@ -1323,11 +1564,7 @@ object PodSpecConverter {
             if (spec.accessModes.nonEmpty) {
               pvcSpec.setAccessModes(spec.accessModes.asJava)
             }
-            // Note: PVC resources setting is commented out due to incompatibility between
-            // fabric8 6.7.2 (used by Spark 3.x) and fabric8 6.13+ (used by Spark 4.1.0).
-            // In 6.7.2, setResources expects ResourceRequirements
-            // In 6.13+, setResources expects VolumeResourceRequirements
-            // This field is optional and rarely used in ephemeral volumes.
+            // PVC resources: incompatible between fabric8 6.7.2 (Spark 3.x) and 6.13+ (Spark 4.x)
             //
             // spec.resources.foreach { res =>
             //   val resources = new model.ResourceRequirements() // or VolumeResourceRequirements in 6.13+
@@ -1351,5 +1588,20 @@ object PodSpecConverter {
     }
 
     Some(volume)
+  }
+
+  /** Convert protobuf PodSpec to fabric8 Pod with empty metadata. */
+  def protobufPodSpecToFabric8Pod(protobufPodSpec: generated.PodSpec): model.Pod = {
+    val fabric8Spec = protobufToFabric8(protobufPodSpec)
+    new model.PodBuilder()
+      .withNewMetadata()
+      .endMetadata()
+      .withSpec(fabric8Spec)
+      .build()
+  }
+
+  /** Convert fabric8 Pod to protobuf PodSpec. */
+  def fabric8PodToProtobufPodSpec(pod: model.Pod): generated.PodSpec = {
+    fabric8ToProtobuf(pod.getSpec)
   }
 }
