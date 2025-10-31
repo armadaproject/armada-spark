@@ -7,7 +7,6 @@ echo Submitting spark job to Armada.
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
 
-JOBSET="${JOBSET:-armada-spark}"
 
 if [ "${INCLUDE_PYTHON}" == "false" ]; then
     NAME=spark-pi
@@ -53,10 +52,10 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     $CLASS_PROMPT $CLASS_ARG \
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
-    --conf spark.executor.instances=2 \
+    --conf spark.executor.instances=5 \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.armada.jobSetId="$JOBSET" \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
+    --conf spark.armada.internalUrl="armada://10.244.2.14:50051" \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
     --conf spark.local.dir=/tmp \

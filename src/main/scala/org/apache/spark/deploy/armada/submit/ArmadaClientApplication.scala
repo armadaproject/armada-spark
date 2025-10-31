@@ -17,60 +17,12 @@
 package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
-import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
-  ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
-  ARMADA_DRIVER_LIMIT_CORES,
-  ARMADA_DRIVER_LIMIT_MEMORY,
-  ARMADA_DRIVER_REQUEST_CORES,
-  ARMADA_DRIVER_REQUEST_MEMORY,
-  ARMADA_EXECUTOR_CONNECTION_TIMEOUT,
-  ARMADA_EXECUTOR_INIT_CONTAINER_CPU,
-  ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE,
-  ARMADA_EXECUTOR_INIT_CONTAINER_MEMORY,
-  ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
-  ARMADA_EXECUTOR_LIMIT_CORES,
-  ARMADA_EXECUTOR_LIMIT_MEMORY,
-  ARMADA_EXECUTOR_REQUEST_CORES,
-  ARMADA_EXECUTOR_REQUEST_MEMORY,
-  ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
-  ARMADA_JOB_NODE_SELECTORS,
-  ARMADA_JOB_QUEUE,
-  ARMADA_JOB_SET_ID,
-  ARMADA_JOB_TEMPLATE,
-  ARMADA_LOOKOUTURL,
-  ARMADA_RUN_AS_USER,
-  ARMADA_SERVER_INTERNAL_URL,
-  ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS,
-  ARMADA_SPARK_DRIVER_INGRESS_CERT_NAME,
-  ARMADA_SPARK_DRIVER_INGRESS_ENABLED,
-  ARMADA_SPARK_DRIVER_INGRESS_PORT,
-  ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED,
-  ARMADA_SPARK_DRIVER_LABELS,
-  ARMADA_SPARK_EXECUTOR_LABELS,
-  ARMADA_SPARK_JOB_NAMESPACE,
-  ARMADA_SPARK_JOB_PRIORITY,
-  ARMADA_SPARK_POD_LABELS,
-  CONTAINER_IMAGE,
-  DEFAULT_CORES,
-  DEFAULT_MEM,
-  DEFAULT_SPARK_EXECUTOR_CORES,
-  DEFAULT_SPARK_EXECUTOR_MEMORY,
-  commaSeparatedAnnotationsToMap,
-  commaSeparatedLabelsToMap
-}
+import org.apache.spark.deploy.armada.Config.{ARMADA_AUTH_TOKEN, ARMADA_DRIVER_JOB_ITEM_TEMPLATE, ARMADA_DRIVER_LIMIT_CORES, ARMADA_DRIVER_LIMIT_MEMORY, ARMADA_DRIVER_REQUEST_CORES, ARMADA_DRIVER_REQUEST_MEMORY, ARMADA_EXECUTOR_CONNECTION_TIMEOUT, ARMADA_EXECUTOR_INIT_CONTAINER_CPU, ARMADA_EXECUTOR_INIT_CONTAINER_IMAGE, ARMADA_EXECUTOR_INIT_CONTAINER_MEMORY, ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE, ARMADA_EXECUTOR_LIMIT_CORES, ARMADA_EXECUTOR_LIMIT_MEMORY, ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD, ARMADA_EXECUTOR_REQUEST_CORES, ARMADA_EXECUTOR_REQUEST_MEMORY, ARMADA_HEALTH_CHECK_TIMEOUT, ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY, ARMADA_JOB_NODE_SELECTORS, ARMADA_JOB_QUEUE, ARMADA_JOB_SET_ID, ARMADA_JOB_TEMPLATE, ARMADA_LOOKOUTURL, ARMADA_RUN_AS_USER, ARMADA_SERVER_INTERNAL_URL, ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS, ARMADA_SPARK_DRIVER_INGRESS_CERT_NAME, ARMADA_SPARK_DRIVER_INGRESS_ENABLED, ARMADA_SPARK_DRIVER_INGRESS_PORT, ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED, ARMADA_SPARK_DRIVER_LABELS, ARMADA_SPARK_EXECUTOR_LABELS, ARMADA_SPARK_JOB_NAMESPACE, ARMADA_SPARK_JOB_PRIORITY, ARMADA_SPARK_POD_LABELS, CONTAINER_IMAGE, DEFAULT_CORES, DEFAULT_MEM, DEFAULT_SPARK_EXECUTOR_CORES, DEFAULT_SPARK_EXECUTOR_MEMORY, commaSeparatedAnnotationsToMap, commaSeparatedLabelsToMap}
 import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.k8s.submit.{
-  JavaMainAppResource,
-  KubernetesDriverBuilder,
-  MainAppResource,
-  PythonMainAppResource,
-  RMainAppResource
-}
+import org.apache.spark.deploy.k8s.submit.{JavaMainAppResource, KubernetesDriverBuilder, MainAppResource, PythonMainAppResource, RMainAppResource}
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
 import org.apache.spark.{SecurityManager, SparkConf}
@@ -176,7 +128,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
-    log(s"Connecting to Armada Server - host: $host, port: $port")
+    log(s"gbj2: Connecting to Armada Server - host: $host, port: $port")
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
@@ -266,28 +218,27 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  private[submit] def submitArmadaJob(
-      armadaClient: ArmadaClient,
+
+  private case class DriverJobItemResult(
+      jobItem: api.submit.JobSubmitRequestItem,
+      configGenerator: ConfigGenerator,
+      templateAnnotations: Map[String, String],
+      templateLabels: Map[String, String],
+      confSeq: Seq[String]
+  )
+
+  private def buildDriverJobItem(
       clientArguments: ClientArguments,
       armadaJobConfig: ArmadaJobConfig,
-      conf: SparkConf
-  ): (String, Seq[String]) = {
+      conf: SparkConf,
+      executorCount: Int,
+      maybeGangId: Option[String]
+  ): DriverJobItemResult = {
     val primaryResource = extractPrimaryResource(clientArguments.mainAppResource)
-    val executorCount   = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-
-    if (executorCount <= 0) {
-      throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
-      )
-    }
-
     val confSeq         = buildSparkConfArgs(conf)
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
 
     val (templateAnnotations, templateLabels) = extractTemplateMetadata(armadaJobConfig.jobTemplate)
-
-    val maybeGangId =
-      armadaJobConfig.cliConfig.nodeUniformityLabel.map(_ => java.util.UUID.randomUUID.toString)
 
     val runtimeAnnotations = buildAnnotations(
       configGenerator,
@@ -310,7 +261,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val driver = createDriverJob(
+    val jobItem = createDriverJob(
       armadaJobConfig,
       resolvedConfig,
       configGenerator,
@@ -319,27 +270,77 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq,
       conf
     )
-    val driverJobId =
-      submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, driver)
+
+    DriverJobItemResult(
+      jobItem = jobItem,
+      configGenerator = configGenerator,
+      templateAnnotations = templateAnnotations,
+      templateLabels = templateLabels,
+      confSeq = confSeq
+    )
+  }
+
+  private[submit] def submitDriverJob(
+      armadaClient: ArmadaClient,
+      clientArguments: ClientArguments,
+      armadaJobConfig: ArmadaJobConfig,
+      conf: SparkConf
+  ): String = {
+    val executorCount = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+    val maybeGangId =
+      armadaJobConfig.cliConfig.nodeUniformityLabel.map(_ => java.util.UUID.randomUUID.toString)
+
+    val result = buildDriverJobItem(
+      clientArguments,
+      armadaJobConfig,
+      conf,
+      executorCount,
+      maybeGangId
+    )
+    submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, result.jobItem)
+  }
+
+  private[spark] def submitExecutorJobs(
+      armadaClient: ArmadaClient,
+      clientArguments: ClientArguments,
+      armadaJobConfig: ArmadaJobConfig,
+      conf: SparkConf,
+      driverJobId: String,
+      executorCount: Int
+  ): Seq[String] = {
+    if (executorCount <= 0) {
+      throw new IllegalArgumentException(
+        s"Executor count must be greater than 0, but got: $executorCount"
+      )
+    }
+
+    // Build driver job item again for feature steps that require it when constructing executor pods
+    val driverResult = buildDriverJobItem(
+      clientArguments,
+      armadaJobConfig,
+      conf,
+      executorCount,
+      None
+    )
 
     val executorLabels = buildLabels(
       armadaJobConfig.cliConfig.podLabels,
-      templateLabels,
+      driverResult.templateLabels,
       armadaJobConfig.cliConfig.executorLabels
     )
 
-    val executorAnnotations = buildAnnotations(
-      configGenerator,
-      templateAnnotations,
+    val executorRuntimeAnnotations = buildAnnotations(
+      driverResult.configGenerator,
+      driverResult.templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
       executorCount,
-      maybeGangId
+      None
     )
 
     val executorResolvedConfig = resolveJobConfig(
       armadaJobConfig.cliConfig,
       armadaJobConfig.executorJobItemTemplate,
-      executorAnnotations,
+      executorRuntimeAnnotations,
       executorLabels,
       conf
     )
@@ -348,18 +349,42 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
-      configGenerator,
+      driverResult.configGenerator,
       driverHostname,
       executorCount,
       conf
     )
-    val executorJobIds = submitExecutors(
+    submitExecutors(
       armadaClient,
       armadaJobConfig.queue,
       armadaJobConfig.jobSetId,
       executors
     )
 
+  }
+
+  private[submit] def submitArmadaJob(
+      armadaClient: ArmadaClient,
+      clientArguments: ClientArguments,
+      armadaJobConfig: ArmadaJobConfig,
+      conf: SparkConf
+  ): (String, Seq[String]) = {
+    val executorCount = conf.getInt("spark.dynamicAllocation.minExecutors",
+      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf))
+    if (executorCount <= 0) {
+      throw new IllegalArgumentException(
+        s"Executor count must be greater than 0, but got: $executorCount"
+      )
+    }
+    val driverJobId    = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
+    val executorJobIds = submitExecutorJobs(
+      armadaClient,
+      clientArguments,
+      armadaJobConfig,
+      conf,
+      driverJobId,
+      executorCount
+    )
     (driverJobId, executorJobIds)
   }
 
@@ -876,9 +901,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val currentPodSpec    = PodSpecConverter.fabric8PodToProtobufPodSpec(afterCLIVolumes)
     val allInitContainers = currentPodSpec.initContainers
 
+    // Set termination grace period for graceful decommissioning
+    // This must be >= spark.armada.decommission.forceKillTimeout + buffer
+    val gracePeriodSeconds = 180
+
     val finalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
-      .withTerminationGracePeriodSeconds(0)
+      .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(driverContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
@@ -1154,9 +1183,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val allInitContainers =
       PodMerger.mergeByName(currentPodSpec.initContainers, Seq(executorInitContainer))(_.name)
 
+    // Set termination grace period for graceful decommissioning
+    // This must be >= spark.armada.decommission.forceKillTimeout + buffer
+    val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
+
     val finalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
-      .withTerminationGracePeriodSeconds(0)
+      .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
@@ -1199,11 +1232,25 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withApiVersion("v1")
         .withFieldPath("status.podIP")
     )
+    val armadaJobIdSource = EnvVarSource().withFieldRef(
+      ObjectFieldSelector()
+        .withApiVersion("v1")
+        .withFieldPath("metadata.labels['armada_job_id']")
+    )
+    val armadaJobSetIdSource = EnvVarSource().withFieldRef(
+      ObjectFieldSelector()
+        .withApiVersion("v1")
+        .withFieldPath("metadata.annotations['armada_jobset_id']")
+    )
+
     val newEnvVars = Seq(
       EnvVar().withName("SPARK_DRIVER_BIND_ADDRESS").withValueFrom(source),
       EnvVar()
         .withName(ConfigGenerator.ENV_SPARK_CONF_DIR)
-        .withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME)
+        .withValue(ConfigGenerator.REMOTE_CONF_DIR_NAME),
+      EnvVar().withName("ARMADA_JOB_ID").withValueFrom(armadaJobIdSource),
+      EnvVar().withName("ARMADA_JOB_SET_ID").withValueFrom(armadaJobSetIdSource)
+
     )
 
     val featureStepEnvVars = armadaJobConfig.driverFeatureStepContainer
@@ -1314,6 +1361,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .withApiVersion("v1")
         .withFieldPath("metadata.name")
     )
+    val armadaJobIdSource = EnvVarSource().withFieldRef(
+      ObjectFieldSelector()
+        .withApiVersion("v1")
+        .withFieldPath("metadata.labels['armada_job_id']")
+    )
     val sparkExecutorMemory =
       conf.getOption("spark.executor.memory").getOrElse(DEFAULT_SPARK_EXECUTOR_MEMORY)
     val sparkExecutorCores =
@@ -1352,9 +1404,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
 
     val newEnvVars = Seq(
-      EnvVar().withName("SPARK_EXECUTOR_ID").withValue(index.toString),
+      EnvVar().withName("SPARK_EXECUTOR_ID").withValue("EXECID"),
       EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
-      EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(podName),
+      // Ensure executor pod name is based on Armada job id label by referencing ARMADA_JOB_ID
+      EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(armadaJobIdSource),
+      EnvVar().withName("ARMADA_JOB_ID").withValueFrom(armadaJobIdSource),
       EnvVar()
         .withName("SPARK_APPLICATION_ID")
         .withValue(armadaJobConfig.applicationId),
@@ -1636,15 +1690,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int,
       gangId: Option[String]
   ): Map[String, String] = {
-    configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
-      .map(label =>
-        GangSchedulingAnnotations(
-          gangId,
-          1 + executorCount,
-          label
-        )
-      )
-      .getOrElse(Map.empty)
+    // Gang scheduling annotations are temporarily disabled/commented out.
+    // Previously, we added GangSchedulingAnnotations here using nodeUniformityLabel and executorCount.
+    // Now we only merge the generator and template annotations.
+    configGenerator.getAnnotations ++ templateAnnotations
+    // ++ nodeUniformityLabel
+    //   .map(label =>
+    //     GangSchedulingAnnotations(
+    //       gangId,
+    //       1 + executorCount,
+    //       label
+    //     )
+    //   )
+    //   .getOrElse(Map.empty)
   }
 
   private def buildLabels(

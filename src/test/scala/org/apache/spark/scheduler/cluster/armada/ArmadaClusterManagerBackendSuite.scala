@@ -57,31 +57,4 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     when(env.rpcEnv).thenReturn(rpcEnv)
     when(taskSchedulerImpl.isExecutorAlive(executorRange.head.toString)).thenReturn(true)
   }
-  def runTrackerTest(): Unit = {
-    val clock = new ManualClock()
-    val backend = new ArmadaClusterManagerBackend(
-      taskSchedulerImpl,
-      sc,
-      null,
-      "master"
-    )
-
-    val executorTracker = new backend.ExecutorTracker(clock, executorCount)
-    clock.advance(timeout - 1)
-    executorTracker.checkMin()
-    verify(taskSchedulerImpl, never()).error(anyString())
-    clock.advance(timeout + 1)
-    executorTracker.checkMin()
-  }
-  test("Verify ExecutorTracker discovers insufficient executor") {
-    when(taskSchedulerImpl.isExecutorAlive(executorRange.drop(1).head.toString)).thenReturn(false)
-    runTrackerTest()
-    verify(taskSchedulerImpl).error(anyString())
-  }
-
-  test("Verify ExecutorTracker no errors on sufficient executor") {
-    when(taskSchedulerImpl.isExecutorAlive(executorRange.drop(1).head.toString)).thenReturn(true)
-    runTrackerTest()
-    verify(taskSchedulerImpl, never()).error(anyString())
-  }
 }

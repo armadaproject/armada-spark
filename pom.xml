@@ -9,7 +9,7 @@
 
     <!-- Project Coordinates -->
     <groupId>io.armadaproject.armada</groupId>
-    <artifactId>armada-cluster-manager_2.13</artifactId>
+    <artifactId>armada-cluster-manager_2.12</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -26,14 +26,14 @@
         <maven.compiler.target>17</maven.compiler.target>
         <!-- configure Scala version -->
         <scala.major.version>2</scala.major.version>
-        <scala.minor.version>13</scala.minor.version>
-        <scala.patch.version>8</scala.patch.version>
+        <scala.minor.version>12</scala.minor.version>
+        <scala.patch.version>18</scala.patch.version>
         <scala.binary.version>${scala.major.version}.${scala.minor.version}</scala.binary.version>
         <scala.version>${scala.binary.version}.${scala.patch.version}</scala.version>
         <!-- configure Spark version -->
         <spark.major.version>3</spark.major.version>
         <spark.minor.version>5</spark.minor.version>
-        <spark.patch.version>5</spark.patch.version>
+        <spark.patch.version>3</spark.patch.version>
         <spark.binary.version>${spark.major.version}.${spark.minor.version}</spark.binary.version>
         <spark.version>${spark.binary.version}.${spark.patch.version}</spark.version>
         <spotless.version>2.44.4</spotless.version>

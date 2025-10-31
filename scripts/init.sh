@@ -28,7 +28,7 @@ print_usage () {
     echo '   ARMADA_QUEUE=test'
     echo '   USE_KIND=true'
     echo '   INCLUDE_PYTHON=true'
-    echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
+    echo '   PYTHON_SCRIPT=/opt/spark/extraFiles/test-basic-shuffle.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
     exit 1
@@ -60,7 +60,7 @@ export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
-    PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
+    PYTHON_SCRIPT="/opt/spark/extraFiles/test-premption.py"
 else
     INCLUDE_PYTHON=true
 fi
