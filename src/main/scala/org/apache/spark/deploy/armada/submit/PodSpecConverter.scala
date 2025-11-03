@@ -394,9 +394,6 @@ object PodSpecConverter {
       affinity.setNodeAffinity(nodeAffinity)
     }
 
-    // Note: PodAffinity and PodAntiAffinity conversions would be similar but are not currently used
-    // in the tests. They can be added if needed.
-
     affinity
   }
 
@@ -481,7 +478,6 @@ object PodSpecConverter {
       )
     }
 
-    // Note: PodAffinity and PodAntiAffinity not implemented yet (not used in current tests)
     val podAffinity     = None
     val podAntiAffinity = None
 
