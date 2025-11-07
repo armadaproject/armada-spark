@@ -57,7 +57,7 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     --conf spark.armada.executor.request.memory=4Gi \
     --conf spark.armada.driver.limit.memory=4Gi \
     --conf spark.armada.driver.request.memory=4Gi \
-    --conf spark.armada.internalUrl="armada://10.244.2.14:50051" \
+    --conf spark.armada.internalUrl="armada://10.244.1.196:50051" \
     --conf spark.home=/opt/spark \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
@@ -79,5 +79,5 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     --conf spark.storage.decommission.enabled=true \
     --conf spark.storage.decommission.shuffleBlocks.enabled=true \
     --conf spark.storage.decommission.fallbackStorage.cleanUp=true \
-    --conf spark.kubernetes.executor.deleteOnTermination=true \
+    --conf spark.kubernetes.executor.deleteOnTermination=false \
     $FIRST_ARG  "${FINAL_ARGS[@]}"
