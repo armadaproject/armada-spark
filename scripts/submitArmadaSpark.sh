@@ -52,11 +52,12 @@ docker run -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     $CLASS_PROMPT $CLASS_ARG \
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
-    --conf spark.executor.instances=5 \
+    --conf spark.executor.instances=2 \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.scheduling.nodeUniformity=armada-spark \
     --conf spark.armada.internalUrl="armada://10.244.2.14:50051" \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
-    --conf spark.local.dir=/tmp \
+    --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005" \
+    --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED " \
     $FIRST_ARG  "${FINAL_ARGS[@]}"

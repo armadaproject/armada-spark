@@ -56,11 +56,11 @@ export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
-export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
+export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.EnricoTest}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
-    PYTHON_SCRIPT="/opt/spark/extraFiles/test-premption.py"
+    PYTHON_SCRIPT="/opt/spark/conf/next7.py"
 else
     INCLUDE_PYTHON=true
 fi
