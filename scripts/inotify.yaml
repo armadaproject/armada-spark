@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: inotify-fix
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: inotify-fix
+  template:
+    metadata:
+      labels:
+        name: inotify-fix
+    spec:
+      hostPID: true
+      hostNetwork: true
+      containers:
+      - name: sysctl-setter
+        image: busybox
+        command: ["sh", "-c"]
+        args:
+        - |
+          sysctl -w fs.inotify.max_user_watches=524288
+          sysctl -w fs.inotify.max_user_instances=512
+          sleep infinity
+        securityContext:
+          privileged: true

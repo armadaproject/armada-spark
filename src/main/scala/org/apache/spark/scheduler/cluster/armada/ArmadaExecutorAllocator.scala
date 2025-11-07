@@ -52,6 +52,7 @@ private[spark] class ArmadaExecutorAllocator(
     conf: SparkConf,
     applicationId: String,
     executorToJobId: ConcurrentHashMap[String, String],
+    jobIdToExecutor: ConcurrentHashMap[String, String],
     pendingExecutors: mutable.HashSet[String]) extends Logging {
 
   // Configuration
@@ -99,7 +100,7 @@ private[spark] class ArmadaExecutorAllocator(
       }
       totalExpectedExecutors.put(rp.id, numExecs)
     }
-    logDebug(s"Updated target executors: ${totalExpectedExecutors.asScala.toMap}")
+    logInfo(s"Updated target executors: ${totalExpectedExecutors.asScala.toMap}")
   }
 
   /**
@@ -116,7 +117,7 @@ private[spark] class ArmadaExecutorAllocator(
           case Some(resourceProfile) =>
             val pending = getPendingExecutorCount(rpId)
             val gap = target - pending
-
+            logInfo(s" gbjft target $target pending $pending")
             if (gap > 0 && pending < maxPendingJobs) {
               val toAllocate = math.min(gap, batchSize)
               submitExecutorJobs(toAllocate, resourceProfile, rpId)
@@ -144,9 +145,6 @@ private[spark] class ArmadaExecutorAllocator(
       // Build minimal context for Armada submission using existing SparkConf
       val app = new org.apache.spark.deploy.armada.submit.ArmadaClientApplication()
 
-      // Validate/load Armada job config from SparkConf
-      val armadaJobConfig = app.validateArmadaJobConfig(conf)
-
       // Construct minimal ClientArguments; values are placeholders sufficient for executor submission path
       val clientArgs = org.apache.spark.deploy.armada.submit.ClientArguments(
         mainAppResource = org.apache.spark.deploy.k8s.submit.JavaMainAppResource(Some("local:///dev/null")),
@@ -154,6 +152,9 @@ private[spark] class ArmadaExecutorAllocator(
         driverArgs = Array.empty[String],
         proxyUser = (None: Option[String])
       )
+
+      // Validate/load Armada job config from SparkConf
+      val armadaJobConfig = app.validateArmadaJobConfig(conf, clientArgs)
 
       // Set the driverJobId from ARMADA_JOB_ID env var if present, otherwise fall back to applicationId
       val driverJobId = sys.env.getOrElse("ARMADA_JOB_ID", applicationId)
@@ -169,8 +170,9 @@ private[spark] class ArmadaExecutorAllocator(
 
       // Track pending executors and map executor IDs to Armada job IDs
       submittedJobIds.foreach { jobId =>
-        val execId = s"${rpId}-${executorIdCounter.incrementAndGet()}"
+        val execId = s"${executorIdCounter.incrementAndGet()}"
         executorToJobId.put(execId, jobId)
+        jobIdToExecutor.put(jobId, execId)
         pendingExecutors.synchronized { pendingExecutors += execId }
         logInfo(s"Submitted executor (execId=$execId) as Armada jobId=$jobId for RP=$rpId")
       }

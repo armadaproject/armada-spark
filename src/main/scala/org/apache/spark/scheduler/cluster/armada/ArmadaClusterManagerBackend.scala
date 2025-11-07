@@ -147,6 +147,7 @@ private[spark] class ArmadaClusterManagerBackend(
               conf,
               applicationId(),
               executorToJobId,
+              jobIdToExecutor,
               pendingExecutors)
             executorAllocator = Some(allocator)
             allocator.start()
@@ -369,7 +370,7 @@ private[spark] class ArmadaClusterManagerBackend(
     decommissionExecutors(
       Array((executorId, decommissionInfo)),
       adjustTargetNumExecutors = false,
-      triggeredByExecutor = true)
+      triggeredByExecutor = false)
   }
 
 
@@ -394,17 +395,11 @@ private[spark] class ArmadaClusterManagerBackend(
      */
     private def generateExecID(context: RpcCallContext): PartialFunction[Any, Unit] = {
       case GenerateExecID(jobId) =>
-        val newId = execIdCounter.incrementAndGet().toString
+        val newId = jobIdToExecutor.get(jobId)
         context.reply(newId)
 
         val executorAddress = context.senderAddress
         execIdRequests(executorAddress) = newId
-
-        // Register mapping
-        jobIdToExecutor.put(jobId, newId)
-        executorToJobId.put(newId, jobId)
-
-        logDebug(s"Assigned executor ID $newId to Armada job $jobId")
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {

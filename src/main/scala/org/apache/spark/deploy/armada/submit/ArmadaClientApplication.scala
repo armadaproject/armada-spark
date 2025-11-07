@@ -924,11 +924,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       } else {
         template.map(_.priority).filter(_ != 0.0).getOrElse(baseJobItem.priority)
       },
-      namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
-        resolvedConfig.namespace
-      } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
-      },
+      namespace = ArmadaClientApplication.DEFAULT_NAMESPACE,
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
       annotations = baseJobItem.annotations ++ template
@@ -1016,6 +1012,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf,
       clientArguments: ClientArguments
   ): (Option[JobSubmitRequestItem], Option[Container]) = {
+    if (conf.get("spark.driver.bindAddress", "").nonEmpty) {
+      return (None, None)
+    }
     val appId =
       conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
 
@@ -1204,11 +1203,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       } else {
         template.map(_.priority).filter(_ != 0.0).getOrElse(baseJobItem.priority)
       },
-      namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
-        resolvedConfig.namespace
-      } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
-      },
+      namespace = ArmadaClientApplication.DEFAULT_NAMESPACE,
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
       annotations = baseJobItem.annotations ++ template
