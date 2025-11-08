@@ -896,10 +896,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         template.map(_.priority).filter(_ != 0.0).getOrElse(baseJobItem.priority)
       },
       namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
-        resolvedConfig.namespace
-      } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
-      },
+          resolvedConfig.namespace
+        } else {
+          template
+            .map(_.namespace)
+            .filter(_.nonEmpty)
+            .orElse(Option(baseJobItem.namespace).filter(_.nonEmpty))
+            .getOrElse(ArmadaClientApplication.DEFAULT_NAMESPACE)
+        },
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
       annotations = baseJobItem.annotations ++ template
@@ -1172,10 +1176,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         template.map(_.priority).filter(_ != 0.0).getOrElse(baseJobItem.priority)
       },
       namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
-        resolvedConfig.namespace
-      } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
-      },
+          resolvedConfig.namespace
+        } else {
+          template
+            .map(_.namespace)
+            .filter(_.nonEmpty)
+            .orElse(Option(baseJobItem.namespace).filter(_.nonEmpty))
+            .getOrElse(ArmadaClientApplication.DEFAULT_NAMESPACE)
+        },
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
       annotations = baseJobItem.annotations ++ template
