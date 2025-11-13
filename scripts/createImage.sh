@@ -34,6 +34,12 @@ if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || 
     # Spark 3.3.4 does not compile without this fix
     if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
       sed -i -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+      # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
+      spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
+      if [ -f "$spark_dockerfile" ]; then
+        sed -i -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+        sed -i -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+      fi
     fi
     ./dev/change-scala-version.sh $SCALA_BIN_VERSION
     # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
