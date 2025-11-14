@@ -21,34 +21,28 @@ import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
 /** Helper trait that encapsulates deployment mode-specific behavior for Armada Spark jobs.
   *
-  * This trait provides a strategy pattern implementation for handling different combinations
-  * of deployment modes (client vs cluster) and executor allocation strategies (static vs dynamic).
-  *
-  * The primary responsibilities are:
-  *   1. Determining the initial executor count based on deployment mode and allocation strategy
-  *   2. Computing gang scheduling cardinality (total number of pods in the gang)
-  *
-  * Gang scheduling cardinality differs based on deployment mode:
-  *   - Cluster mode: cardinality = executorCount + 1 (includes driver pod)
-  *   - Client mode: cardinality = executorCount (driver runs externally)
+  * This trait handles different combinations of deployment modes (client vs cluster) and executor
+  * allocation strategies (static vs dynamic).
   */
 trait ModeHelper {
 
   /** Returns the initial number of executors to allocate.
     *
-    * For static allocation, this returns the configured executor count.
-    * For dynamic allocation, this returns the minimum executor count.
+    * For static allocation, this returns the configured executor count. For dynamic allocation,
+    * this returns the minimum executor count.
     *
-    * @return The number of executor pods to create
+    * @return
+    *   The number of executor pods to create
     */
   def getExecutorCount: Int
 
   /** Returns the gang scheduling cardinality.
     *
-    * Gang scheduling ensures all pods in a group are scheduled together atomically.
-    * The cardinality indicates how many pods must be scheduled as a unit.
+    * Gang scheduling ensures all pods in a group are scheduled together atomically. The cardinality
+    * indicates how many pods must be scheduled as a unit.
     *
-    * @return The total number of pods in the gang (executors + driver if applicable)
+    * @return
+    *   The total number of pods in the gang (executors + driver if applicable)
     */
   def getGangCardinality: Int
 }
@@ -59,8 +53,6 @@ trait ModeHelper {
   *   - A fixed number of executors is allocated upfront
   *   - The driver runs as a pod inside the cluster
   *   - Gang cardinality includes both driver and executors
-  *
-  * @param conf Spark configuration
   */
 class StaticCluster(conf: SparkConf) extends ModeHelper {
   override def getExecutorCount: Int = {
@@ -79,8 +71,6 @@ class StaticCluster(conf: SparkConf) extends ModeHelper {
   *   - A fixed number of executors is allocated upfront
   *   - The driver runs on the client machine (outside the cluster)
   *   - Gang cardinality includes only executors
-  *
-  * @param conf Spark configuration
   */
 class StaticClient(conf: SparkConf) extends ModeHelper {
   override def getExecutorCount: Int = {
@@ -100,8 +90,6 @@ class StaticClient(conf: SparkConf) extends ModeHelper {
   *   - The driver runs as a pod inside the cluster
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes both driver and minimum executors
-  *
-  * @param conf Spark configuration
   */
 class DynamicCluster(conf: SparkConf) extends ModeHelper {
   override def getExecutorCount: Int = {
@@ -125,8 +113,6 @@ class DynamicCluster(conf: SparkConf) extends ModeHelper {
   *   - The driver runs on the client machine (outside the cluster)
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes only minimum executors
-  *
-  * @param conf Spark configuration
   */
 class DynamicClient(conf: SparkConf) extends ModeHelper {
   override def getExecutorCount: Int = {
@@ -149,24 +135,8 @@ object ModeHelper {
 
   /** Creates the appropriate ModeHelper implementation based on deployment configuration.
     *
-    * The selection is based on two configuration parameters:
-    *   - spark.submit.deployMode: "client" (default) or "cluster"
-    *   - spark.dynamicAllocation.enabled: true or false (default)
-    *
-    * Selection logic:
-    * {{{
-    * +-------------+----------+-----------------+
-    * | Deploy Mode | Dynamic? | Implementation  |
-    * +-------------+----------+-----------------+
-    * | cluster     | true     | DynamicCluster  |
-    * | cluster     | false    | StaticCluster   |
-    * | client      | true     | DynamicClient   |
-    * | client      | false    | StaticClient    |
-    * +-------------+----------+-----------------+
-    * }}}
-    *
-    * @param conf Spark configuration containing deployment mode settings
-    * @return A ModeHelper instance appropriate for the configured deployment mode
+    * @return
+    *   A ModeHelper instance appropriate for the configured deployment mode
     */
   def apply(conf: SparkConf): ModeHelper = {
     val deployMode = conf.get("spark.submit.deployMode", "client")

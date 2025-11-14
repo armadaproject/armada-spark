@@ -278,7 +278,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private def buildDriverJobItem(
       clientArguments: ClientArguments,
       armadaJobConfig: ArmadaJobConfig,
-      conf: SparkConf): DriverJobItemResult = {
+      conf: SparkConf
+  ): DriverJobItemResult = {
     val primaryResource = extractPrimaryResource(clientArguments.mainAppResource)
     val confSeq         = buildSparkConfArgs(conf)
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
@@ -331,10 +332,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): String = {
 
-    val result = buildDriverJobItem(
-      clientArguments,
-      armadaJobConfig,
-      conf)
+    val result = buildDriverJobItem(clientArguments, armadaJobConfig, conf)
     submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, result.jobItem)
   }
 
@@ -352,10 +350,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     }
 
-    val driverResult = buildDriverJobItem(
-      clientArguments,
-      armadaJobConfig,
-      conf)
+    val driverResult = buildDriverJobItem(clientArguments, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
       armadaJobConfig.cliConfig.podLabels,
