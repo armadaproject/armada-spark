@@ -250,7 +250,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // Get basic feature steps from Spark's Kubernetes integration
     val (driverJobItem, driverContainer)     = getDriverFeatureSteps(conf, clientArguments)
-    val (executorJobItem, executorContainer) = getExecutorFeatureSteps(conf, clientArguments)
+    val (executorJobItem, executorContainer) = getExecutorFeatureSteps(conf)
 
     ArmadaJobConfig(
       queue = finalQueue,
@@ -1084,8 +1084,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *
     * @param conf
     *   Spark configuration
-    * @param clientArguments
-    *   Client arguments with application details
     * @return
     *   A tuple of (Some(JobSubmitRequestItem), Some(Container)) with basic feature steps applied.
     *   JobSubmitRequestItem contains labels, annotations, and PodSpec with init
@@ -1093,8 +1091,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   mounts.
     */
   private[spark] def getExecutorFeatureSteps(
-      conf: SparkConf,
-      clientArguments: ClientArguments
+      conf: SparkConf
   ): (Option[JobSubmitRequestItem], Option[Container]) = {
     val appId =
       conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
