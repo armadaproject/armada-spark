@@ -174,7 +174,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments: ClientArguments,
       sparkConf: SparkConf
   ): Unit = {
-    val armadaJobConfig = validateArmadaJobConfig(sparkConf, clientArguments)
+    val armadaJobConfig = validateArmadaJobConfig(sparkConf, Some(clientArguments))
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"Connecting to Armada Server - host: $host, port: $port")
@@ -208,7 +208,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private[spark] def validateArmadaJobConfig(
       conf: SparkConf,
-      clientArguments: ClientArguments = null
+      clientArguments: Option[ClientArguments] = None
   ): ArmadaJobConfig = {
     // Disable ConfigMap creation as we do not have support for them in Armada
     conf.set("spark.kubernetes.executor.disableConfigMap", "true")
@@ -267,20 +267,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  private case class DriverJobItemResult(
-      jobItem: api.submit.JobSubmitRequestItem,
+  private case class DriverData(
+      jobItem: Option[api.submit.JobSubmitRequestItem],
       configGenerator: ConfigGenerator,
       templateAnnotations: Map[String, String],
       templateLabels: Map[String, String],
       confSeq: Seq[String]
   )
 
-  private def buildDriverJobItem(
-      clientArguments: ClientArguments,
+  private def buildDriverData(
+      clientArguments: Option[ClientArguments],
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
-  ): DriverJobItemResult = {
-    val primaryResource = extractPrimaryResource(clientArguments.mainAppResource)
+  ): DriverData = {
     val confSeq         = buildSparkConfArgs(conf)
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
 
@@ -306,17 +305,21 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val jobItem = createDriverJob(
-      armadaJobConfig,
-      resolvedConfig,
-      configGenerator,
-      clientArguments,
-      primaryResource,
-      confSeq,
-      conf
-    )
+    // Only create the actual job item if clientArguments is provided
+    val jobItem = clientArguments.map { args =>
+      val primaryResource = extractPrimaryResource(args.mainAppResource)
+      createDriverJob(
+        armadaJobConfig,
+        resolvedConfig,
+        configGenerator,
+        args,
+        primaryResource,
+        confSeq,
+        conf
+      )
+    }
 
-    DriverJobItemResult(
+    DriverData(
       jobItem = jobItem,
       configGenerator = configGenerator,
       templateAnnotations = templateAnnotations,
@@ -332,8 +335,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): String = {
 
-    val result = buildDriverJobItem(clientArguments, armadaJobConfig, conf)
-    submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, result.jobItem)
+    val result = buildDriverData(Some(clientArguments), armadaJobConfig, conf)
+    val jobItem = result.jobItem.getOrElse(
+      throw new IllegalStateException("Driver job item must be present when submitting driver job")
+    )
+    submitDriver(armadaClient, armadaJobConfig.queue, armadaJobConfig.jobSetId, jobItem)
   }
 
   private[spark] def submitExecutorJobs(
@@ -350,17 +356,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     }
 
-    val driverResult = buildDriverJobItem(clientArguments, armadaJobConfig, conf)
+    val driverData = buildDriverData(None, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
       armadaJobConfig.cliConfig.podLabels,
-      driverResult.templateLabels,
+      driverData.templateLabels,
       armadaJobConfig.cliConfig.executorLabels
     )
 
     val executorRuntimeAnnotations = buildAnnotations(
-      driverResult.configGenerator,
-      driverResult.templateAnnotations,
+      driverData.configGenerator,
+      driverData.templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
       conf
     )
@@ -377,7 +383,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
-      driverResult.configGenerator,
+      driverData.configGenerator,
       driverHostname,
       executorCount,
       conf
@@ -389,6 +395,39 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executors
     )
 
+  }
+
+  /** Validates Armada job configuration and submits executor jobs.
+    *
+    * This is a convenience method that combines validateArmadaJobConfig() and submitExecutorJobs()
+    * for use in dynamic allocation scenarios where client arguments are not available.
+    *
+    * @param armadaClient
+    *   The Armada client for job submission
+    * @param conf
+    *   Spark configuration
+    * @param driverJobId
+    *   The driver job ID
+    * @param executorCount
+    *   Number of executors to submit
+    * @return
+    *   Sequence of submitted executor job IDs
+    */
+  private[spark] def validateAndSubmitExecutorJobs(
+      armadaClient: ArmadaClient,
+      conf: SparkConf,
+      driverJobId: String,
+      executorCount: Int
+  ): Seq[String] = {
+    val armadaJobConfig = validateArmadaJobConfig(conf)
+    submitExecutorJobs(
+      armadaClient,
+      null,
+      armadaJobConfig,
+      conf,
+      driverJobId,
+      executorCount
+    )
   }
 
   private[submit] def submitArmadaJob(
@@ -1044,11 +1083,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     */
   private[spark] def getDriverFeatureSteps(
       conf: SparkConf,
-      clientArguments: ClientArguments
+      clientArguments: Option[ClientArguments]
   ): (Option[JobSubmitRequestItem], Option[Container]) = {
-    if (clientArguments == null) {
-      return (None, None)
-    }
+    clientArguments match {
+      case None => return (None, None)
+      case Some(args) => {
     val appId =
       conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
 
@@ -1057,10 +1096,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       new KubernetesDriverConf(
         sparkConf = conf.clone(),
         appId = appId,
-        mainAppResource = clientArguments.mainAppResource,
-        mainClass = clientArguments.mainClass,
-        appArgs = clientArguments.driverArgs,
-        proxyUser = clientArguments.proxyUser
+        mainAppResource = args.mainAppResource,
+        mainClass = args.mainClass,
+        appArgs = args.driverArgs,
+        proxyUser = args.proxyUser
       ),
       new DefaultKubernetesClient()
     )
@@ -1069,6 +1108,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
 
     (Some(jobItem), Some(container))
+      }
+    }
   }
 
   /** Apply basic Kubernetes feature steps from Spark's KubernetesExecutorBuilder.
