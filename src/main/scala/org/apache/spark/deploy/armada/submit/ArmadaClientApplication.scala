@@ -400,16 +400,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   /** Validates Armada job configuration and submits executor jobs.
     *
     * This is a convenience method that combines validateArmadaJobConfig() and submitExecutorJobs()
-    * for use in dynamic allocation scenarios where client arguments are not available.
-    *
-    * @param armadaClient
-    *   The Armada client for job submission
-    * @param conf
-    *   Spark configuration
-    * @param driverJobId
-    *   The driver job ID
-    * @param executorCount
-    *   Number of executors to submit
+    * for use in dynamic allocation.
     * @return
     *   Sequence of submitted executor job IDs
     */
@@ -1088,26 +1079,26 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     clientArguments match {
       case None => return (None, None)
       case Some(args) => {
-    val appId =
-      conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+        val appId =
+          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
 
-    // Clone conf to prevent feature step builders from mutating the original
-    val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
-      new KubernetesDriverConf(
-        sparkConf = conf.clone(),
-        appId = appId,
-        mainAppResource = args.mainAppResource,
-        mainClass = args.mainClass,
-        appArgs = args.driverArgs,
-        proxyUser = args.proxyUser
-      ),
-      new DefaultKubernetesClient()
-    )
+        // Clone conf to prevent feature step builders from mutating the original
+        val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
+          new KubernetesDriverConf(
+            sparkConf = conf.clone(),
+            appId = appId,
+            mainAppResource = args.mainAppResource,
+            mainClass = args.mainClass,
+            appArgs = args.driverArgs,
+            proxyUser = args.proxyUser
+          ),
+          new DefaultKubernetesClient()
+        )
 
-    val jobItem   = fabric8PodToJobItem(driverSpec.pod.pod)
-    val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
+        val jobItem   = fabric8PodToJobItem(driverSpec.pod.pod)
+        val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
 
-    (Some(jobItem), Some(container))
+        (Some(jobItem), Some(container))
       }
     }
   }
