@@ -80,6 +80,18 @@ Run the following command to load the Armada Spark image into your local kind cl
 kind load docker-image $IMAGE_NAME --name armada
 ```
 
+### Running a remote Armada server using Armada Operator
+The default Armada Operator setup allows only localhost access.  You can quickly set up a local Armada server
+configured to allow external access from other hosts, useful for client development and testing. For this
+configuration,
+- Copy the file `e2e/kind-config-external-access.yaml` in this repository to `hack/kind-config.yaml`
+in your `armada-operator` repository.
+- Edit the newly-copied `hack/kind-config.yaml` as noted in the beginning comments of that file.
+- Run the armada-operator setup commands (usually `make kind-all`) to create and start your Armada instance.
+
+Then copy the `$HOME/.kube/config` and `$HOME/.armadctl.yaml` (that Armada Operator will generate) from the Armada
+server host to your `$HOME` directory on the client (local) host.
+
 ---
 
 ## Development

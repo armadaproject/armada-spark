@@ -161,16 +161,21 @@ run-test() {
   cd "$scripts/.."
 
   # Run the Scala E2E test suite
-  mvn scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
+  # env MAVEN_OPTS='-Dcom.sun.net.ssl.checkRevocation=false'
+  env KUBERNETES_TRUST_CERTIFICATES=true \
+  mvn -e scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
     -Dcontainer.image="$IMAGE_NAME" \
     -Dscala.version="$SCALA_VERSION" \
     -Dscala.binary.version="$SCALA_BIN_VERSION" \
     -Dspark.version="$SPARK_VERSION" \
     -Darmada.queue="$ARMADA_QUEUE" \
-    -Darmada.master="armada://localhost:30002" \
-    -Darmada.lookout.url="http://localhost:30000" \
-    -Darmadactl.path="$scripts/armadactl" 2>&1 | \
-    tee e2e-test.log
+    -Darmada.master="armada://$ARMADA_MASTER" \
+    -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
+    -Darmadactl.path="$scripts/armadactl" \
+    -Dclient_cert_file="$CLIENT_CERT_FILE" \
+    -Dclient_key_file="$CLIENT_KEY_FILE" \
+    -Dcluster_ca_file="$CLUSTER_CA_FILE" \
+    2>&1 | tee e2e-test.log
 
   TEST_EXIT_CODE=${PIPESTATUS[0]}
 
@@ -183,7 +188,7 @@ run-test() {
 }
 
 main() {
-    init-cluster
+    # init-cluster
     run-test
 }
 

@@ -213,7 +213,10 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     val armadactlCmd = resolveArmadactlPath.getOrElse {
       throw new RuntimeException("armadactl not found in system properties or PATH")
     }
-    Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadaUrl)
+    // armadactl command expects the server address to be of the form
+    // <hostname-or-IP>:<port> with no pseudo-protocol prefix
+    var armadactlUrl = armadaUrl.replaceFirst("^armada://", "")
+    Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadactlUrl)
   }
 
   /** Resolves the path to `armadactl`:
