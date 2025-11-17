@@ -898,7 +898,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
         resolvedConfig.namespace
       } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
+        template
+          .map(_.namespace)
+          .filter(_.nonEmpty)
+          .orElse(Option(baseJobItem.namespace).filter(_.nonEmpty))
+          .getOrElse(ArmadaClientApplication.DEFAULT_NAMESPACE)
       },
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
@@ -1174,7 +1178,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       namespace = if (resolvedConfig.namespace != ArmadaClientApplication.DEFAULT_NAMESPACE) {
         resolvedConfig.namespace
       } else {
-        template.map(_.namespace).filter(_.nonEmpty).getOrElse(baseJobItem.namespace)
+        template
+          .map(_.namespace)
+          .filter(_.nonEmpty)
+          .orElse(Option(baseJobItem.namespace).filter(_.nonEmpty))
+          .getOrElse(ArmadaClientApplication.DEFAULT_NAMESPACE)
       },
       labels =
         baseJobItem.labels ++ template.map(_.labels).getOrElse(Map.empty) ++ resolvedConfig.labels,
