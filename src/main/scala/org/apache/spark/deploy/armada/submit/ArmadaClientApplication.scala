@@ -59,7 +59,7 @@ import org.apache.spark.deploy.armada.Config.{
   commaSeparatedAnnotationsToMap,
   commaSeparatedLabelsToMap
 }
-import org.apache.spark.deploy.armada.ModeHelper
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import io.armadaproject.armada.ArmadaClient
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
@@ -426,7 +426,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val executorCount = ModeHelper(conf).getExecutorCount
+    val executorCount = DeploymentModeHelper(conf).getExecutorCount
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
         s"Executor count must be greater than 0, but got: $executorCount"
@@ -1749,7 +1749,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeUniformityLabel: Option[String],
       conf: SparkConf
   ): Map[String, String] = {
-    val modeHelper = ModeHelper(conf)
+    val modeHelper = DeploymentModeHelper(conf)
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .map(label =>
         GangSchedulingAnnotations(

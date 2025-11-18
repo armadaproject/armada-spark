@@ -28,7 +28,7 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "false")
       .set("spark.executor.instances", "5")
 
-    val helper = ModeHelper(conf)
+    val helper = DeploymentModeHelper(conf)
     helper shouldBe a[StaticCluster]
     helper.getExecutorCount shouldBe 5
     helper.getGangCardinality shouldBe 6
@@ -40,7 +40,7 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
 
-    val helper = ModeHelper(conf)
+    val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicCluster]
     helper.getExecutorCount shouldBe 2
     helper.getGangCardinality shouldBe 3
@@ -52,7 +52,7 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "false")
       .set("spark.executor.instances", "3")
 
-    val helper = ModeHelper(conf)
+    val helper = DeploymentModeHelper(conf)
     helper shouldBe a[StaticClient]
     helper.getExecutorCount shouldBe 3
     helper.getGangCardinality shouldBe 3
@@ -64,7 +64,7 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "1")
 
-    val helper = ModeHelper(conf)
+    val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicClient]
     helper.getExecutorCount shouldBe 1
     helper.getGangCardinality shouldBe 1

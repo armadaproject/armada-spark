@@ -24,7 +24,7 @@ import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
   * This trait handles different combinations of deployment modes (client vs cluster) and executor
   * allocation strategies (static vs dynamic).
   */
-trait ModeHelper {
+trait DeploymentModeHelper {
 
   /** Returns the initial number of executors to allocate.
     *
@@ -54,7 +54,7 @@ trait ModeHelper {
   *   - The driver runs as a pod inside the cluster
   *   - Gang cardinality includes both driver and executors
   */
-class StaticCluster(conf: SparkConf) extends ModeHelper {
+class StaticCluster(conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
@@ -72,7 +72,7 @@ class StaticCluster(conf: SparkConf) extends ModeHelper {
   *   - The driver runs on the client machine (outside the cluster)
   *   - Gang cardinality includes only executors
   */
-class StaticClient(conf: SparkConf) extends ModeHelper {
+class StaticClient(conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
@@ -91,7 +91,7 @@ class StaticClient(conf: SparkConf) extends ModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes both driver and minimum executors
   */
-class DynamicCluster(conf: SparkConf) extends ModeHelper {
+class DynamicCluster(conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -114,7 +114,7 @@ class DynamicCluster(conf: SparkConf) extends ModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes only minimum executors
   */
-class DynamicClient(conf: SparkConf) extends ModeHelper {
+class DynamicClient(conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -131,14 +131,14 @@ class DynamicClient(conf: SparkConf) extends ModeHelper {
 
 /** Factory for creating ModeHelper instances based on Spark configuration.
   */
-object ModeHelper {
+object DeploymentModeHelper {
 
   /** Creates the appropriate ModeHelper implementation based on deployment configuration.
     *
     * @return
     *   A ModeHelper instance appropriate for the configured deployment mode
     */
-  def apply(conf: SparkConf): ModeHelper = {
+  def apply(conf: SparkConf): DeploymentModeHelper = {
     val deployMode = conf.get("spark.submit.deployMode", "client")
     val isDynamic  = conf.getBoolean("spark.dynamicAllocation.enabled", false)
 
