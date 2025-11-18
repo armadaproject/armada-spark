@@ -147,14 +147,13 @@ private[spark] object ArmadaClientApplication {
   private val DEFAULT_ARMADA_APP_ID =
     s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
   private val DEFAULT_RUN_AS_USER = 185
-
-  private val gangId = Some(java.util.UUID.randomUUID.toString)
-
 }
 
 /** Main class and entry point of application submission in KUBERNETES mode.
   */
 private[spark] class ArmadaClientApplication extends SparkApplication {
+
+  private val gangId = Some(java.util.UUID.randomUUID.toString)
 
   private def getApplicationId(conf: SparkConf) =
     conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
@@ -1754,7 +1753,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .map(label =>
         GangSchedulingAnnotations(
-          ArmadaClientApplication.gangId,
+          gangId,
           modeHelper.getGangCardinality,
           label
         )
