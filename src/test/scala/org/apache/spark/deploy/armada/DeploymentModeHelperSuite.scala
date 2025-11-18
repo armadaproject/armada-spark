@@ -20,9 +20,11 @@ import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
-class ModeHelperSuite extends AnyFunSuite with Matchers {
+class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
-  test("ModeHelper.apply: creates StaticCluster for cluster mode without dynamic allocation") {
+  test(
+    "DeploymentModeHelper.apply: creates StaticCluster for cluster mode without dynamic allocation"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "false")
@@ -34,7 +36,9 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
     helper.getGangCardinality shouldBe 6
   }
 
-  test("ModeHelper.apply: creates DynamicCluster for cluster mode with dynamic allocation") {
+  test(
+    "DeploymentModeHelper.apply: creates DynamicCluster for cluster mode with dynamic allocation"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "true")
@@ -46,7 +50,9 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
     helper.getGangCardinality shouldBe 3
   }
 
-  test("ModeHelper.apply: creates StaticClient for client mode without dynamic allocation") {
+  test(
+    "DeploymentModeHelper.apply: creates StaticClient for client mode without dynamic allocation"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "false")
@@ -58,7 +64,9 @@ class ModeHelperSuite extends AnyFunSuite with Matchers {
     helper.getGangCardinality shouldBe 3
   }
 
-  test("ModeHelper.apply: creates DynamicClient for client mode with dynamic allocation") {
+  test(
+    "DeploymentModeHelper.apply: creates DynamicClient for client mode with dynamic allocation"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
