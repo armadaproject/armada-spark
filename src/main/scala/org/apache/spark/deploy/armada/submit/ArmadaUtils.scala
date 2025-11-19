@@ -21,7 +21,6 @@ import scala.util.Try
 object ArmadaUtilsExceptions {
   class MasterUrlParsingException extends RuntimeException
 }
-
 object ArmadaUtils {
   import ArmadaUtilsExceptions._
 
