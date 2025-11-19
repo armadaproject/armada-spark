@@ -177,31 +177,6 @@ private[spark] object Config {
     (!path.contains("://") && path.nonEmpty) // Local file without protocol
   }
 
-  val ARMADA_EXECUTOR_TRACKER_POLLING_INTERVAL: ConfigEntry[Long] =
-    ConfigBuilder("spark.armada.executor.trackerPollingInterval")
-      .doc(
-        "Interval between polls to check the " +
-          "state of executors."
-      )
-      .timeConf(TimeUnit.MILLISECONDS)
-      .checkValue(
-        _ > 0,
-        s"Polling interval must be a" +
-          " positive time value."
-      )
-      .createWithDefaultString("60s")
-
-  val ARMADA_EXECUTOR_TRACKER_TIMEOUT: ConfigEntry[Long] =
-    ConfigBuilder("spark.armada.executor.trackerTimeout")
-      .doc("Time to wait for the minimum number of executors.")
-      .timeConf(TimeUnit.MILLISECONDS)
-      .checkValue(
-        _ > 0,
-        s"Timeout must be a" +
-          " positive time value."
-      )
-      .createWithDefaultString("600s")
-
   val ARMADA_EXECUTOR_CONNECTION_TIMEOUT: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.connectionTimeout")
       .doc("Time to wait for the executor to connect to the driver.")
@@ -404,6 +379,56 @@ private[spark] object Config {
       .doc("Armada auth token, (specific to the OIDC server being used.)")
       .stringConf
       .createOptional
+
+  val ARMADA_DELETE_EXECUTORS: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.deleteExecutors")
+      .doc("Whether to delete executor jobs when the backend stops.")
+      .booleanConf
+      .createWithDefault(true)
+
+  val ARMADA_KILL_GRACE_PERIOD: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.killGracePeriod")
+      .doc("Grace period in milliseconds before forcefully killing executors.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .checkValue(_ > 0, "Grace period must be positive")
+      .createWithDefaultString("5s")
+
+  val ARMADA_ALLOCATION_BATCH_SIZE: ConfigEntry[Int] =
+    ConfigBuilder("spark.armada.allocation.batchSize")
+      .doc("Maximum number of executors to allocate in a single batch.")
+      .intConf
+      .checkValue(_ > 0, "Batch size must be positive")
+      .createWithDefault(10)
+
+  val ARMADA_MAX_PENDING_JOBS: ConfigEntry[Int] =
+    ConfigBuilder("spark.armada.allocation.maxPendingJobs")
+      .doc("Maximum number of pending executor jobs allowed.")
+      .intConf
+      .checkValue(_ > 0, "Max pending jobs must be positive")
+      .createWithDefault(100)
+
+  val ARMADA_ALLOCATION_CHECK_INTERVAL: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.allocation.checkInterval")
+      .doc("Interval for checking executor allocation needs.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .checkValue(_ > 0, "Check interval must be positive")
+      .createWithDefaultString("10s")
+
+  // ========================================================================
+  // SHUFFLE & DECOMMISSIONING CONFIGURATION
+  // ========================================================================
+
+  val ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.executor.preemptionGracePeriod")
+      .doc(
+        "Grace period between Armada preemption signal and actual pod termination. " +
+          "Must be greater than spark.armada.decommission.forceKillTimeout + buffer. " +
+          "This is configured in the Armada job spec's terminationGracePeriodSeconds."
+      )
+      .version("4.0.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ > 0, "Preemption grace period must be positive")
+      .createWithDefault(180)
 
   def commaSeparatedLabelsToMap(labelList: String): Map[String, String] = {
     parseCommaSeparatedK8sValue(labelList, K8sValidator.Label).map(_.get).toMap
