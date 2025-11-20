@@ -425,7 +425,6 @@ private[spark] object Config {
           "Must be greater than spark.armada.decommission.forceKillTimeout + buffer. " +
           "This is configured in the Armada job spec's terminationGracePeriodSeconds."
       )
-      .version("4.0.0")
       .timeConf(TimeUnit.SECONDS)
       .checkValue(_ > 0, "Preemption grace period must be positive")
       .createWithDefault(180)
