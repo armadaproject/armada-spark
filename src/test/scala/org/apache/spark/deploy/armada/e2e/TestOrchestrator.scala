@@ -499,7 +499,7 @@ class TestOrchestrator(
     }
 
     val defaultConfs = Map(
-      "spark.armada.internalUrl"             -> "armada-server.armada:50051",
+      "spark.armada.internalUrl"             -> "armada://armada-server.armada:50051",
       "spark.armada.queue"                   -> queueName,
       "spark.armada.jobSetId"                -> jobSetId,
       "spark.executor.instances"             -> "2",
