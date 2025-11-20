@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.deploy.armada.e2e
+package org.apache.spark.deploy.armada
 
 import org.apache.spark.deploy.armada.Config
 import org.apache.spark.deploy.armada.submit

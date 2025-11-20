@@ -20,6 +20,7 @@ package org.apache.spark.deploy.armada.e2e
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
+import org.apache.spark.deploy.armada.K8sClient
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
