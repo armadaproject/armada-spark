@@ -39,14 +39,9 @@ import api.event.{
   JobUnableToScheduleEvent
 }
 import io.grpc.ManagedChannel
-// import io.grpc.stub.StreamObserver  // no longer needed; switched to blocking API
 import org.apache.spark.internal.Logging
 
-/** Minimal Armada event watcher placeholder.
-  *
-  * This class is intended to be started by ArmadaClusterManagerBackend. For now, it starts a daemon
-  * thread and keeps it alive until stopped. The actual event handling will be implemented with the
-  * current Armada Scala client API.
+/** Keeps track of the armada event stream for the jobset
   */
 private[spark] class ArmadaEventWatcher(
     grpcChannel: ManagedChannel,
