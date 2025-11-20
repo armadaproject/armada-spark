@@ -422,7 +422,6 @@ private[spark] object Config {
     ConfigBuilder("spark.armada.executor.preemptionGracePeriod")
       .doc(
         "Grace period between Armada preemption signal and actual pod termination. " +
-          "Must be greater than spark.armada.decommission.forceKillTimeout + buffer. " +
           "This is configured in the Armada job spec's terminationGracePeriodSeconds."
       )
       .timeConf(TimeUnit.SECONDS)
