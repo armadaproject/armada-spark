@@ -14,6 +14,7 @@ print_usage () {
     echo '   -h  help'
     echo '   -k  "use kind cluster"'
     echo '   -p  "build image with python"'
+    echo '   -S  "static mode (fixed executor count, no dynamic allocation)"'
     echo '   -i  <image-name>'
     echo '   -m  <armada-master-url>'
     echo '   -q  <armada-queue>'
@@ -28,17 +29,19 @@ print_usage () {
     echo '   ARMADA_QUEUE=test'
     echo '   USE_KIND=true'
     echo '   INCLUDE_PYTHON=true'
+    echo '   STATIC_MODE=true'
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
     exit 1
 }
 
-while getopts "hekpi:a:m:P:s:c:q:" opt; do
+while getopts "hekpSi:a:m:P:s:c:q:" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
     p) INCLUDE_PYTHON=true ;;
+    S) STATIC_MODE=true ;;
     a) ARMADA_AUTH_TOKEN=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
@@ -52,6 +55,7 @@ done
 
 export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export USE_KIND="${USE_KIND:-false}"
+export STATIC_MODE="${STATIC_MODE:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"

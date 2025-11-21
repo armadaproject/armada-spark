@@ -31,6 +31,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_JOB_ITEM_TEMPLATE,
   ARMADA_EXECUTOR_LIMIT_CORES,
   ARMADA_EXECUTOR_LIMIT_MEMORY,
+  ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD,
   ARMADA_EXECUTOR_REQUEST_CORES,
   ARMADA_EXECUTOR_REQUEST_MEMORY,
   ARMADA_HEALTH_CHECK_TIMEOUT,
@@ -144,8 +145,6 @@ private[spark] object ArmadaClientApplication {
   private[submit] val DRIVER_PORT = 7078
   private val DEFAULT_PRIORITY    = 0.0
   private val DEFAULT_NAMESPACE   = "default"
-  private val DEFAULT_ARMADA_APP_ID =
-    s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
   private val DEFAULT_RUN_AS_USER = 185
 }
 
@@ -155,8 +154,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private val gangId = Some(java.util.UUID.randomUUID.toString)
 
+  private val defaultAppId =
+    s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
+
   private def getApplicationId(conf: SparkConf) =
-    conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+    conf.getOption("spark.app.id").getOrElse(defaultAppId)
 
   private def log(msg: String): Unit = {
     // scalastyle:off println
@@ -343,7 +345,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private[spark] def submitExecutorJobs(
       armadaClient: ArmadaClient,
-      clientArguments: ClientArguments,
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf,
       driverJobId: String,
@@ -412,7 +413,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val armadaJobConfig = validateArmadaJobConfig(conf)
     submitExecutorJobs(
       armadaClient,
-      null,
       armadaJobConfig,
       conf,
       driverJobId,
@@ -435,7 +435,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val driverJobId = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
     val executorJobIds = submitExecutorJobs(
       armadaClient,
-      clientArguments,
       armadaJobConfig,
       conf,
       driverJobId,
@@ -762,12 +761,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     *   Optional loaded executor job item template
     * @param cliConfig
     *   CLI configuration parameters parsed from --conf options
-    * @param driverFeatureStepPodSpec
-    *   PodSpec from basic driver feature steps
     * @param driverFeatureStepContainer
     *   Container from basic driver feature steps
-    * @param executorFeatureStepPodSpec
-    *   PodSpec from basic executor feature steps
     * @param executorFeatureStepContainer
     *   Container from basic executor feature steps
     */
@@ -823,10 +818,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int,
       conf: SparkConf
   ): Seq[api.submit.JobSubmitRequestItem] = {
-    ArmadaUtils.getExecutorRange(executorCount).map { index =>
+    ArmadaUtils.getExecutorRange(executorCount).map { _ =>
       val executorJobItem = mergeExecutorTemplate(
         armadaJobConfig.executorJobItemTemplate,
-        index,
         resolvedConfig,
         armadaJobConfig,
         javaOptEnvVars(conf),
@@ -958,7 +952,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val allInitContainers = currentPodSpec.initContainers
 
     // Set termination grace period for graceful decommissioning
-    val gracePeriodSeconds = 0
+    val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
 
     val finalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
@@ -1076,10 +1070,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       clientArguments: Option[ClientArguments]
   ): (Option[JobSubmitRequestItem], Option[Container]) = {
     clientArguments match {
-      case None => return (None, None)
-      case Some(args) => {
-        val appId =
-          conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+      case None => (None, None)
+      case Some(args) =>
+        val appId = getApplicationId(conf)
 
         // Clone conf to prevent feature step builders from mutating the original
         val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
@@ -1098,7 +1091,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
 
         (Some(jobItem), Some(container))
-      }
     }
   }
 
@@ -1119,8 +1111,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private[spark] def getExecutorFeatureSteps(
       conf: SparkConf
   ): (Option[JobSubmitRequestItem], Option[Container]) = {
-    val appId =
-      conf.getOption("spark.app.id").getOrElse(ArmadaClientApplication.DEFAULT_ARMADA_APP_ID)
+    val appId = getApplicationId(conf)
 
     // Clone conf to prevent feature step builders from mutating the original
     val clonedConf = conf.clone()
@@ -1154,7 +1145,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     */
   private[submit] def mergeExecutorTemplate(
       template: Option[api.submit.JobSubmitRequestItem],
-      index: Int,
       resolvedConfig: ResolvedJobConfig,
       armadaJobConfig: ArmadaJobConfig,
       javaOptEnvVars: Seq[EnvVar],
@@ -1220,7 +1210,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )(_.name)
 
     val executorContainer = newExecutorContainer(
-      index,
       driverHostname,
       driverPort,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
@@ -1245,7 +1234,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       PodMerger.mergeByName(currentPodSpec.initContainers, Seq(executorInitContainer))(_.name)
 
     // Set termination grace period for graceful decommissioning
-    val gracePeriodSeconds = 0
+    val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
 
     val finalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
@@ -1405,7 +1394,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   }
 
   private def newExecutorContainer(
-      index: Int,
       driverHostname: String,
       driverPort: Int,
       nodeUniformityLabel: Option[String],
@@ -1462,7 +1450,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     ) ++ extractAdditionalTemplateResources(templateResources, "requests")
 
     val newEnvVars = Seq(
-      EnvVar().withName("SPARK_EXECUTOR_ID").withValue(index.toString),
+      EnvVar().withName("SPARK_EXECUTOR_ID").withValue("EXECID"),
       EnvVar().withName("SPARK_RESOURCE_PROFILE_ID").withValue("0"),
       // Ensure executor pod name is based on Armada job id label by referencing ARMADA_JOB_ID
       EnvVar().withName("SPARK_EXECUTOR_POD_NAME").withValueFrom(armadaJobIdSource),
