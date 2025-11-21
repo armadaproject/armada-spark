@@ -477,7 +477,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.mergeExecutorTemplate(
       Some(template),
-      0,
       resolvedConfig,
       armadaJobConfig,
       javaOptEnvVars,
@@ -498,7 +497,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.restartPolicy shouldBe Some("Never")
     podSpec.securityContext.get.runAsUser shouldBe Some(RUNTIME_RUN_AS_USER)
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map("node-type" -> "compute")
 
     podSpec.initContainers should have size 1
@@ -642,7 +641,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.mergeExecutorTemplate(
       Some(template),
-      1,
       resolvedConfig,
       armadaJobConfig,
       Seq.empty[EnvVar],
@@ -656,7 +654,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.initContainers should have size 1
@@ -929,7 +927,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.restartPolicy shouldBe Some("Never")
     podSpec.securityContext.get.runAsUser shouldBe Some(RUNTIME_RUN_AS_USER)
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map(
       "driver-node-type" -> "memory-optimized",
       "tier"             -> "production"
@@ -1064,7 +1062,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.containers should have size 1
@@ -1304,7 +1302,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map("node-type" -> "compute")
 
     podSpec.containers should have size 1
@@ -1399,8 +1397,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     val result = armadaClientApp.mergeExecutorTemplate(
-      template = None, // No template - will create blank one internally
-      index = 1,
+      template = None,
       resolvedConfig = resolvedConfig,
       armadaJobConfig = armadaJobConfig,
       javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g")),
@@ -1418,7 +1415,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.initContainers should have size 1
@@ -1525,7 +1522,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.containers should have size 1
@@ -1620,7 +1617,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       val podSpec = job.podSpec.get
 
       podSpec.restartPolicy shouldBe Some("Never")
-      podSpec.terminationGracePeriodSeconds shouldBe Some(0)
+      podSpec.terminationGracePeriodSeconds shouldBe Some(180)
       podSpec.nodeSelector shouldBe Map.empty[String, String]
 
       podSpec.initContainers should have size 1
@@ -2016,7 +2013,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.mergeExecutorTemplate(
       Some(template),
-      0,
       resolvedConfig,
       armadaJobConfig,
       javaOptEnvVars,

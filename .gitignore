@@ -77,3 +77,6 @@ dependency-reduced-pom.xml
 .spark-*
 scripts/armadactl
 *~
+e2e-test.log
+extraJars/*.jar
+scripts/.tmp/

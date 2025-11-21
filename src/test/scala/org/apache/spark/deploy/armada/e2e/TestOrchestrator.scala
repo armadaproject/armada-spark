@@ -501,16 +501,16 @@ class TestOrchestrator(
     }
 
     val defaultConfs = Map(
-      "spark.armada.internalUrl"             -> "armada-server.armada:50051",
+      "spark.armada.internalUrl"             -> "armada://armada-server.armada:50051",
       "spark.armada.queue"                   -> queueName,
       "spark.armada.jobSetId"                -> jobSetId,
       "spark.executor.instances"             -> "2",
       "spark.armada.container.image"         -> imageName,
       "spark.armada.lookouturl"              -> lookoutUrl,
       "spark.armada.driver.limit.cores"      -> "200m",
-      "spark.armada.driver.limit.memory"     -> "450Mi",
+      "spark.armada.driver.limit.memory"     -> "1Gi",
       "spark.armada.driver.request.cores"    -> "200m",
-      "spark.armada.driver.request.memory"   -> "450Mi",
+      "spark.armada.driver.request.memory"   -> "1Gi",
       "spark.armada.executor.limit.cores"    -> "100m",
       "spark.armada.executor.limit.memory"   -> "510Mi",
       "spark.armada.executor.request.cores"  -> "100m",
