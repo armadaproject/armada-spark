@@ -40,16 +40,11 @@ class K8sClient(props: Properties) {
   val pattern = """armada://([^:]+):.*""".r
   val k8sApiURL: String = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
 
-  println(s"************************************************************************************")
-  println(s"armadaMaster= $armadaMaster\n\n")
-  println(s"k8sApiURL = $k8sApiURL\n\n")
-
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")
   val clusterCaFile: String  = props.getProperty("cluster_ca_file", "")
 
   var cb: ConfigBuilder = new ConfigBuilder()
-    // .withMasterUrl("https://api.sandbox.x8i5.example.com:6443")
     .withMasterUrl(k8sApiURL)
     // .withOauthToken("sha256~secret")
     .withNamespace("default")

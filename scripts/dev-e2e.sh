@@ -188,7 +188,7 @@ run-test() {
 }
 
 main() {
-    # init-cluster
+    init-cluster
     run-test
 }
 
