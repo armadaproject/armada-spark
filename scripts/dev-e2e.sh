@@ -140,14 +140,19 @@ init-cluster() {
 
   mkdir -p "$scripts/.tmp"
 
-  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
-   | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
+  if [ "$ARMADA_MASTER" = "localhost" ] ; then
+      TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
+       | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
+  fi
 
   # configure the defaults for the e2e test
-  cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
+  cp "$scripts/../e2e/spark-defaults.conf" "$scripts/../conf/spark-defaults.conf"
 
-  log "Waiting 60 seconds for Armada to stabilize ..."
-  sleep 60
+  # If using a remote Armada server, assume it is already running and ready
+  if [ "$ARMADA_MASTER" = "localhost" ] ; then
+    log "Waiting 60 seconds for Armada to stabilize ..."
+    sleep 60
+  fi
 }
 
 run-test() {
