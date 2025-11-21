@@ -85,7 +85,7 @@ else
 fi
 
 # Run Armada Spark via docker image
-docker run    -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name $NAME \
