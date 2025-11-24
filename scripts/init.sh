@@ -64,9 +64,9 @@ export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
 # Client certificate for TLS
-export CLIENT_CERT_FILE=${CLIENT_CERT_FILE}
-export CLIENT_KEY_FILE=${CLIENT_KEY_FILE}
-export CLUSTER_CA_FILE=${CLUSTER_CA_FILE}
+export CLIENT_CERT_FILE="${CLIENT_CERT_FILE}"
+export CLIENT_KEY_FILE="${CLIENT_KEY_FILE}"
+export CLUSTER_CA_FILE="${CLUSTER_CA_FILE}"
 
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
