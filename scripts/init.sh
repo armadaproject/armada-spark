@@ -58,6 +58,7 @@ export USE_KIND="${USE_KIND:-false}"
 export STATIC_MODE="${STATIC_MODE:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
+export ARMADA_LOOKOUT_URL="${ARMADA_LOOKOUT_URL:-https://localhost:30000}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
