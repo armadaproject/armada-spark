@@ -64,6 +64,16 @@ export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
+if [ -n "${CLIENT_CERT_FILE:-}" ]; then
+  export CLIENT_CERT_FILE="${CLIENT_CERT_FILE}"
+fi
+if [ -n "${CLIENT_CERT_KEY:-}" ]; then
+  export CLIENT_CERT_KEY="${CLIENT_CERT_KEY}"
+fi
+if [ -n "${CLUSTER_CA_FILE:-}" ]; then
+  export CLUSTER_CA_FILE="${CLUSTER_CA_FILE}"
+fi
+
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
 else
