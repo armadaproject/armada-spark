@@ -165,6 +165,11 @@ run-test() {
   # Change to armada-spark directory
   cd "$scripts/.."
 
+  tls_args=()
+  test -n "${CLIENT_CERT_FILE:-}" && tls_args+=( -Dclient_cert_file="$CLIENT_CERT_FILE" )
+  test -n "${CLIENT_KEY_FILE:-}" && tls_args+=( -Dclient_key_file="$CLIENT_KEY_FILE" )
+  test -n "${CLUSTER_CA_FILE:-}" && tls_args+=( -Dcluster_ca_file="$CLUSTER_CA_FILE" )
+
   # Run the Scala E2E test suite
   # env MAVEN_OPTS='-Dcom.sun.net.ssl.checkRevocation=false'
   env KUBERNETES_TRUST_CERTIFICATES=true \
@@ -177,11 +182,7 @@ run-test() {
     -Darmada.master="armada://$ARMADA_MASTER" \
     -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
     -Darmadactl.path="$scripts/armadactl" \
-    -Dclient_cert_file="$CLIENT_CERT_FILE" \
-    -Dclient_key_file="$CLIENT_KEY_FILE" \
-    -Dcluster_ca_file="$CLUSTER_CA_FILE" \
-    2>&1 | tee e2e-test.log
-
+    "${tls_args[@]}" 2>&1 | tee e2e-test.log
   TEST_EXIT_CODE=${PIPESTATUS[0]}
 
   if [ "$TEST_EXIT_CODE" -ne 0 ]; then
