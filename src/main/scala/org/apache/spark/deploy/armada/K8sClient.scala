@@ -37,8 +37,8 @@ import scala.concurrent.{ExecutionContext, Future}
 /** Kubernetes client implementation using fabric8 Kubernetes client library. */
 class K8sClient(props: Properties) {
   val armadaMaster: String = props.getProperty("armada.master")
-  val pattern = """armada://([^:]+):.*""".r
-  val k8sApiURL: String = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
+  val pattern              = """armada://([^:]+):.*""".r
+  val k8sApiURL: String    = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
 
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")

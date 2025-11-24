@@ -43,8 +43,8 @@ class ArmadaSparkE2E
 
   private val baseQueueName = "e2e-template"
 
-  private var armadaClient: ArmadaClient = _
-  private var k8sClient: K8sClient = _
+  private var armadaClient: ArmadaClient      = _
+  private var k8sClient: K8sClient            = _
   implicit private var orch: TestOrchestrator = _
 
   private var baseConfig: TestConfig = _
@@ -56,7 +56,7 @@ class ArmadaSparkE2E
 
     val armadaApiUrl = props.getProperty("armada.master", "localhost:30002")
     armadaClient = new ArmadaClient(armadaApiUrl)
-    k8sClient    = new K8sClient(props)
+    k8sClient = new K8sClient(props)
     orch = new TestOrchestrator(armadaClient, k8sClient)
 
     // Get Scala binary version - either from system property or derive from full version
