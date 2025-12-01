@@ -2,11 +2,14 @@
 
 CONTEXT="kind-armada"
 
+E2E_DIR=$(realpath "$0" | xargs dirname)
+
+cd "$E2E_DIR" || (echo "Error: could not cd to $E2E_DIR"; exit 1)
+
 # What These Files Are
 #  -  client.crt: Your user (client) certificate
 #  -  client.key: The private key associated with the certificate
 #  -  ca.crt: The CA certificate used by the Kubernetes API server (for verifying client and server certs)
-
 
 # Extract the client certificate
 kubectl config view --raw -o json | jq -r \

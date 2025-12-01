@@ -7,7 +7,7 @@ source "$scripts"/init.sh
 
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
-AOHOME="$scripts/../../armada-operator"
+AOHOME=$(realpath "$scripts/../../armada-operator")
 ARMADACTL_VERSION='0.19.1'
 
 GREEN='\033[0;32m'
@@ -87,10 +87,35 @@ start-armada() {
     fi
   fi
 
-  echo  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
+  kind_extern_cfg='e2e/kind-config-external-access.yaml'
+  if ! cp "$kind_extern_cfg" "$AOHOME/hack/kind-config.yaml"; then
+    err "There was an error copying $kind_extern_cfg to $AOHOME/hack/kind-config.yaml"
+    exit 1
+  fi
+
+  # Get IP address of first network interface that is not loopback or a K8S internal network interface
+  external_ip=$(ifconfig -a| grep -w 'inet'  | grep -v 'inet 127\.0\.0' | grep -v 'inet 172\.' | awk '{print $2}' | sed -ne '1p')
+  if [ "$(uname -s)" = 'Darwin' ]; then
+    sed_opt='-I .bak'
+  else
+    sed_opt='-i.bak'
+  fi
+
+  if ! sed "$sed_opt" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
+    err "There was an error modifying $AOHOME/hack/kind-config.yaml"
+    exit 1
+  fi
+
+  echo "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
   if ! (cd "$AOHOME"; make kind-all 2>&1) | tee armada-start.txt; then
     echo ""
     err "There was a problem starting Armada; exiting now"
+    exit 1
+  fi
+
+  echo "Extracting TLS client certificate files from Kind cluster"
+  if ! e2e/extract-kind-cert.sh; then
+    err "There was a problem extracting the certificates"
     exit 1
   fi
 }
@@ -182,12 +207,12 @@ run-test() {
     -Darmada.master="armada://$ARMADA_MASTER" \
     -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
     -Darmadactl.path="$scripts/armadactl" \
-    "${tls_args[@]}" 2>&1 | tee e2e-test.log
+    "${tls_args[@]:-}" 2>&1 | tee e2e-test.log
   TEST_EXIT_CODE=${PIPESTATUS[0]}
 
   if [ "$TEST_EXIT_CODE" -ne 0 ]; then
     err "E2E tests failed with exit code $TEST_EXIT_CODE"
-    exit $TEST_EXIT_CODE
+    exit "$TEST_EXIT_CODE"
   fi
 
   log "E2E tests completed successfully"
