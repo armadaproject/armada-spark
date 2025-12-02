@@ -63,6 +63,7 @@ export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
+export INIT_CONTAINER_IMAGE="${INIT_CONTAINER_IMAGE:-busybox:latest}"
 
 if [ -n "${CLIENT_CERT_FILE:-}" ]; then
   export CLIENT_CERT_FILE="${CLIENT_CERT_FILE}"
@@ -79,8 +80,6 @@ if [ -z "${PYTHON_SCRIPT:-}" ]; then
 else
     INCLUDE_PYTHON=true
 fi
-
-
 
 # derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
 if [[ -z "${SCALA_VERSION:-}" ]]; then
