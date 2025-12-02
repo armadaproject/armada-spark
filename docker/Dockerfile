@@ -28,14 +28,11 @@ COPY extraJars/* /opt/spark/jars
 
 USER 0
 
-RUN SPARK_CORE_JAR=$(ls /opt/spark/jars/spark-core_*.jar | head -1) && \
-    TEMP_DIR=$(mktemp -d) && \
-    cd "$TEMP_DIR" && \
-    jar xf "$SPARK_CORE_JAR" && \
-    rm -f org/apache/spark/deploy/SparkSubmit.class && \
-    rm -f "org/apache/spark/deploy/SparkSubmit\$.class" && \
-    jar cf "$SPARK_CORE_JAR" * && \
-    rm -rf "$TEMP_DIR"
+# Move spark-core jar to a separate directory to ensure armada jar is first in the classpath
+RUN mkdir -p /opt/spark/coreJars && \
+    mv /opt/spark/jars/spark-core_*.jar /opt/spark/coreJars/
+
+ENV SPARK_DIST_CLASSPATH=/opt/spark/coreJars/*
 
 ARG spark_uid=185
 USER ${spark_uid}
