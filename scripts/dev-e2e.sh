@@ -127,6 +127,12 @@ init-cluster() {
     exit 1
   fi
 
+  if ! (echo "$INIT_CONTAINER_IMAGE" | grep -Eq '^[[:alnum:]_]+:[[:alnum:]_]+$'); then
+    err "INIT_CONTAINER_IMAGE is not defined. Please set it in $scripts/config.sh, for example:"
+    err "INIT_CONTAINER_IMAGE=busybox:latest"
+    exit 1
+  fi
+
   if [ -z "$ARMADA_QUEUE" ]; then
     err "ARMADA_QUEUE is not defined. Please set it in $scripts/config.sh, for example:"
     err "ARMADA_QUEUE=spark-test"
@@ -143,6 +149,17 @@ init-cluster() {
     err "Image $IMAGE_NAME not found in local Docker instance."
     err "Rebuild the image (cd '$scripts/..' && mvn test-compile && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
     exit 1
+  fi
+
+  echo "Checking if image $INIT_CONTAINER_IMAGE is available"
+  if ! docker image inspect "$INIT_CONTAINER_IMAGE" > /dev/null 2>&1; then
+    echo "Image $INIT_CONTAINER_IMAGE not found in local Docker instance; pulling it from Docker Hub."
+    if ! docker pull "$INIT_CONTAINER_IMAGE"; then
+      err "Could not pull $INIT_CONTAINER_IMAGE; please try running"
+      err "  docker pull $INIT_CONTAINER_IMAGE"
+      err "then run this script again"
+      exit 1
+    fi
   fi
 
   echo "Checking to see if Armada cluster is available ..."
@@ -165,16 +182,18 @@ init-cluster() {
 
   mkdir -p "$scripts/.tmp"
 
-  if [ "$ARMADA_MASTER" = "localhost" ] ; then
-      TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
-       | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
+  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
+    for IMG in "$IMAGE_NAME" "$INIT_CONTAINER_IMAGE"; do
+      TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMG" --name armada 2>&1 \
+        | log_group "Loading Docker image $IMG into Armada (Kind) cluster";
+    done
   fi
 
   # configure the defaults for the e2e test
   cp "$scripts/../e2e/spark-defaults.conf" "$scripts/../conf/spark-defaults.conf"
 
   # If using a remote Armada server, assume it is already running and ready
-  if [ "$ARMADA_MASTER" = "localhost" ] ; then
+  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
     log "Waiting 60 seconds for Armada to stabilize ..."
     sleep 60
   fi
@@ -207,7 +226,7 @@ run-test() {
     -Darmada.master="armada://$ARMADA_MASTER" \
     -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
     -Darmadactl.path="$scripts/armadactl" \
-    "${tls_args[@]:-}" 2>&1 | tee e2e-test.log
+    ${tls_args[@]:-} 2>&1 | tee e2e-test.log
   TEST_EXIT_CODE=${PIPESTATUS[0]}
 
   if [ "$TEST_EXIT_CODE" -ne 0 ]; then
