@@ -205,13 +205,25 @@ run-test() {
   if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
     echo "Checking out Spark sources for tag v$SPARK_VERSION."
     git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+    cd ".spark-$SPARK_VERSION"
+    # Spark 3.3.4 does not compile without this fix
+    if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
+      sed -i -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+      # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
+      spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
+      if [ -f "$spark_dockerfile" ]; then
+        sed -i -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+        sed -i -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+      fi
+    fi
+    ./dev/change-scala-version.sh $SCALA_BIN_VERSION
+    # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
+    # spark-examples jars are not released, so we need to build these from sources
+    ./build/mvn --batch-mode clean
+    ./build/mvn --batch-mode package -pl examples
+    ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+    cd ..
   fi
-
-  echo ''
-  echo 'Looking for .spark* directory ----------------------------------------------'
-  pwd
-  ls -a
-  echo '-----------------------------------------------------------------------------'
 
   # Add armadactl to PATH so the e2e framework can access it
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH"
