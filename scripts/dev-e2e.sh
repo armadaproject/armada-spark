@@ -200,6 +200,11 @@ init-cluster() {
 }
 
 run-test() {
+  if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
+    echo "Checking out Spark sources for tag v$SPARK_VERSION."
+    git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+  fi
+
   echo "Running Scala E2E test suite..."
 
   # Add armadactl to PATH so the e2e framework can access it
@@ -208,6 +213,11 @@ run-test() {
 
   # Change to armada-spark directory
   cd "$scripts/.."
+
+  echo ''
+  echo 'Looking for .spark* directory ----------------------------------------------'
+  ls .spark*
+  echo '-----------------------------------------------------------------------------'
 
   tls_args=()
   test -n "${CLIENT_CERT_FILE:-}" && tls_args+=( -Dclient_cert_file="$CLIENT_CERT_FILE" )
