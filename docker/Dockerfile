@@ -24,3 +24,18 @@ ARG scala_binary_version=2.13
 COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/jars/
 COPY extraFiles /opt/spark/extraFiles
 COPY extraJars/* /opt/spark/jars
+
+
+USER 0
+
+RUN SPARK_CORE_JAR=$(ls /opt/spark/jars/spark-core_*.jar | head -1) && \
+    TEMP_DIR=$(mktemp -d) && \
+    cd "$TEMP_DIR" && \
+    jar xf "$SPARK_CORE_JAR" && \
+    rm -f org/apache/spark/deploy/SparkSubmit.class && \
+    rm -f "org/apache/spark/deploy/SparkSubmit\$.class" && \
+    jar cf "$SPARK_CORE_JAR" * && \
+    rm -rf "$TEMP_DIR"
+
+ARG spark_uid=185
+USER ${spark_uid}
