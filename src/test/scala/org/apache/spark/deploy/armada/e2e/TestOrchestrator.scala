@@ -484,7 +484,7 @@ class TestOrchestrator(
     ) ++ volumeMounts ++ Seq(
       imageName,
       "/opt/spark/bin/spark-class",
-      "org.apache.spark.deploy.ArmadaSparkSubmit",
+      "org.apache.spark.deploy.SparkSubmit",
       "--master",
       masterUrl,
       "--deploy-mode",

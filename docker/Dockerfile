@@ -24,3 +24,15 @@ ARG scala_binary_version=2.13
 COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/jars/
 COPY extraFiles /opt/spark/extraFiles
 COPY extraJars/* /opt/spark/jars
+
+
+USER 0
+
+# Move spark-core jar to a separate directory to ensure armada jar is first in the classpath
+RUN mkdir -p /opt/spark/coreJars && \
+    mv /opt/spark/jars/spark-core_*.jar /opt/spark/coreJars/
+
+ENV SPARK_DIST_CLASSPATH=/opt/spark/coreJars/*
+
+ARG spark_uid=185
+USER ${spark_uid}
