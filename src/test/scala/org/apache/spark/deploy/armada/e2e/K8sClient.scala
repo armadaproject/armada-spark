@@ -96,7 +96,7 @@ class K8sClient {
       podName: String,
       namespace: String
   )(implicit ec: ExecutionContext): Future[Option[Ingress]] = Future {
-    val ingressName = s"$podName-ingress-1"
+    val ingressName = s"$podName-ingress-0"
     Option(
       client
         .network()
