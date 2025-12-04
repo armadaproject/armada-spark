@@ -105,7 +105,13 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetIdOpt = sys.env.get("ARMADA_JOB_SET_ID")
+    val deployMode = conf.get("spark.submit.deployMode", "client").toLowerCase
+    val jobSetIdOpt = if (deployMode == "cluster") {
+      sys.env.get("ARMADA_JOB_SET_ID")
+    } else {
+      // Client mode: get from config, fallback to application ID
+      conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId()))
+    }
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -151,6 +157,8 @@ private[spark] class ArmadaClusterManagerBackend(
     )
     executorAllocator = Some(allocator)
     allocator.start()
+    
+    // TODO: In static client mode, we might need to request initial executors
   }
 
   private def createWatcher(

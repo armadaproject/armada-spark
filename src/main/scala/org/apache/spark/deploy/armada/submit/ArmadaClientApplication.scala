@@ -348,7 +348,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int
+      executorCount: Int,
+      driverHostname: Option[String] = None
   ): Seq[String] = {
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -379,12 +380,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    // driver hostname will be provided in client mode
+    val resolvedDriverHostname = driverHostname.getOrElse(
+      ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    )
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
       driverData.configGenerator,
-      driverHostname,
+      resolvedDriverHostname,
       executorCount,
       conf
     )
@@ -408,7 +412,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClient: ArmadaClient,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int
+      executorCount: Int,
+      driverHostname: Option[String] = None
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
     submitExecutorJobs(
@@ -416,7 +421,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig,
       conf,
       driverJobId,
-      executorCount
+      executorCount,
+      driverHostname
     )
   }
 
@@ -960,6 +966,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(driverContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
+      .withHostNetwork(true)
       .withNodeSelector(
         if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
         else currentPodSpec.nodeSelector
@@ -1241,6 +1248,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
+      .withHostNetwork(true)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
         if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
