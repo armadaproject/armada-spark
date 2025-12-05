@@ -136,14 +136,19 @@ private[spark] class ArmadaExecutorAllocator(
       val deployMode   = conf.get("spark.submit.deployMode", "client").toLowerCase
       val isClientMode = deployMode == "client"
 
-      // In client mode, use driver hostname from config; in cluster mode, use job ID
+      // In client mode, use driver hostname from config; in cluster mode, it will be derived from the job ID
       val driverJobId = sys.env.getOrElse("ARMADA_JOB_ID", applicationId)
       val driverHostname = if (isClientMode) {
-        // In client mode, driver runs locally - get hostname from config
-        conf.getOption("spark.driver.host").orElse {
-          // Fallback: try to get from RPC env if available
-          Some(java.net.InetAddress.getLocalHost.getHostAddress)
-        }
+        Some(
+          conf
+            .getOption("spark.driver.host")
+            .getOrElse(
+              throw new IllegalArgumentException(
+                "spark.driver.host must be set in client mode. " +
+                  "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
+              )
+            )
+        )
       } else {
         None
       }

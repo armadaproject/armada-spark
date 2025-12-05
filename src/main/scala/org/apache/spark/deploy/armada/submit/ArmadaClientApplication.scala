@@ -966,7 +966,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(driverContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
-      .withHostNetwork(true)
       .withNodeSelector(
         if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
         else currentPodSpec.nodeSelector
@@ -1248,7 +1247,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
-      .withHostNetwork(true)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
         if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
