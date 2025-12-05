@@ -104,7 +104,7 @@ private[spark] class ArmadaClusterManagerBackend(
     super.start()
 
     // Initialize Armada event watcher if queue and jobSetId are provided
-    val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
+    val queueOpt   = conf.get(ARMADA_JOB_QUEUE)
     val deployMode = conf.get("spark.submit.deployMode", "client").toLowerCase
     val jobSetIdOpt = if (deployMode == "cluster") {
       sys.env.get("ARMADA_JOB_SET_ID")
@@ -157,8 +157,18 @@ private[spark] class ArmadaClusterManagerBackend(
     )
     executorAllocator = Some(allocator)
     allocator.start()
-    
-    // TODO: In static client mode, we might need to request initial executors
+
+    // In client mode with static allocation, proactively request initial executors
+    val deployMode          = conf.get("spark.submit.deployMode", "client").toLowerCase
+    val isDynamicAllocation = conf.getBoolean("spark.dynamicAllocation.enabled", false)
+
+    if (deployMode == "client" && !isDynamicAllocation && initialExecutors > 0) {
+      logInfo(
+        s"Proactively requesting $initialExecutors initial executors for client mode (static allocation)"
+      )
+      val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+      doRequestTotalExecutors(Map(defaultProfile -> initialExecutors))
+    }
   }
 
   private def createWatcher(

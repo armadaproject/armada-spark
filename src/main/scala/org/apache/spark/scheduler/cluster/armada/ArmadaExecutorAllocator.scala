@@ -133,7 +133,7 @@ private[spark] class ArmadaExecutorAllocator(
       val app = new org.apache.spark.deploy.armada.submit.ArmadaClientApplication()
 
       // Detect client mode vs cluster mode
-      val deployMode = conf.get("spark.submit.deployMode", "client").toLowerCase
+      val deployMode   = conf.get("spark.submit.deployMode", "client").toLowerCase
       val isClientMode = deployMode == "client"
 
       // In client mode, use driver hostname from config; in cluster mode, use job ID

@@ -49,10 +49,10 @@ if [ "$STATIC_MODE" = true ]; then
     # Static mode: fixed executor count (like submitArmadaSpark.sh)
     EXTRA_CONF=(
         --conf spark.executor.instances=2
-        --conf spark.armada.executor.limit.memory=4Gi
-        --conf spark.armada.executor.request.memory=4Gi
-        --conf spark.armada.driver.limit.memory=4Gi
-        --conf spark.armada.driver.request.memory=4Gi
+        --conf spark.armada.executor.limit.memory=1Gi
+        --conf spark.armada.executor.request.memory=1Gi
+        --conf spark.armada.driver.limit.memory=1Gi
+        --conf spark.armada.driver.request.memory=1Gi
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     )
@@ -97,6 +97,6 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     --conf spark.local.dir=/tmp \
     --conf spark.driver.host=$SPARK_DRIVER_HOST \
     --conf spark.driver.port=$SPARK_DRIVER_PORT \
-    --conf spark.app.id=armada-spark \
+    --conf spark.app.id=armada-spark-$(openssl rand -hex 3) \
     "${EXTRA_CONF[@]}" \
     $FIRST_ARG  "${FINAL_ARGS[@]}"
