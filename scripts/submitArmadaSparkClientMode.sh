@@ -63,10 +63,10 @@ else
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.armada.scheduling.namespace=default
-        --conf spark.armada.executor.limit.memory=4Gi
-        --conf spark.armada.executor.request.memory=4Gi
-        --conf spark.armada.driver.limit.memory=4Gi
-        --conf spark.armada.driver.request.memory=4Gi
+        --conf spark.armada.executor.limit.memory=1Gi
+        --conf spark.armada.executor.request.memory=1Gi
+        --conf spark.armada.driver.limit.memory=1Gi
+        --conf spark.armada.driver.request.memory=1Gi
         --conf spark.default.parallelism=10
         --conf spark.executor.instances=1
         --conf spark.sql.shuffle.partitions=5
