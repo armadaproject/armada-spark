@@ -26,6 +26,7 @@ import io.armadaproject.armada.ArmadaClient
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.util.ThreadUtils
@@ -132,13 +133,11 @@ private[spark] class ArmadaExecutorAllocator(
       // Build minimal context for Armada submission using existing SparkConf
       val app = new org.apache.spark.deploy.armada.submit.ArmadaClientApplication()
 
-      // Detect client mode vs cluster mode
-      val deployMode   = conf.get("spark.submit.deployMode", "client").toLowerCase
-      val isClientMode = deployMode == "client"
-
-      // In client mode, use driver hostname from config; in cluster mode, it will be derived from the job ID
+      val modeHelper  = DeploymentModeHelper(conf)
       val driverJobId = sys.env.getOrElse("ARMADA_JOB_ID", applicationId)
-      val driverHostname = if (isClientMode) {
+      val driverHostname = if (modeHelper.isDriverInCluster) {
+        None
+      } else {
         Some(
           conf
             .getOption("spark.driver.host")
@@ -149,8 +148,6 @@ private[spark] class ArmadaExecutorAllocator(
               )
             )
         )
-      } else {
-        None
       }
 
       val submittedJobIds = app.validateAndSubmitExecutorJobs(

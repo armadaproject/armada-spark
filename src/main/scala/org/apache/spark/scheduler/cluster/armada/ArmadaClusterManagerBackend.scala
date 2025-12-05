@@ -29,6 +29,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.internal.config.SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO
 import org.apache.spark.resource.ResourceProfile
@@ -104,14 +105,9 @@ private[spark] class ArmadaClusterManagerBackend(
     super.start()
 
     // Initialize Armada event watcher if queue and jobSetId are provided
-    val queueOpt   = conf.get(ARMADA_JOB_QUEUE)
-    val deployMode = conf.get("spark.submit.deployMode", "client").toLowerCase
-    val jobSetIdOpt = if (deployMode == "cluster") {
-      sys.env.get("ARMADA_JOB_SET_ID")
-    } else {
-      // Client mode: get from config, fallback to application ID
-      conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId()))
-    }
+    val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
+    val modeHelper  = DeploymentModeHelper(conf)
+    val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -158,16 +154,12 @@ private[spark] class ArmadaClusterManagerBackend(
     executorAllocator = Some(allocator)
     allocator.start()
 
-    // In client mode with static allocation, proactively request initial executors
-    val deployMode          = conf.get("spark.submit.deployMode", "client").toLowerCase
-    val isDynamicAllocation = conf.getBoolean("spark.dynamicAllocation.enabled", false)
-
-    if (deployMode == "client" && !isDynamicAllocation && initialExecutors > 0) {
-      logInfo(
-        s"Proactively requesting $initialExecutors initial executors for client mode (static allocation)"
-      )
+    // proactively request executors in static client mode
+    val modeHelper = DeploymentModeHelper(conf)
+    if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
+      val executorCount  = modeHelper.getExecutorCount
       val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
-      doRequestTotalExecutors(Map(defaultProfile -> initialExecutors))
+      doRequestTotalExecutors(Map(defaultProfile -> executorCount))
     }
   }
 
