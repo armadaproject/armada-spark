@@ -7,6 +7,9 @@ echo Submitting spark job to Armada.
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
 
+echo "Deploy Mode: $DEPLOY_MODE"
+echo "Allocation Mode: $ALLOCATION_MODE"
+
 if [ "${INCLUDE_PYTHON}" == "false" ]; then
     NAME=spark-pi
     CLASS_PROMPT="--class"
@@ -43,32 +46,33 @@ fi
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
-export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
+# Set memory limits based on deploy mode
+MEMORY_LIMIT="1Gi"
 
-# Build configuration based on mode
+# Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
     echo running static mode
-    # Static mode: fixed executor count (like submitArmadaSpark.sh)
+    # Static mode: fixed executor count
     EXTRA_CONF=(
         --conf spark.executor.instances=2
-        --conf spark.armada.executor.limit.memory=4Gi
-        --conf spark.armada.executor.request.memory=4Gi
-        --conf spark.armada.driver.limit.memory=4Gi
-        --conf spark.armada.driver.request.memory=4Gi
+        --conf spark.armada.executor.limit.memory=$MEMORY_LIMIT
+        --conf spark.armada.executor.request.memory=$MEMORY_LIMIT
+        --conf spark.armada.driver.limit.memory=$MEMORY_LIMIT
+        --conf spark.armada.driver.request.memory=$MEMORY_LIMIT
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     )
 else
     echo running dynamic mode
-    # Dynamic mode: dynamic allocation with debug options (original submitArmadaSparkDynamic.sh)
+    # Dynamic mode: dynamic allocation with debug options
     EXTRA_CONF=(
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.armada.scheduling.namespace=default
-        --conf spark.armada.executor.limit.memory=4Gi
-        --conf spark.armada.executor.request.memory=4Gi
-        --conf spark.armada.driver.limit.memory=4Gi
-        --conf spark.armada.driver.request.memory=4Gi
+        --conf spark.armada.executor.limit.memory=$MEMORY_LIMIT
+        --conf spark.armada.executor.request.memory=$MEMORY_LIMIT
+        --conf spark.armada.driver.limit.memory=$MEMORY_LIMIT
+        --conf spark.armada.driver.request.memory=$MEMORY_LIMIT
         --conf spark.default.parallelism=10
         --conf spark.executor.instances=1
         --conf spark.sql.shuffle.partitions=5
@@ -84,10 +88,25 @@ else
     )
 fi
 
+# Build deploy-mode specific arguments array
+DEPLOY_MODE_ARGS=()
+if [ "$DEPLOY_MODE" = "client" ]; then
+    DEPLOY_MODE_ARGS=(
+        --conf spark.driver.host=$SPARK_DRIVER_HOST
+        --conf spark.driver.port=$SPARK_DRIVER_PORT
+        --conf spark.app.id=armada-spark-$(openssl rand -hex 3)
+    )
+else
+    export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
+    DEPLOY_MODE_ARGS=(
+        --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
+    )
+fi
+
 # Run Armada Spark via docker image
 docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
-    --master $ARMADA_MASTER --deploy-mode cluster \
+    --master $ARMADA_MASTER --deploy-mode $DEPLOY_MODE \
     --name $NAME \
     $CLASS_PROMPT $CLASS_ARG \
     $AUTH_ARG \
@@ -97,6 +116,6 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
     --conf spark.local.dir=/tmp \
-    --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
+    "${DEPLOY_MODE_ARGS[@]}" \
     "${EXTRA_CONF[@]}" \
     $FIRST_ARG  "${FINAL_ARGS[@]}"

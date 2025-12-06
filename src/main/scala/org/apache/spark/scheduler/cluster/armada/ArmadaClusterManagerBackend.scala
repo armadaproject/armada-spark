@@ -29,6 +29,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.internal.config.SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO
 import org.apache.spark.resource.ResourceProfile
@@ -105,7 +106,8 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetIdOpt = sys.env.get("ARMADA_JOB_SET_ID")
+    val modeHelper  = DeploymentModeHelper(conf)
+    val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -151,6 +153,14 @@ private[spark] class ArmadaClusterManagerBackend(
     )
     executorAllocator = Some(allocator)
     allocator.start()
+
+    // proactively request executors in static client mode
+    val modeHelper = DeploymentModeHelper(conf)
+    if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
+      val executorCount  = modeHelper.getExecutorCount
+      val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+      doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+    }
   }
 
   private def createWatcher(
