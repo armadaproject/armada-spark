@@ -380,7 +380,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
 
     // Derive driver hostname from deployment mode
-    val modeHelper = DeploymentModeHelper(conf)
+    val modeHelper             = DeploymentModeHelper(conf)
     val resolvedDriverHostname = modeHelper.getDriverHostName(driverJobId)
     val executors = createExecutorJobs(
       armadaJobConfig,

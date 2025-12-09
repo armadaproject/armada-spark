@@ -84,8 +84,8 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "false")
 
-    val helper = DeploymentModeHelper(conf)
-    val driverJobId = "test-job-123"
+    val helper           = DeploymentModeHelper(conf)
+    val driverJobId      = "test-job-123"
     val expectedHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
 
     helper.getDriverHostName(driverJobId) shouldBe expectedHostname
@@ -97,8 +97,8 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "true")
 
-    val helper = DeploymentModeHelper(conf)
-    val driverJobId = "dynamic-job-456"
+    val helper           = DeploymentModeHelper(conf)
+    val driverJobId      = "dynamic-job-456"
     val expectedHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
 
     helper.getDriverHostName(driverJobId) shouldBe expectedHostname
@@ -111,7 +111,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "false")
       .set("spark.driver.host", "my-driver-host.example.com")
 
-    val helper = DeploymentModeHelper(conf)
+    val helper      = DeploymentModeHelper(conf)
     val driverJobId = "client-job-789"
 
     helper.getDriverHostName(driverJobId) shouldBe "my-driver-host.example.com"
@@ -123,18 +123,20 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.driver.host", "external-driver.local")
 
-    val helper = DeploymentModeHelper(conf)
+    val helper      = DeploymentModeHelper(conf)
     val driverJobId = "dynamic-client-job-101"
 
     helper.getDriverHostName(driverJobId) shouldBe "external-driver.local"
   }
 
-  test("getDriverHostName: StaticClient throws IllegalArgumentException when spark.driver.host is not set") {
+  test(
+    "getDriverHostName: StaticClient throws IllegalArgumentException when spark.driver.host is not set"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "false")
 
-    val helper = DeploymentModeHelper(conf)
+    val helper      = DeploymentModeHelper(conf)
     val driverJobId = "client-job-without-host"
 
     val exception = intercept[IllegalArgumentException] {
@@ -144,12 +146,14 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     exception.getMessage should include("spark.driver.host must be set in client mode")
   }
 
-  test("getDriverHostName: DynamicClient throws IllegalArgumentException when spark.driver.host is not set") {
+  test(
+    "getDriverHostName: DynamicClient throws IllegalArgumentException when spark.driver.host is not set"
+  ) {
     val conf = new SparkConf()
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
 
-    val helper = DeploymentModeHelper(conf)
+    val helper      = DeploymentModeHelper(conf)
     val driverJobId = "dynamic-client-job-without-host"
 
     val exception = intercept[IllegalArgumentException] {

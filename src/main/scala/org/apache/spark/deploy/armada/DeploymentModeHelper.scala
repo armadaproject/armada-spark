@@ -80,8 +80,8 @@ trait DeploymentModeHelper {
   /** Returns the driver hostname based on deployment mode.
     *
     * In cluster mode, the driver runs in a pod and the hostname is derived from the service name
-    * built from the driver job ID. In client mode, the driver runs externally and the hostname
-    * must be provided via spark.driver.host configuration.
+    * built from the driver job ID. In client mode, the driver runs externally and the hostname must
+    * be provided via spark.driver.host configuration.
     *
     * @param driverJobId
     *   The Armada job ID of the driver pod
