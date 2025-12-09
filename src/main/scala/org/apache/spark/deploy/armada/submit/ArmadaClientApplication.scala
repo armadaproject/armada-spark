@@ -348,8 +348,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int,
-      driverHostname: Option[String] = None
+      executorCount: Int
   ): Seq[String] = {
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -380,10 +379,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    // driver hostname will be provided in client mode
-    val resolvedDriverHostname = driverHostname.getOrElse(
-      ArmadaUtils.buildServiceNameFromJobId(driverJobId)
-    )
+    // Derive driver hostname from deployment mode
+    val modeHelper = DeploymentModeHelper(conf)
+    val resolvedDriverHostname = modeHelper.getDriverHostName(driverJobId)
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
@@ -412,8 +410,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaClient: ArmadaClient,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int,
-      driverHostname: Option[String] = None
+      executorCount: Int
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
     submitExecutorJobs(
@@ -421,8 +418,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig,
       conf,
       driverJobId,
-      executorCount,
-      driverHostname
+      executorCount
     )
   }
 

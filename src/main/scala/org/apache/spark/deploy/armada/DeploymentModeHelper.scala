@@ -18,6 +18,7 @@ package org.apache.spark.deploy.armada
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
 /** Helper trait that encapsulates deployment mode-specific behavior for Armada Spark jobs.
@@ -75,6 +76,21 @@ trait DeploymentModeHelper {
     *   Optional jobSetId string
     */
   def getJobSetIdSource(applicationId: String): Option[String]
+
+  /** Returns the driver hostname based on deployment mode.
+    *
+    * In cluster mode, the driver runs in a pod and the hostname is derived from the service name
+    * built from the driver job ID. In client mode, the driver runs externally and the hostname
+    * must be provided via spark.driver.host configuration.
+    *
+    * @param driverJobId
+    *   The Armada job ID of the driver pod
+    * @return
+    *   The driver hostname string
+    * @throws IllegalArgumentException
+    *   In client mode if spark.driver.host is not configured
+    */
+  def getDriverHostName(driverJobId: String): String
 }
 
 /** Static allocation in cluster mode.
@@ -101,6 +117,11 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
   override def getJobSetIdSource(applicationId: String): Option[String] = {
     sys.env.get("ARMADA_JOB_SET_ID")
   }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In cluster mode, driver runs in a pod, so use service name from job ID
+    ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+  }
 }
 
 /** Static allocation in client mode.
@@ -126,6 +147,18 @@ class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
 
   override def getJobSetIdSource(applicationId: String): Option[String] = {
     conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In client mode, driver runs externally, so use spark.driver.host from config
+    conf
+      .getOption("spark.driver.host")
+      .getOrElse(
+        throw new IllegalArgumentException(
+          "spark.driver.host must be set in client mode. " +
+            "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
+        )
+      )
   }
 }
 
@@ -158,6 +191,11 @@ class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
   override def getJobSetIdSource(applicationId: String): Option[String] = {
     sys.env.get("ARMADA_JOB_SET_ID")
   }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In cluster mode, driver runs in a pod, so use service name from job ID
+    ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+  }
 }
 
 /** Dynamic allocation in client mode.
@@ -188,6 +226,18 @@ class DynamicClient(val conf: SparkConf) extends DeploymentModeHelper {
 
   override def getJobSetIdSource(applicationId: String): Option[String] = {
     conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In client mode, driver runs externally, so use spark.driver.host from config
+    conf
+      .getOption("spark.driver.host")
+      .getOrElse(
+        throw new IllegalArgumentException(
+          "spark.driver.host must be set in client mode. " +
+            "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
+        )
+      )
   }
 }
 
