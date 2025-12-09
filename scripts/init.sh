@@ -33,7 +33,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Restore remaining arguments for getopts
-set -- "${ARGS[@]}"
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 print_usage () {
     echo ' Usage:'
