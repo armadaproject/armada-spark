@@ -51,7 +51,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   */
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
-    sc: SparkContext,
+    val sc: SparkContext,
     executorService: ScheduledExecutorService,
     masterURL: String
 ) extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {

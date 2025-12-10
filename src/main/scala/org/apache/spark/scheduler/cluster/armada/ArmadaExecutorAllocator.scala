@@ -61,6 +61,9 @@ private[spark] class ArmadaExecutorAllocator(
   private val allocationExecutor: ScheduledExecutorService =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-allocator")
 
+  // Shutdown flag to prevent allocations during shutdown
+  @volatile private var stopped = false
+
   // ========================================================================
   // LIFECYCLE
   // ========================================================================
@@ -79,6 +82,7 @@ private[spark] class ArmadaExecutorAllocator(
 
   def stop(): Unit = {
     logInfo("Stopping Armada executor allocator")
+    stopped = true
     ThreadUtils.shutdown(allocationExecutor)
   }
 
@@ -100,6 +104,11 @@ private[spark] class ArmadaExecutorAllocator(
     */
   private def tryAllocateExecutors(): Unit = {
     try {
+      // Don't allocate executors if SparkContext is stopping
+      if (stopped || backend.sc.isStopped) {
+        return
+      }
+
       totalExpectedExecutors.asScala.foreach { case (rpId, target) =>
         val rp = rpIdToResourceProfile.synchronized {
           rpIdToResourceProfile.get(rpId)
