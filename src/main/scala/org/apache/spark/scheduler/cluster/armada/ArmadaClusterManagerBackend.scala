@@ -29,6 +29,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.internal.config.SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO
 import org.apache.spark.resource.ResourceProfile
@@ -50,7 +51,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   */
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
-    sc: SparkContext,
+    val sc: SparkContext,
     executorService: ScheduledExecutorService,
     masterURL: String
 ) extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
@@ -103,9 +104,13 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     super.start()
 
+    // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
+    ArmadaUtils.setDefaultAppId(conf)
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetIdOpt = sys.env.get("ARMADA_JOB_SET_ID")
+    val modeHelper  = DeploymentModeHelper(conf)
+    val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -129,7 +134,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
           createWatcher(q, jsId, host, port, client)
 
-          createAllocator(q, jsId, client)
+          createAllocator(q, jsId, client, modeHelper)
         } catch {
           case e: Throwable =>
             logWarning(s"Failed to start Armada components: ${e.getMessage}", e)
@@ -140,7 +145,12 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  private def createAllocator(q: String, jsId: String, client: ArmadaClient): Unit = {
+  private def createAllocator(
+      q: String,
+      jsId: String,
+      client: ArmadaClient,
+      modeHelper: DeploymentModeHelper
+  ): Unit = {
     val allocator = new ArmadaExecutorAllocator(
       client,
       q,
@@ -151,6 +161,24 @@ private[spark] class ArmadaClusterManagerBackend(
     )
     executorAllocator = Some(allocator)
     allocator.start()
+
+    // proactively request executors in static client mode only
+    val modeName                 = modeHelper.getClass.getSimpleName
+    val shouldProactivelyRequest = modeHelper.shouldProactivelyRequestExecutors
+    val isStopped                = sc.isStopped
+
+    logInfo(
+      s"Proactive executor request check: mode=$modeName, " +
+        s"isStopped=$isStopped, shouldProactivelyRequest=$shouldProactivelyRequest, " +
+        s"initialExecutors=$initialExecutors"
+    )
+
+    if (!isStopped && shouldProactivelyRequest && initialExecutors > 0) {
+      logInfo(s"Proactively requesting executors: executorCount=${modeHelper.getExecutorCount}")
+      val executorCount  = modeHelper.getExecutorCount
+      val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+      doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+    }
   }
 
   private def createWatcher(
@@ -193,6 +221,11 @@ private[spark] class ArmadaClusterManagerBackend(
   override def stop(): Unit = {
     logInfo("Stopping Armada cluster scheduler backend")
 
+    // Stop executor allocator FIRST to prevent new allocations during shutdown
+    Utils.tryLogNonFatalError {
+      executorAllocator.foreach(_.stop())
+    }
+
     // Call parent stop
     Utils.tryLogNonFatalError {
       super.stop()
@@ -201,11 +234,6 @@ private[spark] class ArmadaClusterManagerBackend(
     // Stop event watcher
     Utils.tryLogNonFatalError {
       eventWatcher.foreach(_.stop())
-    }
-
-    // Stop executor allocator
-    Utils.tryLogNonFatalError {
-      executorAllocator.foreach(_.stop())
     }
 
     // Cancel individual executor jobs (not the driver) if configured
@@ -289,6 +317,10 @@ private[spark] class ArmadaClusterManagerBackend(
   override def doRequestTotalExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]
   ): Future[Boolean] = {
+    // Don't update executor targets if SparkContext is stopping
+    if (sc.isStopped) {
+      return Future.successful(false)
+    }
     executorAllocator match {
       case Some(allocator) =>
         allocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)

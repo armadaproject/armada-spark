@@ -154,11 +154,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private val gangId = Some(java.util.UUID.randomUUID.toString)
 
-  private val defaultAppId =
-    s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
-
-  private def getApplicationId(conf: SparkConf) =
-    conf.getOption("spark.app.id").getOrElse(defaultAppId)
+  private def getApplicationId(conf: SparkConf): String =
+    ArmadaUtils.getApplicationId(conf)
 
   private def log(msg: String): Unit = {
     // scalastyle:off println
@@ -379,12 +376,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    // Derive driver hostname from deployment mode
+    val modeHelper             = DeploymentModeHelper(conf)
+    val resolvedDriverHostname = modeHelper.getDriverHostName(driverJobId)
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
       driverData.configGenerator,
-      driverHostname,
+      resolvedDriverHostname,
       executorCount,
       conf
     )

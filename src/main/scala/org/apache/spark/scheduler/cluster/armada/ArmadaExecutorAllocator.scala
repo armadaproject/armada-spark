@@ -26,6 +26,7 @@ import io.armadaproject.armada.ArmadaClient
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.util.ThreadUtils
@@ -60,6 +61,9 @@ private[spark] class ArmadaExecutorAllocator(
   private val allocationExecutor: ScheduledExecutorService =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("armada-allocator")
 
+  // Shutdown flag to prevent allocations during shutdown
+  @volatile private var stopped = false
+
   // ========================================================================
   // LIFECYCLE
   // ========================================================================
@@ -78,6 +82,7 @@ private[spark] class ArmadaExecutorAllocator(
 
   def stop(): Unit = {
     logInfo("Stopping Armada executor allocator")
+    stopped = true
     ThreadUtils.shutdown(allocationExecutor)
   }
 
@@ -86,6 +91,10 @@ private[spark] class ArmadaExecutorAllocator(
   // ========================================================================
 
   def setTotalExpectedExecutors(resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = {
+    // Don't update targets if allocator is stopped or SparkContext is stopping
+    if (stopped || backend.sc.isStopped) {
+      return
+    }
     resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
       rpIdToResourceProfile.synchronized {
         rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)
@@ -99,6 +108,11 @@ private[spark] class ArmadaExecutorAllocator(
     */
   private def tryAllocateExecutors(): Unit = {
     try {
+      // Don't allocate executors if SparkContext is stopping
+      if (stopped || backend.sc.isStopped) {
+        return
+      }
+
       totalExpectedExecutors.asScala.foreach { case (rpId, target) =>
         val rp = rpIdToResourceProfile.synchronized {
           rpIdToResourceProfile.get(rpId)
@@ -132,7 +146,6 @@ private[spark] class ArmadaExecutorAllocator(
       // Build minimal context for Armada submission using existing SparkConf
       val app = new org.apache.spark.deploy.armada.submit.ArmadaClientApplication()
 
-      // Set the driverJobId from ARMADA_JOB_ID env var if present, otherwise fall back to applicationId
       val driverJobId = sys.env.getOrElse("ARMADA_JOB_ID", applicationId)
 
       val submittedJobIds = app.validateAndSubmitExecutorJobs(

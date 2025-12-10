@@ -17,6 +17,8 @@
 package org.apache.spark.deploy.armada
 
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
 /** Helper trait that encapsulates deployment mode-specific behavior for Armada Spark jobs.
@@ -45,6 +47,50 @@ trait DeploymentModeHelper {
     *   The total number of pods in the gang (executors + driver if applicable)
     */
   def getGangCardinality: Int
+
+  /** Returns whether the driver runs inside the cluster (cluster mode) or externally (client mode).
+    *
+    * @return
+    *   true if driver runs in cluster, false if driver runs externally
+    */
+  def isDriverInCluster: Boolean
+
+  /** Returns whether executors should be proactively requested at startup.
+    *
+    * This is typically true for client mode with static allocation, where executors need to be
+    * requested immediately since the driver is already running.
+    *
+    * @return
+    *   true if executors should be proactively requested, false otherwise
+    */
+  def shouldProactivelyRequestExecutors: Boolean
+
+  /** Returns the source for jobSetId based on deployment mode.
+    *
+    * In cluster mode, jobSetId comes from environment variable ARMADA_JOB_SET_ID. In client mode,
+    * jobSetId comes from config or falls back to application ID.
+    *
+    * @param applicationId
+    *   Spark application ID to use as fallback
+    * @return
+    *   Optional jobSetId string
+    */
+  def getJobSetIdSource(applicationId: String): Option[String]
+
+  /** Returns the driver hostname based on deployment mode.
+    *
+    * In cluster mode, the driver runs in a pod and the hostname is derived from the service name
+    * built from the driver job ID. In client mode, the driver runs externally and the hostname must
+    * be provided via spark.driver.host configuration.
+    *
+    * @param driverJobId
+    *   The Armada job ID of the driver pod
+    * @return
+    *   The driver hostname string
+    * @throws IllegalArgumentException
+    *   In client mode if spark.driver.host is not configured
+    */
+  def getDriverHostName(driverJobId: String): String
 }
 
 /** Static allocation in cluster mode.
@@ -54,7 +100,7 @@ trait DeploymentModeHelper {
   *   - The driver runs as a pod inside the cluster
   *   - Gang cardinality includes both driver and executors
   */
-class StaticCluster(conf: SparkConf) extends DeploymentModeHelper {
+class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
@@ -62,6 +108,19 @@ class StaticCluster(conf: SparkConf) extends DeploymentModeHelper {
   override def getGangCardinality: Int = {
     // In cluster mode, include the driver pod in gang scheduling
     getExecutorCount + 1
+  }
+
+  override def isDriverInCluster: Boolean = true
+
+  override def shouldProactivelyRequestExecutors: Boolean = false
+
+  override def getJobSetIdSource(applicationId: String): Option[String] = {
+    sys.env.get("ARMADA_JOB_SET_ID")
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In cluster mode, driver runs in a pod, so use service name from job ID
+    ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
 }
 
@@ -72,7 +131,7 @@ class StaticCluster(conf: SparkConf) extends DeploymentModeHelper {
   *   - The driver runs on the client machine (outside the cluster)
   *   - Gang cardinality includes only executors
   */
-class StaticClient(conf: SparkConf) extends DeploymentModeHelper {
+class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
@@ -80,6 +139,26 @@ class StaticClient(conf: SparkConf) extends DeploymentModeHelper {
   override def getGangCardinality: Int = {
     // In client mode, driver runs externally, so only count executors
     getExecutorCount
+  }
+
+  override def isDriverInCluster: Boolean = false
+
+  override def shouldProactivelyRequestExecutors: Boolean = true
+
+  override def getJobSetIdSource(applicationId: String): Option[String] = {
+    conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In client mode, driver runs externally, so use spark.driver.host from config
+    conf
+      .getOption("spark.driver.host")
+      .getOrElse(
+        throw new IllegalArgumentException(
+          "spark.driver.host must be set in client mode. " +
+            "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
+        )
+      )
   }
 }
 
@@ -91,7 +170,7 @@ class StaticClient(conf: SparkConf) extends DeploymentModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes both driver and minimum executors
   */
-class DynamicCluster(conf: SparkConf) extends DeploymentModeHelper {
+class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -104,6 +183,19 @@ class DynamicCluster(conf: SparkConf) extends DeploymentModeHelper {
     // In cluster mode, include the driver pod in gang scheduling
     getExecutorCount + 1
   }
+
+  override def isDriverInCluster: Boolean = true
+
+  override def shouldProactivelyRequestExecutors: Boolean = false
+
+  override def getJobSetIdSource(applicationId: String): Option[String] = {
+    sys.env.get("ARMADA_JOB_SET_ID")
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In cluster mode, driver runs in a pod, so use service name from job ID
+    ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+  }
 }
 
 /** Dynamic allocation in client mode.
@@ -114,7 +206,7 @@ class DynamicCluster(conf: SparkConf) extends DeploymentModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes only minimum executors
   */
-class DynamicClient(conf: SparkConf) extends DeploymentModeHelper {
+class DynamicClient(val conf: SparkConf) extends DeploymentModeHelper {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -126,6 +218,26 @@ class DynamicClient(conf: SparkConf) extends DeploymentModeHelper {
   override def getGangCardinality: Int = {
     // In client mode, driver runs externally, so only count executors
     getExecutorCount
+  }
+
+  override def isDriverInCluster: Boolean = false
+
+  override def shouldProactivelyRequestExecutors: Boolean = false
+
+  override def getJobSetIdSource(applicationId: String): Option[String] = {
+    conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
+  }
+
+  override def getDriverHostName(driverJobId: String): String = {
+    // In client mode, driver runs externally, so use spark.driver.host from config
+    conf
+      .getOption("spark.driver.host")
+      .getOrElse(
+        throw new IllegalArgumentException(
+          "spark.driver.host must be set in client mode. " +
+            "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
+        )
+      )
   }
 }
 
