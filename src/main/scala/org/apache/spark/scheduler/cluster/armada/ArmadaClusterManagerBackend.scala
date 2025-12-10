@@ -158,12 +158,12 @@ private[spark] class ArmadaClusterManagerBackend(
     allocator.start()
 
     // proactively request executors in static client mode
-    val modeHelper = DeploymentModeHelper(conf)
-    if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
-      val executorCount  = modeHelper.getExecutorCount
-      val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
-      doRequestTotalExecutors(Map(defaultProfile -> executorCount))
-    }
+    // val modeHelper = DeploymentModeHelper(conf)
+    // if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
+    //   val executorCount  = modeHelper.getExecutorCount
+    //   val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+    //   doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+    // }
   }
 
   private def createWatcher(
