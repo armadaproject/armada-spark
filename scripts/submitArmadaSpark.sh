@@ -94,7 +94,6 @@ if [ "$DEPLOY_MODE" = "client" ]; then
     DEPLOY_MODE_ARGS=(
         --conf spark.driver.host=$SPARK_DRIVER_HOST
         --conf spark.driver.port=$SPARK_DRIVER_PORT
-        --conf spark.app.id=armada-spark-$(openssl rand -hex 3)
     )
 else
     export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"

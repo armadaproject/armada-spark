@@ -16,6 +16,7 @@
  */
 package org.apache.spark.deploy.armada.submit
 
+import org.apache.spark.SparkConf
 import scala.util.Try
 
 object ArmadaUtilsExceptions {
@@ -62,5 +63,33 @@ object ArmadaUtils {
 
   def getExecutorRange(numberOfExecutors: Int): Range = {
     0 until numberOfExecutors
+  }
+
+  /** Sets a default application ID in SparkConf if not already set.
+    *
+    * If spark.app.id is not already set, generates a default application ID with the format
+    * "armada-spark-app-id-<UUID>".
+    *
+    * @param conf
+    *   Spark configuration to check and potentially update
+    */
+  def setDefaultAppId(conf: SparkConf): Unit = {
+    if (conf.getOption("spark.app.id").isEmpty) {
+      val defaultAppId =
+        s"armada-spark-app-id-${java.util.UUID.randomUUID().toString.replaceAll("-", "")}"
+      conf.set("spark.app.id", defaultAppId)
+    }
+  }
+
+  /** Gets the application ID from SparkConf, generating a default if not set.
+    *
+    * @param conf
+    *   Spark configuration
+    * @return
+    *   The application ID string
+    */
+  def getApplicationId(conf: SparkConf): String = {
+    setDefaultAppId(conf)
+    conf.get("spark.app.id")
   }
 }

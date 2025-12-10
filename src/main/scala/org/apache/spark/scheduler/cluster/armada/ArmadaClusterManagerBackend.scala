@@ -104,6 +104,9 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     super.start()
 
+    // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
+    ArmadaUtils.setDefaultAppId(conf)
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
     val modeHelper  = DeploymentModeHelper(conf)
