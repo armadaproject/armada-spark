@@ -77,7 +77,7 @@ private[spark] object OAuthSidecarBuilder {
       image = Some(proxyImage),
       args = args,
       env = envVars,
-      volumeMounts = if (volumeMounts.nonEmpty) volumeMounts else Seq.empty,
+      volumeMounts = volumeMounts,
       // Native sidecars (restartPolicy: Always) have ports extracted by Armada for service creation
       ports = Seq(
         generated.ContainerPort(
@@ -203,7 +203,8 @@ private[spark] object OAuthSidecarBuilder {
     // Boolean flags without values
     val simpleBooleanArgs = Seq(
       (Config.ARMADA_OAUTH_SKIP_JWT_BEARER_TOKENS, "--skip-jwt-bearer-tokens"),
-      (Config.ARMADA_OAUTH_SKIP_VERIFY, "--ssl-insecure-skip-verify")
+      (Config.ARMADA_OAUTH_SKIP_VERIFY, "--ssl-insecure-skip-verify"),
+      (Config.ARMADA_OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY, "--ssl-upstream-insecure-skip-verify")
     ).flatMap { case (configEntry, argName) =>
       if (conf.get(configEntry)) Seq(argName)
       else Seq.empty
@@ -298,6 +299,7 @@ private[spark] object OAuthSidecarBuilder {
       generated.VolumeMount(
         name = Some(CA_CERTIFICATES_VOLUME),
         mountPath = Some(path),
+        subPath = conf.get(Config.ARMADA_OAUTH_TLS_CA_CERT_SUBPATH),
         readOnly = Some(true)
       )
     }
@@ -306,6 +308,7 @@ private[spark] object OAuthSidecarBuilder {
       generated.VolumeMount(
         name = Some(CA_BUNDLE_VOLUME),
         mountPath = Some(path),
+        subPath = conf.get(Config.ARMADA_OAUTH_TLS_CA_BUNDLE_SUBPATH),
         readOnly = Some(true)
       )
     }
