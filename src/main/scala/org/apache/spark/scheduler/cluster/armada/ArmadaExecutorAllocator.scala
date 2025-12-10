@@ -91,6 +91,10 @@ private[spark] class ArmadaExecutorAllocator(
   // ========================================================================
 
   def setTotalExpectedExecutors(resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = {
+    // Don't update targets if allocator is stopped or SparkContext is stopping
+    if (stopped || backend.sc.isStopped) {
+      return
+    }
     resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
       rpIdToResourceProfile.synchronized {
         rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)

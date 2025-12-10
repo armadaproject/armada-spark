@@ -302,6 +302,10 @@ private[spark] class ArmadaClusterManagerBackend(
   override def doRequestTotalExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]
   ): Future[Boolean] = {
+    // Don't update executor targets if SparkContext is stopping
+    if (sc.isStopped) {
+      return Future.successful(false)
+    }
     executorAllocator match {
       case Some(allocator) =>
         allocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)
