@@ -134,7 +134,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
           createWatcher(q, jsId, host, port, client)
 
-          createAllocator(q, jsId, client)
+          createAllocator(q, jsId, client, modeHelper)
         } catch {
           case e: Throwable =>
             logWarning(s"Failed to start Armada components: ${e.getMessage}", e)
@@ -145,7 +145,12 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  private def createAllocator(q: String, jsId: String, client: ArmadaClient): Unit = {
+  private def createAllocator(
+      q: String,
+      jsId: String,
+      client: ArmadaClient,
+      modeHelper: DeploymentModeHelper
+  ): Unit = {
     val allocator = new ArmadaExecutorAllocator(
       client,
       q,
@@ -157,13 +162,23 @@ private[spark] class ArmadaClusterManagerBackend(
     executorAllocator = Some(allocator)
     allocator.start()
 
-    // proactively request executors in static client mode
-    // val modeHelper = DeploymentModeHelper(conf)
-    // if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
-    //   val executorCount  = modeHelper.getExecutorCount
-    //   val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
-    //   doRequestTotalExecutors(Map(defaultProfile -> executorCount))
-    // }
+    // proactively request executors in static client mode only
+    val modeName                 = modeHelper.getClass.getSimpleName
+    val shouldProactivelyRequest = modeHelper.shouldProactivelyRequestExecutors
+    val isStopped                = sc.isStopped
+
+    logInfo(
+      s"Proactive executor request check: mode=$modeName, " +
+        s"isStopped=$isStopped, shouldProactivelyRequest=$shouldProactivelyRequest, " +
+        s"initialExecutors=$initialExecutors"
+    )
+
+    if (!isStopped && shouldProactivelyRequest && initialExecutors > 0) {
+      logInfo(s"Proactively requesting executors: executorCount=${modeHelper.getExecutorCount}")
+      val executorCount  = modeHelper.getExecutorCount
+      val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+      doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+    }
   }
 
   private def createWatcher(
@@ -206,6 +221,11 @@ private[spark] class ArmadaClusterManagerBackend(
   override def stop(): Unit = {
     logInfo("Stopping Armada cluster scheduler backend")
 
+    // Stop executor allocator FIRST to prevent new allocations during shutdown
+    Utils.tryLogNonFatalError {
+      executorAllocator.foreach(_.stop())
+    }
+
     // Call parent stop
     Utils.tryLogNonFatalError {
       super.stop()
@@ -214,11 +234,6 @@ private[spark] class ArmadaClusterManagerBackend(
     // Stop event watcher
     Utils.tryLogNonFatalError {
       eventWatcher.foreach(_.stop())
-    }
-
-    // Stop executor allocator
-    Utils.tryLogNonFatalError {
-      executorAllocator.foreach(_.stop())
     }
 
     // Cancel individual executor jobs (not the driver) if configured
