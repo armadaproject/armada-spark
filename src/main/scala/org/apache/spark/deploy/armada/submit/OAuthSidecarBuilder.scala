@@ -22,6 +22,7 @@ import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import k8s.io.apimachinery.pkg.util.intstr.generated.IntOrString
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
+import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
 
 import java.security.SecureRandom
 
@@ -46,18 +47,12 @@ private[spark] object OAuthSidecarBuilder {
   private val LIVENESS_TIMEOUT_SECONDS       = 3
   private val LIVENESS_FAILURE_THRESHOLD     = 3
 
-  /** Builds OAuth2-proxy sidecar container if OAuth is enabled.
-    *
-    * @param conf
-    *   SparkConf containing OAuth configuration
-    * @return
-    *   Some(Container) if OAuth enabled, None otherwise
-    */
+  /** Builds OAuth2-proxy sidecar container if OAuth is enabled. */
   def buildOAuthSidecar(conf: SparkConf): Option[generated.Container] = {
-    if (!conf.get(Config.ARMADA_OAUTH_ENABLED)) {
-      return None
-    }
+    if (conf.get(Config.ARMADA_OAUTH_ENABLED)) Some(buildOAuthContainer(conf)) else None
+  }
 
+  private def buildOAuthContainer(conf: SparkConf): generated.Container = {
     validateOAuthConfig(conf)
 
     val clientId     = conf.get(Config.ARMADA_OAUTH_CLIENT_ID).get
@@ -72,12 +67,12 @@ private[spark] object OAuthSidecarBuilder {
     val resources     = buildOAuthResources(conf)
     val livenessProbe = buildLivenessProbe(proxyPort)
 
-    val oauthContainer = generated.Container(
+    generated.Container(
       name = Some("oauth"),
       image = Some(proxyImage),
       args = args,
       env = envVars,
-      volumeMounts = if (volumeMounts.nonEmpty) volumeMounts else Seq.empty,
+      volumeMounts = volumeMounts,
       // Native sidecars (restartPolicy: Always) have ports extracted by Armada for service creation
       ports = Seq(
         generated.ContainerPort(
@@ -90,20 +85,10 @@ private[spark] object OAuthSidecarBuilder {
       restartPolicy = Some("Always"),
       livenessProbe = Some(livenessProbe)
     )
-
-    Some(oauthContainer)
   }
 
-  /** Validates required OAuth configuration.
-    *
-    * @param conf
-    *   SparkConf to validate
-    * @throws IllegalArgumentException
-    *   if required configs are missing
-    */
+  /** Validates required OAuth configuration. Assumes ARMADA_OAUTH_ENABLED is true. */
   private def validateOAuthConfig(conf: SparkConf): Unit = {
-    // This method assumes Config.ARMADA_OAUTH_ENABLED is true
-
     require(
       conf.get(Config.ARMADA_OAUTH_CLIENT_ID).isDefined,
       s"OAuth enabled but ${Config.ARMADA_OAUTH_CLIENT_ID.key} is not set"
@@ -114,39 +99,33 @@ private[spark] object OAuthSidecarBuilder {
       s"OAuth enabled but neither ${Config.ARMADA_OAUTH_CLIENT_SECRET.key} nor ${Config.ARMADA_OAUTH_CLIENT_SECRET_K8S.key} is set"
     )
 
-    val skipDiscovery = conf.get(Config.ARMADA_OAUTH_SKIP_PROVIDER_DISCOVERY)
-    if (skipDiscovery) {
-      // When skipping discovery, explicit endpoints are required
-      require(
-        conf.get(Config.ARMADA_OAUTH_LOGIN_URL).isDefined,
-        s"OAuth skip-oidc-discovery enabled but ${Config.ARMADA_OAUTH_LOGIN_URL.key} is not set"
-      )
-      require(
-        conf.get(Config.ARMADA_OAUTH_REDEEM_URL).isDefined,
-        s"OAuth skip-oidc-discovery enabled but ${Config.ARMADA_OAUTH_REDEEM_URL.key} is not set"
-      )
-      require(
-        conf.get(Config.ARMADA_OAUTH_VALIDATE_URL).isDefined,
-        s"OAuth skip-oidc-discovery enabled but ${Config.ARMADA_OAUTH_VALIDATE_URL.key} is not set"
-      )
-      require(
-        conf.get(Config.ARMADA_OAUTH_JWKS_URL).isDefined,
-        s"OAuth skip-oidc-discovery enabled but ${Config.ARMADA_OAUTH_JWKS_URL.key} is not set"
-      )
+    if (conf.get(Config.ARMADA_OAUTH_SKIP_PROVIDER_DISCOVERY)) {
+      validateExplicitEndpoints(conf)
     } else {
-      // When using discovery, issuer URL is required
       require(
         conf.get(Config.ARMADA_OAUTH_ISSUER_URL).isDefined,
-        s"OAuth enabled and skipProviderDiscovery is false but ${Config.ARMADA_OAUTH_ISSUER_URL.key} is not set"
+        s"OAuth enabled but ${Config.ARMADA_OAUTH_ISSUER_URL.key} is not set (required when skipProviderDiscovery is false)"
       )
     }
   }
 
-  /** Builds OAuth2-proxy command-line arguments.
-    *
-    * @return
-    *   Sequence of arguments for oauth2-proxy
-    */
+  /** Validates explicit OIDC endpoints when discovery is disabled. */
+  private def validateExplicitEndpoints(conf: SparkConf): Unit = {
+    val requiredEndpoints = Seq(
+      (Config.ARMADA_OAUTH_LOGIN_URL, "loginUrl"),
+      (Config.ARMADA_OAUTH_REDEEM_URL, "redeemUrl"),
+      (Config.ARMADA_OAUTH_VALIDATE_URL, "validateUrl"),
+      (Config.ARMADA_OAUTH_JWKS_URL, "jwksUrl")
+    )
+    requiredEndpoints.foreach { case (configEntry, name) =>
+      require(
+        conf.get(configEntry).isDefined,
+        s"OAuth skip-oidc-discovery enabled but ${configEntry.key} is not set"
+      )
+    }
+  }
+
+  /** Builds OAuth2-proxy command-line arguments organized by category. */
   private def buildOAuthProxyArgs(
       conf: SparkConf,
       clientId: String,
@@ -154,7 +133,7 @@ private[spark] object OAuthSidecarBuilder {
       sparkUIPort: Int,
       providerName: String
   ): Seq[String] = {
-    val baseArgs = Seq(
+    val coreArgs = Seq(
       "--pass-authorization-header",
       "--http-address",
       s"0.0.0.0:$proxyPort",
@@ -173,212 +152,195 @@ private[spark] object OAuthSidecarBuilder {
       conf.get(Config.ARMADA_OAUTH_CODE_CHALLENGE_METHOD)
     )
 
-    // Optional redirect-url and oidc-issuer-url
-    val optionalBaseArgs = Seq(
-      conf.get(Config.ARMADA_OAUTH_REDIRECT_URL).toSeq.flatMap(url => Seq("--redirect-url", url)),
-      conf.get(Config.ARMADA_OAUTH_ISSUER_URL).toSeq.flatMap(url => Seq("--oidc-issuer-url", url))
-    ).flatten
+    val oidcArgs = buildOptionalArgs(
+      conf,
+      Seq(
+        (Config.ARMADA_OAUTH_REDIRECT_URL, "--redirect-url"),
+        (Config.ARMADA_OAUTH_ISSUER_URL, "--oidc-issuer-url"),
+        (Config.ARMADA_OAUTH_LOGIN_URL, "--login-url"),
+        (Config.ARMADA_OAUTH_REDEEM_URL, "--redeem-url"),
+        (Config.ARMADA_OAUTH_VALIDATE_URL, "--validate-url"),
+        (Config.ARMADA_OAUTH_JWKS_URL, "--oidc-jwks-url")
+      )
+    )
 
-    // Boolean flags that take "true" as a value
-    val booleanWithValueArgs = Seq(
-      (Config.ARMADA_OAUTH_SKIP_PROVIDER_DISCOVERY, "--skip-oidc-discovery"),
-      (
-        Config.ARMADA_OAUTH_INSECURE_SKIP_ISSUER_VERIFICATION,
-        "--insecure-oidc-skip-issuer-verification"
-      ),
-      (
-        Config.ARMADA_OAUTH_INSECURE_ALLOW_UNVERIFIED_EMAIL,
-        "--insecure-oidc-allow-unverified-email"
-      ),
-      (Config.ARMADA_OAUTH_SKIP_PROVIDER_BUTTON, "--skip-provider-button"),
-      (Config.ARMADA_OAUTH_SKIP_AUTH_PREFLIGHT, "--skip-auth-preflight"),
-      (Config.ARMADA_OAUTH_PASS_HOST_HEADER, "--pass-host-header"),
-      (Config.ARMADA_OAUTH_COOKIE_SECURE, "--cookie-secure"),
-      (Config.ARMADA_OAUTH_COOKIE_CSRF_PER_REQUEST, "--cookie-csrf-per-request")
-    ).flatMap { case (configEntry, argName) =>
-      if (conf.get(configEntry)) Seq(argName, "true")
-      else Seq.empty
-    }
+    val securityArgs = buildBooleanArgsWithValue(
+      conf,
+      Seq(
+        (Config.ARMADA_OAUTH_SKIP_PROVIDER_DISCOVERY, "--skip-oidc-discovery"),
+        (
+          Config.ARMADA_OAUTH_INSECURE_SKIP_ISSUER_VERIFICATION,
+          "--insecure-oidc-skip-issuer-verification"
+        ),
+        (
+          Config.ARMADA_OAUTH_INSECURE_ALLOW_UNVERIFIED_EMAIL,
+          "--insecure-oidc-allow-unverified-email"
+        ),
+        (Config.ARMADA_OAUTH_SKIP_PROVIDER_BUTTON, "--skip-provider-button"),
+        (Config.ARMADA_OAUTH_SKIP_AUTH_PREFLIGHT, "--skip-auth-preflight"),
+        (Config.ARMADA_OAUTH_PASS_HOST_HEADER, "--pass-host-header")
+      )
+    ) ++ buildBooleanFlags(
+      conf,
+      Seq(
+        (Config.ARMADA_OAUTH_SKIP_JWT_BEARER_TOKENS, "--skip-jwt-bearer-tokens"),
+        (Config.ARMADA_OAUTH_SKIP_VERIFY, "--ssl-insecure-skip-verify"),
+        (
+          Config.ARMADA_OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY,
+          "--ssl-upstream-insecure-skip-verify"
+        )
+      )
+    )
 
-    // Boolean flags without values
-    val simpleBooleanArgs = Seq(
-      (Config.ARMADA_OAUTH_SKIP_JWT_BEARER_TOKENS, "--skip-jwt-bearer-tokens"),
-      (Config.ARMADA_OAUTH_SKIP_VERIFY, "--ssl-insecure-skip-verify")
-    ).flatMap { case (configEntry, argName) =>
-      if (conf.get(configEntry)) Seq(argName)
-      else Seq.empty
-    }
-
-    // Optional string value args
-    val optionalStringValueArgs = Seq(
-      (Config.ARMADA_OAUTH_LOGIN_URL, "--login-url"),
-      (Config.ARMADA_OAUTH_REDEEM_URL, "--redeem-url"),
-      (Config.ARMADA_OAUTH_VALIDATE_URL, "--validate-url"),
-      (Config.ARMADA_OAUTH_JWKS_URL, "--oidc-jwks-url"),
-      (Config.ARMADA_OAUTH_COOKIE_SAMESITE, "--cookie-samesite"),
-      (Config.ARMADA_OAUTH_COOKIE_CSRF_EXPIRE, "--cookie-csrf-expire"),
-      (Config.ARMADA_OAUTH_WHITELIST_DOMAIN, "--whitelist-domain")
-    ).flatMap { case (configEntry, argName) =>
-      conf.get(configEntry).toSeq.flatMap(value => Seq(argName, value))
-    }
-
-    // Non-optional string value args (have defaults)
-    val nonOptionalStringValueArgs = Seq(
-      Seq("--cookie-name", conf.get(Config.ARMADA_OAUTH_COOKIE_NAME)),
-      Seq("--cookie-path", conf.get(Config.ARMADA_OAUTH_COOKIE_PATH))
-    ).flatten
+    val cookieArgs = Seq(
+      "--cookie-name",
+      conf.get(Config.ARMADA_OAUTH_COOKIE_NAME),
+      "--cookie-path",
+      conf.get(Config.ARMADA_OAUTH_COOKIE_PATH)
+    ) ++ buildBooleanArgsWithValue(
+      conf,
+      Seq(
+        (Config.ARMADA_OAUTH_COOKIE_SECURE, "--cookie-secure"),
+        (Config.ARMADA_OAUTH_COOKIE_CSRF_PER_REQUEST, "--cookie-csrf-per-request")
+      )
+    ) ++ buildOptionalArgs(
+      conf,
+      Seq(
+        (Config.ARMADA_OAUTH_COOKIE_SAMESITE, "--cookie-samesite"),
+        (Config.ARMADA_OAUTH_COOKIE_CSRF_EXPIRE, "--cookie-csrf-expire"),
+        (Config.ARMADA_OAUTH_WHITELIST_DOMAIN, "--whitelist-domain")
+      )
+    )
 
     val extraAudiencesArgs =
       conf.get(Config.ARMADA_OAUTH_EXTRA_AUDIENCES).toSeq.flatMap { audiences =>
-        audiences.split(",").flatMap { audience =>
-          Seq("--oidc-extra-audience", audience.trim)
-        }
+        audiences.split(",").map(_.trim).flatMap(audience => Seq("--oidc-extra-audience", audience))
       }
 
-    baseArgs ++ optionalBaseArgs ++ booleanWithValueArgs ++ simpleBooleanArgs ++
-      optionalStringValueArgs ++ nonOptionalStringValueArgs ++ extraAudiencesArgs
+    coreArgs ++ oidcArgs ++ securityArgs ++ cookieArgs ++ extraAudiencesArgs
   }
 
-  /** Builds environment variables for OAuth2-proxy.
-    *
-    * Handles client secret from either inline config or Kubernetes secret.
-    *
-    * @param conf
-    *   SparkConf containing OAuth configuration
-    * @return
-    *   Sequence of environment variables
-    */
-  private def buildOAuthEnvVars(conf: SparkConf): Seq[generated.EnvVar] = {
-    val cookieSecretEnv = generated.EnvVar(
-      name = Some("OAUTH2_PROXY_COOKIE_SECRET"),
-      value = Some(generateCookieSecret())
-    )
+  /** Builds arguments for optional string config entries. */
+  private def buildOptionalArgs(
+      conf: SparkConf,
+      configs: Seq[(OptionalConfigEntry[String], String)]
+  ): Seq[String] = {
+    configs.flatMap { case (configEntry, argName) =>
+      conf.get(configEntry).toSeq.flatMap(value => Seq(argName, value))
+    }
+  }
 
-    val clientSecretEnv = conf.get(Config.ARMADA_OAUTH_CLIENT_SECRET) match {
+  /** Builds boolean flags that require "true" as explicit value. */
+  private def buildBooleanArgsWithValue(
+      conf: SparkConf,
+      configs: Seq[(ConfigEntry[Boolean], String)]
+  ): Seq[String] = {
+    configs.flatMap { case (configEntry, argName) =>
+      if (conf.get(configEntry)) Seq(argName, "true") else Seq.empty
+    }
+  }
+
+  /** Builds standalone boolean flags (no value). */
+  private def buildBooleanFlags(
+      conf: SparkConf,
+      configs: Seq[(ConfigEntry[Boolean], String)]
+  ): Seq[String] = {
+    configs.flatMap { case (configEntry, argName) =>
+      if (conf.get(configEntry)) Seq(argName) else Seq.empty
+    }
+  }
+
+  /** Builds environment variables for OAuth2-proxy (cookie secret + client secret). */
+  private def buildOAuthEnvVars(conf: SparkConf): Seq[generated.EnvVar] = {
+    Seq(
+      generated.EnvVar(
+        name = Some("OAUTH2_PROXY_COOKIE_SECRET"),
+        value = Some(generateCookieSecret())
+      ),
+      buildClientSecretEnvVar(conf)
+    )
+  }
+
+  /** Builds the client secret environment variable from either inline config or K8s secret. */
+  private def buildClientSecretEnvVar(conf: SparkConf): generated.EnvVar = {
+    conf.get(Config.ARMADA_OAUTH_CLIENT_SECRET) match {
       case Some(secret) =>
-        // Inline secret (simple but less secure)
         generated.EnvVar(
           name = Some("OAUTH2_PROXY_CLIENT_SECRET"),
           value = Some(secret)
         )
       case None =>
-        // Kubernetes secret reference (secure)
         val secretName = conf.get(Config.ARMADA_OAUTH_CLIENT_SECRET_K8S).get
+        val secretKey  = conf.get(Config.ARMADA_OAUTH_CLIENT_SECRET_KEY)
         generated.EnvVar(
           name = Some("OAUTH2_PROXY_CLIENT_SECRET"),
           valueFrom = Some(
             generated.EnvVarSource(
               secretKeyRef = Some(
                 generated.SecretKeySelector(
-                  localObjectReference = Some(
-                    generated.LocalObjectReference(name = Some(secretName))
-                  ),
-                  key = Some(conf.get(Config.ARMADA_OAUTH_CLIENT_SECRET_KEY))
+                  localObjectReference =
+                    Some(generated.LocalObjectReference(name = Some(secretName))),
+                  key = Some(secretKey)
                 )
               )
             )
           )
         )
     }
-
-    Seq(cookieSecretEnv, clientSecretEnv)
   }
 
-  /** Builds optional volume mounts for TLS certificates.
-    *
-    * Only creates volume mounts if paths are explicitly configured. No defaults are provided.
-    *
-    * @param conf
-    *   SparkConf containing optional TLS certificate paths
-    * @return
-    *   Sequence of volume mounts (empty if not configured)
-    */
+  /** Builds optional TLS certificate volume mounts if configured. */
   private def buildOAuthVolumeMounts(conf: SparkConf): Seq[generated.VolumeMount] = {
-    val caCertMount = conf.get(Config.ARMADA_OAUTH_TLS_CA_CERT_PATH).map { path =>
-      generated.VolumeMount(
-        name = Some(CA_CERTIFICATES_VOLUME),
-        mountPath = Some(path),
-        readOnly = Some(true)
-      )
-    }
-
-    val caBundleMount = conf.get(Config.ARMADA_OAUTH_TLS_CA_BUNDLE_PATH).map { path =>
-      generated.VolumeMount(
-        name = Some(CA_BUNDLE_VOLUME),
-        mountPath = Some(path),
-        readOnly = Some(true)
-      )
-    }
-
-    Seq(caCertMount, caBundleMount).flatten
+    Seq(
+      conf.get(Config.ARMADA_OAUTH_TLS_CA_CERT_PATH).map { path =>
+        generated.VolumeMount(
+          name = Some(CA_CERTIFICATES_VOLUME),
+          mountPath = Some(path),
+          subPath = conf.get(Config.ARMADA_OAUTH_TLS_CA_CERT_SUBPATH),
+          readOnly = Some(true)
+        )
+      },
+      conf.get(Config.ARMADA_OAUTH_TLS_CA_BUNDLE_PATH).map { path =>
+        generated.VolumeMount(
+          name = Some(CA_BUNDLE_VOLUME),
+          mountPath = Some(path),
+          subPath = conf.get(Config.ARMADA_OAUTH_TLS_CA_BUNDLE_SUBPATH),
+          readOnly = Some(true)
+        )
+      }
+    ).flatten
   }
 
-  /** Builds resource requirements for OAuth2-proxy container.
-    *
-    * Armada requires all containers to have resources specified, and requests must equal limits.
-    *
-    * @param conf
-    *   SparkConf containing resource configuration
-    * @return
-    *   ResourceRequirements with requests == limits
-    */
+  /** Builds resource requirements (requests == limits, as required by Armada). */
   private def buildOAuthResources(conf: SparkConf): generated.ResourceRequirements = {
-    val cpu    = conf.get(Config.ARMADA_OAUTH_RESOURCES_CPU)
-    val memory = conf.get(Config.ARMADA_OAUTH_RESOURCES_MEMORY)
-
     val resourceMap = Map(
-      "cpu"    -> Quantity(string = Some(cpu)),
-      "memory" -> Quantity(string = Some(memory))
+      "cpu"    -> Quantity(string = Some(conf.get(Config.ARMADA_OAUTH_RESOURCES_CPU))),
+      "memory" -> Quantity(string = Some(conf.get(Config.ARMADA_OAUTH_RESOURCES_MEMORY)))
     )
-
-    generated.ResourceRequirements(
-      limits = resourceMap,
-      requests = resourceMap // Armada requires requests == limits
-    )
+    generated.ResourceRequirements(limits = resourceMap, requests = resourceMap)
   }
 
-  /** Generates a random cookie secret for OAuth2-proxy session encryption.
-    *
-    * Uses SecureRandom to generate 16 cryptographically secure random bytes, then hex encodes to 32
-    * chars. OAuth2-proxy requires cookie_secret to be 16, 24, or 32 bytes (not base64 encoded).
-    *
-    * Note: Secret is regenerated on each pod creation, invalidating existing sessions. This is
-    * acceptable for Spark driver pods which are ephemeral. For persistent sessions across restarts,
-    * use a K8s secret with a stable cookie secret value.
-    *
-    * @return
-    *   32-character hex-encoded cookie secret (16 bytes)
-    */
+  /** Generates a 32-char hex-encoded cookie secret (16 random bytes). */
   private def generateCookieSecret(): String = {
-    val random = new SecureRandom()
-    val bytes  = new Array[Byte](16) // 16 bytes = 32 hex chars = 32 bytes as string
-    random.nextBytes(bytes)
+    val bytes = new Array[Byte](16)
+    new SecureRandom().nextBytes(bytes)
     bytes.map("%02x".format(_)).mkString
   }
 
-  /** Builds a liveness probe for the OAuth2-proxy container.
-    *
-    * Uses the oauth2-proxy built-in /ping endpoint which returns 200 OK when healthy. This allows
-    * Kubernetes to detect hung processes and restart the container.
-    *
-    * @param proxyPort
-    *   The port oauth2-proxy is listening on
-    * @return
-    *   Probe configured for HTTP GET /ping
-    */
+  /** Builds liveness probe using oauth2-proxy's /ping endpoint. */
   private def buildLivenessProbe(proxyPort: Int): generated.Probe = {
-    val httpGetAction = generated.HTTPGetAction(
-      path = Some("/ping"),
-      port = Some(IntOrString(intVal = Some(proxyPort))),
-      scheme = Some("HTTP")
-    )
-
-    val probeHandler = generated.ProbeHandler(
-      httpGet = Some(httpGetAction)
-    )
-
     generated.Probe(
-      handler = Some(probeHandler),
+      handler = Some(
+        generated.ProbeHandler(
+          httpGet = Some(
+            generated.HTTPGetAction(
+              path = Some("/ping"),
+              port = Some(IntOrString(intVal = Some(proxyPort))),
+              scheme = Some("HTTP")
+            )
+          )
+        )
+      ),
       initialDelaySeconds = Some(LIVENESS_INITIAL_DELAY_SECONDS),
       periodSeconds = Some(LIVENESS_PERIOD_SECONDS),
       timeoutSeconds = Some(LIVENESS_TIMEOUT_SECONDS),
@@ -387,21 +349,9 @@ private[spark] object OAuthSidecarBuilder {
     )
   }
 
-  /** Returns the OAuth proxy port if OAuth is enabled, otherwise None.
-    *
-    * Used for Service port selection - when OAuth is enabled, Service should route to OAuth proxy
-    * port instead of Spark UI port.
-    *
-    * @param conf
-    *   SparkConf containing OAuth configuration
-    * @return
-    *   Some(proxyPort) if OAuth enabled, None otherwise
-    */
+  /** Returns the OAuth proxy port if OAuth is enabled (for Service port selection). */
   def getOAuthProxyPort(conf: SparkConf): Option[Int] = {
-    if (conf.get(Config.ARMADA_OAUTH_ENABLED)) {
-      Some(conf.get(Config.ARMADA_OAUTH_PROXY_PORT))
-    } else {
-      None
-    }
+    if (conf.get(Config.ARMADA_OAUTH_ENABLED)) Some(conf.get(Config.ARMADA_OAUTH_PROXY_PORT))
+    else None
   }
 }

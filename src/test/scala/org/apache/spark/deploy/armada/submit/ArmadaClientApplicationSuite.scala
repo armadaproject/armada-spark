@@ -927,7 +927,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     podSpec.restartPolicy shouldBe Some("Never")
     podSpec.securityContext.get.runAsUser shouldBe Some(RUNTIME_RUN_AS_USER)
-    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
+    // Driver uses KUBERNETES_SUBMIT_GRACE_PERIOD (default 30s), not executor's preemption period
+    podSpec.terminationGracePeriodSeconds shouldBe Some(30)
     podSpec.nodeSelector shouldBe Map(
       "driver-node-type" -> "memory-optimized",
       "tier"             -> "production"
@@ -1063,7 +1064,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
+    // Driver uses KUBERNETES_SUBMIT_GRACE_PERIOD (default 30s), not executor's preemption period
+    podSpec.terminationGracePeriodSeconds shouldBe Some(30)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.containers should have size 1
@@ -1302,7 +1304,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
+    // Driver uses KUBERNETES_SUBMIT_GRACE_PERIOD (default 30s), not executor's preemption period
+    podSpec.terminationGracePeriodSeconds shouldBe Some(30)
     podSpec.nodeSelector shouldBe Map("node-type" -> "compute")
 
     podSpec.containers should have size 1
@@ -1521,7 +1524,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val podSpec = result.podSpec.get
 
     podSpec.restartPolicy shouldBe Some("Never")
-    podSpec.terminationGracePeriodSeconds shouldBe Some(180)
+    // Driver uses KUBERNETES_SUBMIT_GRACE_PERIOD (default 30s), not executor's preemption period
+    podSpec.terminationGracePeriodSeconds shouldBe Some(30)
     podSpec.nodeSelector shouldBe Map.empty[String, String]
 
     podSpec.containers should have size 1
@@ -2281,6 +2285,80 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // Overriding values should win when explicitly set
     merged.getSpec.getServiceAccount shouldBe "template-service-account"
     merged.getSpec.getHostname shouldBe "template-hostname"
+  }
+
+  test("parseCLIConfig should set driverIngress when ingress enabled via SparkConf") {
+    val ingressConf = new SparkConf()
+      .set("spark.master", "armada://localhost:50051")
+      .set("spark.app.name", "test-app")
+      .set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
+      .set(Config.CONTAINER_IMAGE.key, DEFAULT_IMAGE_NAME)
+      .set(Config.ARMADA_SPARK_DRIVER_INGRESS_ENABLED.key, "true")
+      .set(
+        Config.ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS.key,
+        "nginx.ingress.kubernetes.io/rewrite-target=/,nginx.ingress.kubernetes.io/backend-protocol=HTTP"
+      )
+      .set(Config.ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED.key, "false")
+
+    val cliConfig = armadaClientApp.parseCLIConfig(ingressConf)
+
+    cliConfig.driverIngress shouldBe defined
+    val ingress = cliConfig.driverIngress.get
+    ingress.annotations should contain("nginx.ingress.kubernetes.io/rewrite-target" -> "/")
+    ingress.annotations should contain("nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP")
+    ingress.tls shouldBe Some(false)
+  }
+
+  test("resolveJobConfig should create driverIngress when CLI has ingress enabled") {
+    val ingressConf = new SparkConf()
+      .set("spark.master", "armada://localhost:50051")
+      .set("spark.app.name", "test-app")
+      .set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
+      .set(Config.CONTAINER_IMAGE.key, DEFAULT_IMAGE_NAME)
+      .set(Config.ARMADA_SPARK_DRIVER_INGRESS_ENABLED.key, "true")
+      .set(
+        Config.ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS.key,
+        "nginx.ingress.kubernetes.io/rewrite-target=/"
+      )
+
+    val cliConfig = armadaClientApp.parseCLIConfig(ingressConf)
+
+    val resolvedConfig = armadaClientApp.resolveJobConfig(
+      cliConfig = cliConfig,
+      template = None,
+      annotations = Map.empty,
+      labels = Map.empty,
+      conf = ingressConf
+    )
+
+    resolvedConfig.driverIngress shouldBe defined
+    val ingress = resolvedConfig.driverIngress.get
+    ingress.ports shouldBe Seq(4040) // Default Spark UI port
+    ingress.annotations should contain("nginx.ingress.kubernetes.io/rewrite-target" -> "/")
+  }
+
+  test("validateArmadaJobConfig should set driverIngress when ingress enabled") {
+    val ingressConf = new SparkConf()
+      .set("spark.master", "armada://localhost:50051")
+      .set("spark.app.name", "test-app")
+      .set(Config.ARMADA_JOB_QUEUE.key, "test-queue")
+      .set(Config.CONTAINER_IMAGE.key, DEFAULT_IMAGE_NAME)
+      .set(Config.ARMADA_SPARK_DRIVER_INGRESS_ENABLED.key, "true")
+      .set(
+        Config.ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS.key,
+        "nginx.ingress.kubernetes.io/rewrite-target=/"
+      )
+      .set(Config.ARMADA_SPARK_DRIVER_INGRESS_TLS_ENABLED.key, "false")
+      .set("spark.kubernetes.container.image", DEFAULT_IMAGE_NAME)
+
+    val armadaJobConfig =
+      armadaClientApp.validateArmadaJobConfig(ingressConf, Some(clientArguments))
+
+    // Verify CLI config has ingress enabled
+    armadaJobConfig.cliConfig.driverIngress shouldBe defined
+    val cliIngress = armadaJobConfig.cliConfig.driverIngress.get
+    cliIngress.annotations should contain("nginx.ingress.kubernetes.io/rewrite-target" -> "/")
+    cliIngress.tls shouldBe Some(false)
   }
 
 }

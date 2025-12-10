@@ -380,10 +380,6 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
-  // ========================================================================
-  // DYNAMIC ALLOCATION CONFIGURATION
-  // ========================================================================
-
   val ARMADA_DELETE_EXECUTORS: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.deleteExecutors")
       .doc("Whether to delete executor jobs when the backend stops.")
@@ -418,10 +414,6 @@ private[spark] object Config {
       .checkValue(_ > 0, "Check interval must be positive")
       .createWithDefaultString("10s")
 
-  // ========================================================================
-  // SHUFFLE & DECOMMISSIONING CONFIGURATION
-  // ========================================================================
-
   val ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.preemptionGracePeriod")
       .doc(
@@ -431,10 +423,6 @@ private[spark] object Config {
       .timeConf(TimeUnit.SECONDS)
       .checkValue(_ > 0, "Preemption grace period must be positive")
       .createWithDefault(180)
-
-  // ========================================================================
-  // OAUTH2 AUTHENTICATION CONFIGURATION
-  // ========================================================================
 
   val ARMADA_OAUTH_ENABLED: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.oauth.enabled")
@@ -553,7 +541,13 @@ private[spark] object Config {
 
   val ARMADA_OAUTH_SKIP_VERIFY: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.oauth.skipVerify")
-      .doc("Skip TLS certificate verification (dev only)")
+      .doc("Skip TLS certificate verification for OIDC provider")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ARMADA_OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.oauth.sslUpstreamInsecureSkipVerify")
+      .doc("Skip TLS certificate verification for upstream (Spark UI)")
       .booleanConf
       .createWithDefault(false)
 
@@ -631,13 +625,25 @@ private[spark] object Config {
 
   val ARMADA_OAUTH_TLS_CA_CERT_PATH: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.oauth.tls.caCertPath")
-      .doc("Path to CA certificate for TLS validation")
+      .doc("Mount path for CA certificate")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_TLS_CA_CERT_SUBPATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.tls.caCertSubPath")
+      .doc("SubPath for CA certificate volume mount")
       .stringConf
       .createOptional
 
   val ARMADA_OAUTH_TLS_CA_BUNDLE_PATH: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.oauth.tls.caBundlePath")
-      .doc("Path to CA bundle for TLS validation")
+      .doc("Mount path for CA bundle (e.g., /etc/ssl/certs/ca-certificates.crt)")
+      .stringConf
+      .createOptional
+
+  val ARMADA_OAUTH_TLS_CA_BUNDLE_SUBPATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.oauth.tls.caBundleSubPath")
+      .doc("SubPath for CA bundle volume mount (e.g., ca-bundle.crt)")
       .stringConf
       .createOptional
 
