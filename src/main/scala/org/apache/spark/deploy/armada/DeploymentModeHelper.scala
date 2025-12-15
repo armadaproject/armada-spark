@@ -251,7 +251,7 @@ object DeploymentModeHelper {
     *   A ModeHelper instance appropriate for the configured deployment mode
     */
   def apply(conf: SparkConf): DeploymentModeHelper = {
-    val deployMode = conf.get("spark.submit.deployMode", "client")
+    val deployMode = conf.get("spark.submit.deployMode", "cluster")
     val isDynamic  = conf.getBoolean("spark.dynamicAllocation.enabled", false)
 
     (deployMode.toLowerCase, isDynamic) match {

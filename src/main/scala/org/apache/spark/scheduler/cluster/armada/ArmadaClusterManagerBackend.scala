@@ -135,6 +135,19 @@ private[spark] class ArmadaClusterManagerBackend(
           createWatcher(q, jsId, host, port, client)
 
           createAllocator(q, jsId, client)
+
+          // proactively request executors in static client mode only
+          // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
+          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
+          val shouldProactivelyRequest =
+            !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
+
+          if (shouldProactivelyRequest) {
+            val executorCount  = modeHelper.getExecutorCount
+            val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+            doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+          }
+
         } catch {
           case e: Throwable =>
             logWarning(s"Failed to start Armada components: ${e.getMessage}", e)
@@ -156,14 +169,6 @@ private[spark] class ArmadaClusterManagerBackend(
     )
     executorAllocator = Some(allocator)
     allocator.start()
-
-    // proactively request executors in static client mode
-    // val modeHelper = DeploymentModeHelper(conf)
-    // if (modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0) {
-    //   val executorCount  = modeHelper.getExecutorCount
-    //   val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
-    //   doRequestTotalExecutors(Map(defaultProfile -> executorCount))
-    // }
   }
 
   private def createWatcher(
