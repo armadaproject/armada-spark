@@ -26,6 +26,7 @@ import io.armadaproject.armada.ArmadaClient
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.util.ThreadUtils
@@ -132,7 +133,6 @@ private[spark] class ArmadaExecutorAllocator(
       // Build minimal context for Armada submission using existing SparkConf
       val app = new org.apache.spark.deploy.armada.submit.ArmadaClientApplication()
 
-      // Set the driverJobId from ARMADA_JOB_ID env var if present, otherwise fall back to applicationId
       val driverJobId = sys.env.getOrElse("ARMADA_JOB_ID", applicationId)
 
       val submittedJobIds = app.validateAndSubmitExecutorJobs(

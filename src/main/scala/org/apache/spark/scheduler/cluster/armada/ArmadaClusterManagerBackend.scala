@@ -29,6 +29,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.internal.config.SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO
 import org.apache.spark.resource.ResourceProfile
@@ -103,9 +104,13 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     super.start()
 
+    // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
+    ArmadaUtils.setDefaultAppId(conf)
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetIdOpt = sys.env.get("ARMADA_JOB_SET_ID")
+    val modeHelper  = DeploymentModeHelper(conf)
+    val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -130,6 +135,19 @@ private[spark] class ArmadaClusterManagerBackend(
           createWatcher(q, jsId, host, port, client)
 
           createAllocator(q, jsId, client)
+
+          // proactively request executors in static client mode only
+          // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
+          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
+          val shouldProactivelyRequest =
+            !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
+
+          if (shouldProactivelyRequest) {
+            val executorCount  = modeHelper.getExecutorCount
+            val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+            doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+          }
+
         } catch {
           case e: Throwable =>
             logWarning(s"Failed to start Armada components: ${e.getMessage}", e)
