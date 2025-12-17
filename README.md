@@ -68,6 +68,15 @@ export ARMADA_MASTER="armada://localhost:30002"
 export ARMADA_QUEUE="default"
 export ARMADA_LOOKOUT_URL="http://localhost:30000"
 export INCLUDE_PYTHON=true
+export USE_KIND=true
+```
+
+**Note:** For client mode, you need to set additional configuration:
+
+```bash
+export ARMADA_MASTER="local://armada://localhost:30002"  # Add "local://" prefix
+export SPARK_DRIVER_HOST="172.18.0.1"                    # Required for client mode
+export SPARK_DRIVER_PORT="7078"                          # Required for client mode
 ```
 
 ### Deployment
@@ -126,7 +135,17 @@ Make sure that the [SparkPi](#sparkpi-example) job successfully runs on your Arm
 The project includes a ready-to-use Spark job to test your setup:
 
 ```bash
-./scripts/submitArmadaSpark.sh
+# Cluster mode + Dynamic allocation
+./scripts/submitArmadaSpark.sh -M cluster -A dynamic 100
+
+# Cluster mode + Static allocation
+./scripts/submitArmadaSpark.sh -M cluster -A static 100
+
+# Client mode + Dynamic allocation
+./scripts/submitArmadaSpark.sh -M client -A dynamic 100
+
+# Client mode + Static allocation
+./scripts/submitArmadaSpark.sh -M client -A static 100
 ```
 
 This job leverages the same configuration parameters (`ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_LOOKOUT_URL`) as the `scripts/config.sh` script.

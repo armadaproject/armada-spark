@@ -24,6 +24,9 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
 
+import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.DeploymentModeHelper
+
 import scala.annotation.tailrec
 
 case class TestConfig(
@@ -187,10 +190,17 @@ class TestOrchestrator(
       s"e2e-${name.toLowerCase.replaceAll("[^a-z0-9]", "-")}-${System.currentTimeMillis()}"
     val queueName = s"${config.baseQueueName}-${context.queueSuffix}"
 
+    // Determine deployment mode type
+    val sparkConf = new SparkConf(false)
+    config.sparkConfs.foreach { case (key, value) => sparkConf.set(key, value) }
+    val modeHelper = DeploymentModeHelper(sparkConf)
+    val modeType   = modeHelper.toString
+
     println(s"\n========== Starting E2E Test: $name ==========")
     println(s"Test ID: ${context.testId}")
     println(s"Namespace: ${context.namespace}")
     println(s"Queue: $queueName")
+    println(s"Deployment Mode: $modeType")
 
     val resultFuture = for {
       _ <- k8sClient.createNamespace(context.namespace)

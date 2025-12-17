@@ -122,6 +122,8 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
     // In cluster mode, driver runs in a pod, so use service name from job ID
     ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
+
+  override def toString: String = "StaticCluster"
 }
 
 /** Static allocation in client mode.
@@ -160,6 +162,8 @@ class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
         )
       )
   }
+
+  override def toString: String = "StaticClient"
 }
 
 /** Dynamic allocation in cluster mode.
@@ -196,6 +200,8 @@ class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
     // In cluster mode, driver runs in a pod, so use service name from job ID
     ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
+
+  override def toString: String = "DynamicCluster"
 }
 
 /** Dynamic allocation in client mode.
@@ -239,6 +245,8 @@ class DynamicClient(val conf: SparkConf) extends DeploymentModeHelper {
         )
       )
   }
+
+  override def toString: String = "DynamicClient"
 }
 
 /** Factory for creating ModeHelper instances based on Spark configuration.
