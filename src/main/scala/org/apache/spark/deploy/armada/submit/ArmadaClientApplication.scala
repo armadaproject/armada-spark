@@ -41,6 +41,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_JOB_SET_ID,
   ARMADA_JOB_TEMPLATE,
   ARMADA_LOOKOUTURL,
+  ARMADA_OAUTH_ENABLED,
   ARMADA_RUN_AS_USER,
   ARMADA_SERVER_INTERNAL_URL,
   ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS,
@@ -945,10 +946,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val sidecars = extractSidecarContainers(baseJobItem.podSpec)
-
     val currentPodSpec    = PodSpecConverter.fabric8PodToProtobufPodSpec(afterCLIVolumes)
-    val allInitContainers = currentPodSpec.initContainers
+    val sidecars          = extractSidecarContainers(Some(currentPodSpec))
+    val oauthSidecar      = OAuthSidecarBuilder.buildOAuthSidecar(conf)
+    val allInitContainers = currentPodSpec.initContainers ++ oauthSidecar.toSeq
 
     // Set termination grace period for graceful decommissioning
     val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
@@ -990,10 +991,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       services = services
     )
 
-    resolvedConfig.driverIngress match {
-      case Some(ingress) => finalJobItem.withIngress(Seq(ingress))
-      case None          => finalJobItem
-    }
+    resolvedConfig.driverIngress
+      .map(ingress => finalJobItem.withIngress(Seq(ingress)))
+      .getOrElse(finalJobItem)
   }
 
   private def createBlankTemplate(): JobSubmitRequestItem = {
@@ -1041,10 +1041,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .map(_.containers)
       .getOrElse(Seq.empty)
       .filterNot(c =>
-        c.name.exists { name =>
-          val lowerName = name.toLowerCase
-          lowerName == "driver" || lowerName == "executor"
-        }
+        // Spark's basic feature steps use these exact names for main containers
+        c.name.exists { name => Set("driver", "executor").contains(name.toLowerCase) }
       )
   }
 
@@ -1377,18 +1375,27 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         )
       )
       .withPorts({
-        Seq(
-          ContainerPort(
-            containerPort = Some(port),
-            name = Some("driver"),
-            protocol = Some("TCP")
-          ),
-          ContainerPort(
+        val driverPort = ContainerPort(
+          containerPort = Some(port),
+          name = Some("driver"),
+          protocol = Some("TCP")
+        )
+
+        // Only expose UI port when ingress is enabled WITHOUT OAuth
+        // When OAuth is enabled, the OAuth sidecar exposes port 4180 and proxies to the UI port
+        val oauthEnabled   = conf.get(ARMADA_OAUTH_ENABLED)
+        val ingressEnabled = conf.get(ARMADA_SPARK_DRIVER_INGRESS_ENABLED)
+
+        if (ingressEnabled && !oauthEnabled) {
+          val uiPort = ContainerPort(
             containerPort = Some(conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)),
             name = Some("ui"),
             protocol = Some("TCP")
           )
-        )
+          Seq(driverPort, uiPort)
+        } else {
+          Seq(driverPort)
+        }
       })
   }
 
@@ -1550,38 +1557,37 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverPort: Int,
       conf: SparkConf
   ): Seq[api.submit.ServiceConfig] = {
-    val requiredPorts = scala.collection.mutable.LinkedHashSet(driverPort)
-
-    val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
-    requiredPorts += uiPort
+    // OAuth proxy port if OAuth enabled, otherwise Spark UI port
+    val uiPort = OAuthSidecarBuilder
+      .getOAuthProxyPort(conf)
+      .getOrElse(conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040))
 
     Seq(
       api.submit.ServiceConfig(
         `type` = api.submit.ServiceType.Headless,
-        ports = requiredPorts.toSeq,
+        ports = Seq(driverPort, uiPort),
         name = ""
       )
     )
   }
 
+  // Resolves ingress configuration based precedence: CLI > Template > Default
+  // Ingress routing: If OAuth is enabled, routes to OAuth proxy port; otherwise routes to Spark UI port
   private[submit] def resolveIngressConfig(
       cliIngress: Option[IngressConfig],
       templateIngress: Option[api.submit.IngressConfig],
       conf: SparkConf
   ): api.submit.IngressConfig = {
-    val mergedAnnotations = templateIngress
-      .map(_.annotations)
-      .getOrElse(Map.empty) ++
-      cliIngress
-        .map(_.annotations)
-        .getOrElse(Map.empty)
-
-    val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
-    val ports  = Seq(uiPort)
+    // OAuth proxy port if OAuth enabled, otherwise Spark UI port
+    val ingressPort = OAuthSidecarBuilder
+      .getOAuthProxyPort(conf)
+      .getOrElse(conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040))
 
     api.submit.IngressConfig(
-      ports = ports,
-      annotations = mergedAnnotations,
+      `type` = api.submit.IngressType.Ingress,
+      ports = Seq(ingressPort),
+      annotations = templateIngress.map(_.annotations).getOrElse(Map.empty) ++
+        cliIngress.map(_.annotations).getOrElse(Map.empty),
       tlsEnabled = resolveValue(
         cliIngress.flatMap(_.tls),
         templateIngress.map(_.tlsEnabled),
@@ -1591,7 +1597,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         cliIngress.flatMap(_.certName),
         templateIngress.map(_.certName),
         ""
-      )
+      ),
+      useClusterIP = true
     )
   }
 
@@ -1755,4 +1762,5 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Map[String, String] = {
     podLabels ++ templateLabels ++ roleSpecificLabels
   }
+
 }
