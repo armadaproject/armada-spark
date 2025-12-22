@@ -428,13 +428,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val executorCount = DeploymentModeHelper(conf).getExecutorCount
+    val modeHelper   = DeploymentModeHelper(conf)
+    val executorCount = modeHelper.getExecutorCount
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
         s"Executor count must be greater than 0, but got: $executorCount"
       )
     }
-    val driverJobId = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
+
+    val driverJobId = if (modeHelper.isDriverInCluster) {
+      submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
+    } else {
+      armadaJobConfig.applicationId
+    }
+    
     val executorJobIds = submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
