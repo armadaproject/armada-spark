@@ -140,6 +140,7 @@ class ArmadaSparkE2E
   test("Basic SparkPi job with gang scheduling", E2ETest) {
     E2ETestBuilder("basic-spark-pi-gang")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withGangJob("armada-spark")
       .withExecutors(3)
       .withPodLabels(Map("test-type" -> "basic"))
@@ -150,9 +151,23 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("Basic SparkPi job in static client mode", E2ETest) {
+    E2ETestBuilder("basic-spark-pi-client")
+      .withBaseConfig(baseConfig)
+      .withDeployMode("client")
+      .withGangJob("armada-spark")
+      .withExecutors(2)
+      .withPodLabels(Map("test-type" -> "client-mode"))
+      .assertExecutorCount(2)
+      .assertExecutorsHaveLabels(Map("test-type" -> "client-mode"))
+      .assertExecutorGangJob("armada-spark", 2) // Only 2 executors, no driver
+      .run()
+  }
+
   test("SparkPi job with node selectors", E2ETest) {
     E2ETestBuilder("spark-pi-node-selectors")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withPodLabels(Map("test-type" -> "node-selector"))
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .assertDriverExists()
@@ -165,6 +180,7 @@ class ArmadaSparkE2E
   test("Basic python SparkPi job", E2ETest) {
     E2ETestBuilder("python-spark-pi")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
@@ -181,6 +197,7 @@ class ArmadaSparkE2E
   test("SparkPi job using job templates", E2ETest) {
     E2ETestBuilder("spark-pi-templates")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
@@ -228,6 +245,7 @@ class ArmadaSparkE2E
   test("SparkPi job with driver ingress using cli", E2ETest) {
     E2ETestBuilder("spark-pi-ingress")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withDriverIngress(
         Map(
           "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
@@ -251,6 +269,7 @@ class ArmadaSparkE2E
   test("SparkPi job with driver ingress using template", E2ETest) {
     E2ETestBuilder("spark-pi-ingress-template")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
@@ -278,6 +297,7 @@ class ArmadaSparkE2E
   test("SparkPi job with custom feature steps", E2ETest) {
     E2ETestBuilder("spark-pi-feature-steps")
       .withBaseConfig(baseConfig)
+      .withDeployMode("cluster")
       .withSparkConf(
         Map(
           "spark.kubernetes.driver.pod.featureSteps" ->
