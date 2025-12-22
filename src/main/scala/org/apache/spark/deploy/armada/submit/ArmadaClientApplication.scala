@@ -428,7 +428,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val modeHelper   = DeploymentModeHelper(conf)
+    val modeHelper    = DeploymentModeHelper(conf)
     val executorCount = modeHelper.getExecutorCount
     if (executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -441,7 +441,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     } else {
       armadaJobConfig.applicationId
     }
-    
+
     val executorJobIds = submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
