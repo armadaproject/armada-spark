@@ -82,6 +82,10 @@ class E2ETestBuilder(testName: String) {
     withSparkConf("spark.executor.instances", count.toString)
   }
 
+  def withDeployMode(mode: String): E2ETestBuilder = {
+    withSparkConf("spark.submit.deployMode", mode)
+  }
+
   /** Use Python script instead of Scala class */
   def withPythonScript(script: String): E2ETestBuilder = {
     pythonScript = Some(script)
@@ -244,6 +248,25 @@ class E2ETestBuilder(testName: String) {
     }
 
     withDriverPodAssertion(hasValidGangAnnotations)
+    withExecutorPodAssertion(hasValidGangAnnotations)
+  }
+
+  /** Assert that executors have correct gang scheduling annotations (for client mode where driver
+    * is external)
+    */
+  def assertExecutorGangJob(
+      nodeUniformityLabel: String,
+      expectedCardinality: Int
+  ): E2ETestBuilder = {
+    def hasValidGangAnnotations(pod: Pod): Boolean = {
+      val annotations = pod.getMetadata.getAnnotations
+      Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+      Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
+        .contains(expectedCardinality.toString) &&
+      Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+        .contains(nodeUniformityLabel)
+    }
+
     withExecutorPodAssertion(hasValidGangAnnotations)
   }
 
