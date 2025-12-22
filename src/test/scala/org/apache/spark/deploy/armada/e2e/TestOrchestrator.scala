@@ -354,7 +354,7 @@ class TestOrchestrator(
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
       // In client mode, spark-submit runs until application completes, so use longer timeout
       val timeout = if (!modeHelper.isDriverInCluster) jobWatchTimeout else jobSubmitTimeout
-      val result = ProcessExecutor.executeWithResult(dockerCommand, timeout)
+      val result  = ProcessExecutor.executeWithResult(dockerCommand, timeout)
 
       if (result.exitCode != 0) {
         val allOutput            = result.stdout + "\n" + result.stderr
