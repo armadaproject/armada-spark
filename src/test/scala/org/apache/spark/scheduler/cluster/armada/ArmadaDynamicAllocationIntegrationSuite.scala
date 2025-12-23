@@ -107,9 +107,12 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
     // Get the executor ID that was created
     val execId = backend.recordExecutor(jobId)
 
-    // Mark as running - should be removed from pending
+    // Mark as running - executor stays in pending until it registers with Spark
     backend.onExecutorRunning(jobId, execId)
-    assert(backend.getPendingExecutorCount === 0)
+    assert(
+      backend.getPendingExecutorCount === 1,
+      "Executor should stay pending until registered with Spark"
+    )
   }
 
   test("concurrent executor submissions are thread-safe") {
@@ -172,14 +175,10 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
 
     assert(backend.getPendingExecutorCount === 10)
 
-    // Simulate some becoming running
-    (1 to 5).foreach { i =>
-      val jobId  = s"job-$i"
-      val execId = s"exec-$i"
-      backend.onExecutorRunning(jobId, execId)
-    }
-
-    assert(backend.getPendingExecutorCount === 5)
+    assert(
+      backend.getPendingExecutorCount === 10,
+      "Executors stay pending until registered with Spark"
+    )
   }
 
   // Helper methods
