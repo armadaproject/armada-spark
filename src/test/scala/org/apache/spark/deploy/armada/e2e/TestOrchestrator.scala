@@ -184,36 +184,51 @@ class TestOrchestrator(
 
     // Give Armada some time to schedule resources after driver starts (executors need time to come up)
     val maxWaitTime                 = 30.seconds
+    val gracePeriodAfterCompletion  = 10.seconds
     val startTime                   = System.currentTimeMillis()
     var attempts                    = 0
     var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked")
+    var jobCompletedTime: Option[Long] = None
 
-    while (!jobCompleted() && (System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
-      attempts += 1
-      try {
-        val result = Await.result(assertion.assert(context)(ec), 10.seconds)
-        lastResult = result
-
-        result match {
-          case AssertionResult.Success =>
-            return result
-          case AssertionResult.Failure(_) =>
-          // For the first few attempts, be patient - resources may still be scheduling
-        }
-      } catch {
-        case ex: Exception =>
-          lastResult = AssertionResult.Failure(ex.getMessage)
-        // Don't log retries to avoid clutter
+    while ((System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
+      val nowCompleted = jobCompleted()
+      if (nowCompleted && jobCompletedTime.isEmpty) {
+        jobCompletedTime = Some(System.currentTimeMillis())
       }
 
-      Thread.sleep(2000)
+      // Allow assertions to continue for grace period even after job completes
+      val inGracePeriod = jobCompletedTime.isEmpty || {
+        val elapsedSinceCompletion = System.currentTimeMillis() - jobCompletedTime.get
+        elapsedSinceCompletion < gracePeriodAfterCompletion.toMillis
+      }
+
+      if (inGracePeriod) {
+        attempts += 1
+        try {
+          val result = Await.result(assertion.assert(context)(ec), 10.seconds)
+          lastResult = result
+
+          result match {
+            case AssertionResult.Success =>
+              return result
+            case AssertionResult.Failure(_) =>
+            // For the first few attempts, be patient - resources may still be scheduling
+          }
+        } catch {
+          case ex: Exception =>
+            lastResult = AssertionResult.Failure(ex.getMessage)
+          // Don't log retries to avoid clutter
+        }
+
+        Thread.sleep(2000)
+      }
     }
 
     lastResult match {
       case AssertionResult.Success =>
         lastResult
       case AssertionResult.Failure(msg) =>
-        if (jobCompleted()) {
+        if (jobCompletedTime.isDefined) {
           AssertionResult.Failure(
             s"${assertion.name}: Job completed before assertion could pass"
           )
