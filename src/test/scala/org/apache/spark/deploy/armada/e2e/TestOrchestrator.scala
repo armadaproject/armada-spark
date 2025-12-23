@@ -183,11 +183,11 @@ class TestOrchestrator(
     import scala.concurrent.duration._
 
     // Give Armada some time to schedule resources after driver starts (executors need time to come up)
-    val maxWaitTime                 = 30.seconds
-    val gracePeriodAfterCompletion  = 10.seconds
-    val startTime                   = System.currentTimeMillis()
-    var attempts                    = 0
-    var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked")
+    val maxWaitTime                    = 30.seconds
+    val gracePeriodAfterCompletion     = 10.seconds
+    val startTime                      = System.currentTimeMillis()
+    var attempts                       = 0
+    var lastResult: AssertionResult    = AssertionResult.Failure("Not yet checked")
     var jobCompletedTime: Option[Long] = None
 
     while ((System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
