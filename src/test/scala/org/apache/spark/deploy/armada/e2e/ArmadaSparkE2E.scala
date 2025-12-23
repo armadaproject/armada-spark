@@ -164,6 +164,95 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("SparkPi job in client mode with node selectors", E2ETest) {
+    E2ETestBuilder("spark-pi-node-selectors-client")
+      .withBaseConfig(baseConfig)
+      .withDeployMode("client")
+      .withPodLabels(Map("test-type" -> "node-selector-client"))
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .withExecutors(2)
+      .assertExecutorCount(2)
+      .assertExecutorsHaveLabels(Map("test-type" -> "node-selector-client"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .run()
+  }
+
+  test("Basic python SparkPi job in client mode", E2ETest) {
+    E2ETestBuilder("python-spark-pi-client")
+      .withBaseConfig(baseConfig)
+      .withDeployMode("client")
+      .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.file.upload.path"          -> "/tmp",
+          "spark.kubernetes.executor.disableConfigMap" -> "true"
+        )
+      )
+      .withExecutors(2)
+      .assertExecutorCount(2)
+      .run()
+  }
+
+  test("SparkPi job in client mode using job templates", E2ETest) {
+    E2ETestBuilder("spark-pi-templates-client")
+      .withBaseConfig(baseConfig)
+      .withDeployMode("client")
+      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.jobItemTemplate"   -> templatePath("spark-pi-driver-template.yaml"),
+          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+        )
+      )
+      .withPodLabels(Map("test-type" -> "template-client"))
+      .withExecutors(2)
+      .assertExecutorCount(2)
+      .assertExecutorsHaveLabels(Map("test-type" -> "template-client"))
+      // Assert template-specific labels from executor template
+      .assertExecutorsHaveLabels(
+        Map(
+          "app"             -> "spark-pi",
+          "component"       -> "executor",
+          "template-source" -> "e2e-test"
+        )
+      )
+      // Assert template-specific annotations from executor template
+      .assertExecutorsHaveAnnotations(
+        Map(
+          "armada/component" -> "spark-executor",
+          "armada/template"  -> "spark-pi-executor"
+        )
+      )
+      .run()
+  }
+
+  test("SparkPi job in client mode with custom feature steps", E2ETest) {
+    E2ETestBuilder("spark-pi-feature-steps-client")
+      .withBaseConfig(baseConfig)
+      .withDeployMode("client")
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.executor.pod.featureSteps" ->
+            "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
+        )
+      )
+      .withPodLabels(Map("test-type" -> "feature-step-client"))
+      .withExecutors(2)
+      .assertExecutorCount(2)
+      .assertExecutorsHaveLabels(
+        Map(
+          "test-type"         -> "feature-step-client",
+          "feature-step"      -> "executor-applied",
+          "feature-step-role" -> "executor"
+        )
+      )
+      .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
+      .withExecutorPodAssertion { pod =>
+        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+      }
+      .run()
+  }
+
   test("SparkPi job with node selectors", E2ETest) {
     E2ETestBuilder("spark-pi-node-selectors")
       .withBaseConfig(baseConfig)
