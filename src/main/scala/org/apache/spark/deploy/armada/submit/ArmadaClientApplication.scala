@@ -422,7 +422,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val modeHelper    = DeploymentModeHelper(conf)
     val executorCount = modeHelper.getExecutorCount
     val isDynamic     = conf.getBoolean("spark.dynamicAllocation.enabled", false)
-    
+
     // Allow minExecutors=0 for dynamic allocation
     if (!isDynamic && executorCount <= 0) {
       throw new IllegalArgumentException(
@@ -1734,7 +1734,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeUniformityLabel: Option[String],
       conf: SparkConf
   ): Map[String, String] = {
-    val modeHelper = DeploymentModeHelper(conf)
+    val modeHelper      = DeploymentModeHelper(conf)
     val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0

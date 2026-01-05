@@ -1651,7 +1651,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
   }
 
-  test("submitArmadaJob should validate executor count is greater than zero for static allocation") {
+  test(
+    "submitArmadaJob should validate executor count is greater than zero for static allocation"
+  ) {
     val armadaJobConfig = armadaClientApp.ArmadaJobConfig(
       queue = "test-queue",
       jobSetId = "test-job-set",
