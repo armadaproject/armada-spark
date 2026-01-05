@@ -1734,7 +1734,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     val exception = intercept[Throwable] {
       armadaClientApp.submitArmadaJob(null, clientArguments, armadaJobConfig, sparkConf)
     }
-    exception.getMessage should not include "Executor count must be greater than 0"
+    Option(exception.getMessage).getOrElse(
+      ""
+    ) should not include "Executor count must be greater than 0"
   }
 
   test("JobTemplateLoader should handle malformed YAML gracefully") {
