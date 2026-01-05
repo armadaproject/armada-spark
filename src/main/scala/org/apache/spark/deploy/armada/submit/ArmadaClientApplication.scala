@@ -425,10 +425,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val executorCount = DeploymentModeHelper(conf).getExecutorCount
-    if (executorCount <= 0) {
+    val modeHelper    = DeploymentModeHelper(conf)
+    val executorCount = modeHelper.getExecutorCount
+    val isDynamic     = conf.getBoolean("spark.dynamicAllocation.enabled", false)
+    
+    // Allow minExecutors=0 for dynamic allocation
+    if (!isDynamic && executorCount <= 0) {
       throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
+        s"Executor count must be greater than 0 for static allocation, but got: $executorCount"
       )
     }
     val driverJobId = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
