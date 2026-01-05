@@ -363,12 +363,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverJobId: String,
       executorCount: Int
   ): Seq[String] = {
-    if (executorCount <= 0) {
-      throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
-      )
-    }
-
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
@@ -1787,11 +1781,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): Map[String, String] = {
     val modeHelper = DeploymentModeHelper(conf)
+    val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
+      .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>
         GangSchedulingAnnotations(
           gangId,
-          modeHelper.getGangCardinality,
+          gangCardinality,
           label
         )
       )
