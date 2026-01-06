@@ -563,7 +563,6 @@ class TestOrchestrator(
       case None    => baseCommand ++ Seq("--class", "org.apache.spark.examples.SparkPi")
     }
 
-    // Build default configs based on deploy mode
     val baseDefaultConfs = Map(
       "spark.armada.queue"                   -> queueName,
       "spark.armada.jobSetId"                -> jobSetId,
