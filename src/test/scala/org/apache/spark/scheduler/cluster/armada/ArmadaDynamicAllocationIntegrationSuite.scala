@@ -88,7 +88,7 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
     sc = createMockSparkContext(conf)
     val taskScheduler = createMockTaskScheduler(sc)
 
-    backend = new ArmadaClusterManagerBackend(
+    backend = new TestableArmadaClusterManagerBackend(
       taskScheduler,
       sc,
       java.util.concurrent.Executors.newScheduledThreadPool(1),
@@ -112,6 +112,13 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
     assert(
       backend.getPendingExecutorCount === 1,
       "Executor should stay pending until registered with Spark"
+    )
+
+    backend.asInstanceOf[TestableArmadaClusterManagerBackend].simulateExecutorRegistration(execId)
+
+    assert(
+      backend.getPendingExecutorCount === 0,
+      "Executor should be removed from pending after registering with Spark"
     )
   }
 
@@ -182,6 +189,26 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
   }
 
   // Helper methods
+
+  private class TestableArmadaClusterManagerBackend(
+      scheduler: TaskSchedulerImpl,
+      sc: SparkContext,
+      executorService: java.util.concurrent.ScheduledExecutorService,
+      masterURL: String
+  ) extends ArmadaClusterManagerBackend(scheduler, sc, executorService, masterURL) {
+
+    private val testRegisteredExecutors = scala.collection.mutable.Set.empty[String]
+
+    /** Simulate executor registration by adding it to the test set */
+    def simulateExecutorRegistration(executorId: String): Unit = {
+      testRegisteredExecutors += executorId
+    }
+
+    /** Include our test executors */
+    override def getExecutorIds(): Seq[String] = synchronized {
+      super.getExecutorIds() ++ testRegisteredExecutors.toSeq
+    }
+  }
 
   private def createMockSparkContext(sparkConf: SparkConf): SparkContext = {
     val sc     = org.mockito.Mockito.mock(classOf[SparkContext])
