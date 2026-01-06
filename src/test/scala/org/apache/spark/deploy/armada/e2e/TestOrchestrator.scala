@@ -76,6 +76,43 @@ class TestOrchestrator(
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
+  private def waitForPod(
+      selector: String,
+      namespace: String,
+      failureMessage: String,
+      jobCompleted: () => Boolean
+  ): Boolean = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
+
+    var podRunning      = false
+    var attempts        = 0
+    val maxWaitAttempts = 60 // 2 minutes max to wait for pod
+
+    while (!podRunning && !jobCompleted() && attempts < maxWaitAttempts) {
+      try {
+        val pods = Await.result(
+          k8sClient.getPodsByLabel(selector, namespace),
+          10.seconds
+        )
+        pods.headOption.foreach { pod =>
+          if (pod.getStatus != null && pod.getStatus.getPhase == "Running") {
+            podRunning = true
+          }
+        }
+      } catch {
+        case _: Exception =>
+      }
+
+      if (!podRunning) {
+        Thread.sleep(2000)
+        attempts += 1
+      }
+    }
+
+    podRunning
+  }
+
   private def runAssertionsWhileJobRunning(
       assertions: Seq[TestAssertion],
       context: TestContext,
@@ -83,9 +120,6 @@ class TestOrchestrator(
       jobCompleted: () => Boolean,
       isClientMode: Boolean = false
   ): Map[String, AssertionResult] = {
-    import scala.concurrent.Await
-    import scala.concurrent.duration._
-
     val assertionContext = AssertionContext(
       context.namespace,
       queueName,
@@ -94,78 +128,24 @@ class TestOrchestrator(
       armadaClient
     )
 
-    if (!isClientMode) {
+    val (selector, failureMessage) = if (!isClientMode) {
       // Wait for Spark driver pod to be scheduled and running
-      val driverSelector  = s"spark-role=driver,test-id=${context.testId}"
-      var driverRunning   = false
-      var attempts        = 0
-      val maxWaitAttempts = 60 // 2 minutes max to wait for driver
-
-      while (!driverRunning && !jobCompleted() && attempts < maxWaitAttempts) {
-        try {
-          val driverPods = Await.result(
-            k8sClient.getPodsByLabel(driverSelector, context.namespace),
-            10.seconds
-          )
-          driverPods.headOption match {
-            case Some(pod) if pod.getStatus != null && pod.getStatus.getPhase == "Running" =>
-              driverRunning = true
-            case Some(_) =>
-            case None    =>
-          }
-        } catch {
-          case _: Exception =>
-        }
-
-        if (!driverRunning) {
-          Thread.sleep(2000)
-          attempts += 1
-        }
-      }
-
-      if (!driverRunning) {
-        return assertions.map { assertion =>
-          assertion.name -> AssertionResult.Failure(
-            "Driver pod never started, Armada may not have scheduled it"
-          )
-        }.toMap
-      }
+      (
+        s"spark-role=driver,test-id=${context.testId}",
+        "Driver pod never started, Armada may not have scheduled it"
+      )
     } else {
       // In client mode, wait for at least one executor pod to start
-      val executorSelector = s"spark-role=executor,test-id=${context.testId}"
-      var executorRunning  = false
-      var attempts         = 0
-      val maxWaitAttempts  = 60 // 2 minutes max to wait for executors
+      (
+        s"spark-role=executor,test-id=${context.testId}",
+        "Executor pods never started, Armada may not have scheduled them"
+      )
+    }
 
-      while (!executorRunning && !jobCompleted() && attempts < maxWaitAttempts) {
-        try {
-          val executorPods = Await.result(
-            k8sClient.getPodsByLabel(executorSelector, context.namespace),
-            10.seconds
-          )
-          executorPods.headOption match {
-            case Some(pod) if pod.getStatus != null && pod.getStatus.getPhase == "Running" =>
-              executorRunning = true
-            case Some(_) =>
-            case None    =>
-          }
-        } catch {
-          case _: Exception =>
-        }
-
-        if (!executorRunning) {
-          Thread.sleep(2000)
-          attempts += 1
-        }
-      }
-
-      if (!executorRunning) {
-        return assertions.map { assertion =>
-          assertion.name -> AssertionResult.Failure(
-            "Executor pods never started, Armada may not have scheduled them"
-          )
-        }.toMap
-      }
+    if (!waitForPod(selector, context.namespace, failureMessage, jobCompleted)) {
+      return assertions.map { assertion =>
+        assertion.name -> AssertionResult.Failure(failureMessage)
+      }.toMap
     }
 
     assertions.map { assertion =>
