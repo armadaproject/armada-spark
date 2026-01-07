@@ -62,6 +62,8 @@ import org.apache.spark.deploy.armada.Config.{
 }
 import org.apache.spark.deploy.armada.DeploymentModeHelper
 import io.armadaproject.armada.ArmadaClient
+import io.fabric8.kubernetes.api.model
+import io.fabric8.kubernetes.api.model.PodBuilder
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.deploy.SparkApplication
@@ -83,7 +85,6 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import java.util.UUID
 
 /** Encapsulates arguments to the submission client.
   *
@@ -142,7 +143,7 @@ private[spark] object ClientArguments {
 }
 
 private[spark] object ArmadaClientApplication {
-  private[submit] val DRIVER_PORT = 7078
+  private[submit] val DRIVER_PORT = 10060
   private val DEFAULT_PRIORITY    = 0.0
   private val DEFAULT_NAMESPACE   = "default"
   private val DEFAULT_RUN_AS_USER = 185
@@ -499,7 +500,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .get(ARMADA_SERVER_INTERNAL_URL)
       .filter(_.nonEmpty)
       .map { internalUrl =>
-        s"local://armada://$internalUrl"
+        s"$internalUrl"
       }
       .getOrElse(armadaClientUrl)
 
@@ -845,7 +846,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .filter(_.nonEmpty)
       .getOrElse("none")
     log(
-      s"Submitted driver job with ID: $driverJobId, Error: $error"
+      s"Submitted driver job with ID: $jobSetId:$driverJobId, Error: $error"
     )
     driverJobId
   }
@@ -859,7 +860,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
       val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      log(s"Submitted executor job with ID: $jobSetId:${item.jobId}, Error: $error")
       item.jobId
     }
   }
@@ -1167,7 +1168,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     import scala.jdk.CollectionConverters._
     val afterCLIVolumes = if (volumes.nonEmpty) {
       val currentSpec =
-        Option(afterTemplatePod.getSpec).getOrElse(new io.fabric8.kubernetes.api.model.PodSpec())
+        Option(afterTemplatePod.getSpec).getOrElse(new model.PodSpec())
       val currentVolumes = Option(currentSpec.getVolumes)
         .map(_.asScala.toSeq)
         .getOrElse(Seq.empty)
@@ -1179,7 +1180,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         fabric8CLIVolumes
       )(v => Option(v.getName))
 
-      new io.fabric8.kubernetes.api.model.PodBuilder(afterTemplatePod)
+      new PodBuilder(afterTemplatePod)
         .editOrNewSpec()
         .withVolumes(mergedVolumes.asJava)
         .endSpec()
@@ -1242,8 +1243,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
-        if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
-        else currentPodSpec.nodeSelector
+        if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors ++ getGangNodeSelector
+        else currentPodSpec.nodeSelector ++ getGangNodeSelector
       )
 
     JobSubmitRequestItem(
@@ -1269,6 +1270,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       podSpec = Some(finalPodSpec)
     )
   }
+
+  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
+  // node should be selected
+  private def getGangNodeSelector = {
+    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    if (nodeLabel.nonEmpty)
+      Map(nodeLabel -> nodeValue)
+    else Map.empty
+  }
+
 
   private def newDriverContainer(
       master: String,
