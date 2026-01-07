@@ -37,6 +37,7 @@ docker run -d \
   -e ARMADA_MASTER=${ARMADA_MASTER} \
   -e ARMADA_QUEUE=${ARMADA_QUEUE} \
   -e IMAGE_NAME=${IMAGE_NAME} \
+  -e ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-} \
   -v "$notebooks_dir:/home/spark/workspace/notebooks:ro" \
   -v "$root/conf:/opt/spark/conf:ro" \
   --rm \
