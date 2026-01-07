@@ -143,7 +143,7 @@ private[spark] object ClientArguments {
 }
 
 private[spark] object ArmadaClientApplication {
-  private[submit] val DRIVER_PORT = 10060
+  private[submit] val DRIVER_PORT = 7078
   private val DEFAULT_PRIORITY    = 0.0
   private val DEFAULT_NAMESPACE   = "default"
   private val DEFAULT_RUN_AS_USER = 185
@@ -799,7 +799,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
-      ArmadaClientApplication.DRIVER_PORT,
+      conf.getInt("spark.driver.port", ArmadaClientApplication.DRIVER_PORT),
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -825,7 +825,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig,
         javaOptEnvVars(conf),
         driverHostname,
-        ArmadaClientApplication.DRIVER_PORT,
+        conf.getInt("spark.driver.port", ArmadaClientApplication.DRIVER_PORT),
         configGenerator.getVolumes,
         conf
       )
