@@ -1243,7 +1243,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
-        if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors ++ getGangNodeSelector
+        if (resolvedConfig.nodeSelectors.nonEmpty)
+          resolvedConfig.nodeSelectors ++ getGangNodeSelector
         else currentPodSpec.nodeSelector ++ getGangNodeSelector
       )
 
@@ -1280,7 +1281,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       Map(nodeLabel -> nodeValue)
     else Map.empty
   }
-
 
   private def newDriverContainer(
       master: String,
