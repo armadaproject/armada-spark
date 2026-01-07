@@ -164,5 +164,6 @@ This will start a Jupyter notebook server at `http://localhost:8888` (or the por
 The example notebooks from `example/jupyter/notebooks` are mounted in the container at `/home/spark/workspace/notebooks`.
 
 **Configuration:**
-- Override the Jupyter port by setting `JUPYTER_PORT` in `scripts/config.sh`
+- Override the Jupyter port if required by setting `JUPYTER_PORT` in `scripts/config.sh`
 - The script uses the same configuration (`ARMADA_MASTER`, `ARMADA_QUEUE`, `SPARK_DRIVER_HOST`, etc.) as other scripts
+- `SPARK_DRIVER_HOST` should be set to the local machines IP address.
