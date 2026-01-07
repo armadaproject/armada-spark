@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+
+# init environment variables
+scripts="$(cd "$(dirname "$0")"; pwd)"
+source "$scripts/init.sh"
+
+# Jupyter-specific defaults
+JUPYTER_PORT="${JUPYTER_PORT:-8888}"
+SPARK_BLOCK_MANAGER_PORT="${SPARK_BLOCK_MANAGER_PORT:-10061}"
+SPARK_DRIVER_PORT="${SPARK_DRIVER_PORT:-7078}"
+SPARK_DRIVER_HOST="${SPARK_DRIVER_HOST:-10.0.0.80}"
+
+# Setup example notebooks
+root="$(cd "$scripts/.."; pwd)"
+notebooks_dir="$root/example/jupyter/notebooks"
+
+if [ ! -d "$notebooks_dir" ]; then
+    echo "Warning: Notebooks directory not found at $notebooks_dir"
+fi
+
+# Remove existing container if it exists
+if docker ps -a --format '{{.Names}}' | grep -q "^armada-jupyter$"; then
+    echo "Removing existing armada-jupyter container..."
+    docker rm -f armada-jupyter >/dev/null 2>&1 || true
+fi
+
+# Run Jupyter container
+docker run -d \
+  --name armada-jupyter \
+  -p ${JUPYTER_PORT}:8888 \
+  -p ${SPARK_BLOCK_MANAGER_PORT}:${SPARK_BLOCK_MANAGER_PORT} \
+  -p ${SPARK_DRIVER_PORT}:${SPARK_DRIVER_PORT} \
+  -e SPARK_DRIVER_HOST=${SPARK_DRIVER_HOST} \
+  -e SPARK_DRIVER_PORT=${SPARK_DRIVER_PORT} \
+  -e SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT} \
+  -e ARMADA_MASTER=${ARMADA_MASTER} \
+  -e ARMADA_QUEUE=${ARMADA_QUEUE} \
+  -e IMAGE_NAME=${IMAGE_NAME} \
+  -v "$notebooks_dir:/home/spark/workspace/notebooks:ro" \
+  -v "$root/conf:/opt/spark/conf:ro" \
+  --rm \
+  ${IMAGE_NAME} \
+  /opt/spark/bin/jupyter-entrypoint.sh
+
+echo "Jupyter notebook is running at http://localhost:${JUPYTER_PORT}"
+echo "Notebooks are available in the container at /home/spark/workspace/notebooks"
