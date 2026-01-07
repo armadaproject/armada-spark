@@ -113,7 +113,7 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark}
+    --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark} \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
     --conf spark.local.dir=/tmp \
