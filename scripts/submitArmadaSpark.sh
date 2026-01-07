@@ -69,7 +69,7 @@ else
     EXTRA_CONF=(
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-        --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}"
+        --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
         --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
@@ -113,7 +113,7 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark}"
+    --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark}
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
     --conf spark.local.dir=/tmp \
