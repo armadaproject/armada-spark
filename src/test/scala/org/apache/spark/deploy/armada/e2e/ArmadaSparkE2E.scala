@@ -380,52 +380,80 @@ class ArmadaSparkE2E
   // Ingress Tests
   // ========================================================================
 
-  test("SparkPi job with driver ingress using cli - staticCluster", E2ETest) {
-    baseSparkPiTest("spark-pi-ingress", "cluster")
-      .withDriverIngress(
-        Map(
-          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
-          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
-        )
-      )
-      .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
-      .withPodLabels(Map("test-type" -> "ingress"))
+  private def baseIngressTest(
+      testName: String,
+      executorCount: Int,
+      labels: Map[String, String],
+      ingressAnnotations: Map[String, String]
+  )(
+      configureIngress: E2ETestBuilder => E2ETestBuilder
+  ): E2ETestBuilder = {
+    configureIngress(baseSparkPiTest(testName, "cluster"))
+      .withExecutors(executorCount)
+      .withPodLabels(labels)
       .assertDriverExists()
-      .assertExecutorCount(2)
-      .assertPodLabels(Map("test-type" -> "ingress"))
-      .assertIngressAnnotations(
-        Map(
-          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
-          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
+      .assertExecutorCount(executorCount)
+      .assertPodLabels(labels)
+      .assertIngressAnnotations(ingressAnnotations)
+  }
+
+  private def baseIngressCLITest(
+      testName: String,
+      executorCount: Int,
+      labels: Map[String, String],
+      ingressAnnotations: Map[String, String]
+  ): E2ETestBuilder = {
+    baseIngressTest(testName, executorCount, labels, ingressAnnotations) { builder =>
+      builder
+        .withDriverIngress(ingressAnnotations)
+        .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
+    }
+  }
+
+  private def baseIngressTemplateTest(
+      testName: String,
+      executorCount: Int,
+      labels: Map[String, String],
+      ingressAnnotations: Map[String, String]
+  ): E2ETestBuilder = {
+    baseIngressTest(testName, executorCount, labels, ingressAnnotations) { builder =>
+      builder
+        .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+        .withSparkConf(
+          Map(
+            "spark.armada.driver.ingress.enabled" -> "true",
+            "spark.armada.driver.jobItemTemplate" -> templatePath(
+              "spark-pi-driver-ingress-template.yaml"
+            ),
+            "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+          )
         )
+    }
+  }
+
+  test("SparkPi job with driver ingress using cli - staticCluster", E2ETest) {
+    baseIngressCLITest(
+      "spark-pi-ingress",
+      2,
+      Map("test-type" -> "ingress"),
+      Map(
+        "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+        "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP"
       )
-      .run()
+    ).run()
   }
 
   test("SparkPi job with driver ingress using template - staticCluster", E2ETest) {
-    baseSparkPiTest("spark-pi-ingress-template", "cluster")
-      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
-      .withSparkConf(
-        Map(
-          "spark.armada.driver.ingress.enabled" -> "true",
-          "spark.armada.driver.jobItemTemplate" -> templatePath(
-            "spark-pi-driver-ingress-template.yaml"
-          ),
-          "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
-        )
+    baseIngressTemplateTest(
+      "spark-pi-ingress-template",
+      2,
+      Map("test-type" -> "ingress-template"),
+      Map(
+        "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+        "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
+        "kubernetes.io/ingress.class"                  -> "nginx"
       )
-      .withPodLabels(Map("test-type" -> "ingress-template"))
-      .assertDriverExists()
-      .assertExecutorCount(2)
-      .assertPodLabels(Map("test-type" -> "ingress-template"))
-      .assertIngressAnnotations(
-        Map(
-          "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
-          "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
-          "kubernetes.io/ingress.class"                  -> "nginx"
-        )
-      )
-      .run()
+    ).run()
   }
 
   private def loadProperties(): Properties = {
