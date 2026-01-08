@@ -350,12 +350,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverJobId: String,
       executorCount: Int
   ): Seq[String] = {
-    if (executorCount <= 0) {
-      throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
-      )
-    }
-
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
@@ -428,10 +422,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val executorCount = DeploymentModeHelper(conf).getExecutorCount
-    if (executorCount <= 0) {
+    val modeHelper    = DeploymentModeHelper(conf)
+    val executorCount = modeHelper.getExecutorCount
+    val isDynamic     = conf.getBoolean("spark.dynamicAllocation.enabled", false)
+
+    // Allow minExecutors=0 for dynamic allocation
+    if (!isDynamic && executorCount <= 0) {
       throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
+        s"Executor count must be greater than 0 for static allocation, but got: $executorCount"
       )
     }
     val driverJobId = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
@@ -1750,12 +1748,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeUniformityLabel: Option[String],
       conf: SparkConf
   ): Map[String, String] = {
-    val modeHelper = DeploymentModeHelper(conf)
+    val modeHelper      = DeploymentModeHelper(conf)
+    val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
+      .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>
         GangSchedulingAnnotations(
           gangId,
-          modeHelper.getGangCardinality,
+          gangCardinality,
           label
         )
       )
