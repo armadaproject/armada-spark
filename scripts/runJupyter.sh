@@ -17,10 +17,17 @@ if [ -z "${SPARK_DRIVER_HOST:-}" ]; then
     exit 1
 fi
 
-# Ensure queue exists on Armada
-if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
-    echo "Creating Armada queue: $ARMADA_QUEUE"
-    armadactl create queue $ARMADA_QUEUE
+if [ "${USE_KIND}" == "true" ]; then
+    # Ensure queue exists on Armada
+    if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
+        armadactl create queue $ARMADA_QUEUE
+    fi
+
+    # needed by kind load docker-image (if docker is installed via snap)
+    # https://github.com/kubernetes-sigs/kind/issues/2535
+    export TMPDIR="$scripts/.tmp"
+    mkdir -p "$TMPDIR"
+    kind load docker-image $IMAGE_NAME --name armada
 fi
 
 # Setup workspace directory
