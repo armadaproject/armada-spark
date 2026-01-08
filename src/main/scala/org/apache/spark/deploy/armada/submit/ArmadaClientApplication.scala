@@ -178,6 +178,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"Connecting to Armada Server - host: $host, port: $port")
+    log(s"gbjdriver port is ${DRIVER_PORT.key}")
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
@@ -800,7 +801,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
-      conf.getInt(DRIVER_PORT.toString, ArmadaClientApplication.DRIVER_PORT),
+      conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -826,7 +827,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig,
         javaOptEnvVars(conf),
         driverHostname,
-        conf.getInt(DRIVER_PORT.toString, ArmadaClientApplication.DRIVER_PORT),
+        conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
         configGenerator.getVolumes,
         conf
       )
@@ -1370,11 +1371,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           mainClass,
           "--conf",
-          DRIVER_PORT.toString + s"=$port",
+          DRIVER_PORT.key + s"=$port",
           "--conf",
           s"spark.app.id=${armadaJobConfig.applicationId}",
           "--conf",
-          DRIVER_HOST_ADDRESS.toString + "=$(SPARK_DRIVER_BIND_ADDRESS)"
+          DRIVER_HOST_ADDRESS.key + "=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(
