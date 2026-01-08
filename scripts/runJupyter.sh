@@ -38,10 +38,16 @@ workspace_dir="$root/example/jupyter/workspace"
 # Create workspace directory if it doesn't exist
 mkdir -p "$workspace_dir"
 
-# Copy example notebooks to workspace
+# Copy example notebooks to workspace only if they don't already exist
 if [ -d "$notebooks_dir" ]; then
-    echo "Copying notebooks to workspace..."
-    cp -n "$notebooks_dir"/* "$workspace_dir/" 2>/dev/null || true
+    for notebook in "$notebooks_dir"/*.ipynb; do
+        [ -f "$notebook" ] || break
+        notebook_name=$(basename "$notebook")
+        if [ ! -f "$workspace_dir/$notebook_name" ]; then
+            echo "Copying $notebook_name to workspace..."
+            cp "$notebook" "$workspace_dir/"
+        fi
+    done
 fi
 
 # Remove existing container if it exists
