@@ -183,29 +183,30 @@ class ArmadaSparkE2E
   // Node Selector Tests
   // ========================================================================
 
-  /** Base builder for node selector tests */
-  private def baseNodeSelectorTest(testName: String, deployMode: String): E2ETestBuilder = {
+  private def baseNodeSelectorTest(
+      testName: String,
+      deployMode: String,
+      executorCount: Int,
+      labels: Map[String, String]
+  ): E2ETestBuilder = {
     baseSparkPiTest(testName, deployMode)
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .withExecutors(executorCount)
+      .withPodLabels(labels)
+      .assertExecutorCount(executorCount)
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
   }
 
   test("SparkPi job with node selectors - staticCluster", E2ETest) {
-    baseNodeSelectorTest("spark-pi-node-selectors", "cluster")
-      .withPodLabels(Map("test-type" -> "node-selector"))
+    baseNodeSelectorTest("spark-pi-node-selectors", "cluster", 2, Map("test-type" -> "node-selector"))
       .assertDriverExists()
-      .assertExecutorCount(2)
       .assertPodLabels(Map("test-type" -> "node-selector"))
-      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .run()
   }
 
   test("SparkPi job with node selectors - staticClient", E2ETest) {
-    baseNodeSelectorTest("spark-pi-node-selectors-client", "client")
-      .withPodLabels(Map("test-type" -> "node-selector-client"))
-      .withExecutors(2)
-      .assertExecutorCount(2)
+    baseNodeSelectorTest("spark-pi-node-selectors-client", "client", 2, Map("test-type" -> "node-selector-client"))
       .assertExecutorsHaveLabels(Map("test-type" -> "node-selector-client"))
-      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .run()
   }
 
