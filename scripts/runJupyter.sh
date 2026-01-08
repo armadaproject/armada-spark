@@ -23,12 +23,18 @@ if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
     armadactl create queue $ARMADA_QUEUE
 fi
 
-# Setup example notebooks
+# Setup workspace directory
 root="$(cd "$scripts/.."; pwd)"
 notebooks_dir="$root/example/jupyter/notebooks"
+workspace_dir="$root/example/jupyter/workspace"
 
-if [ ! -d "$notebooks_dir" ]; then
-    echo "Warning: Notebooks directory not found at $notebooks_dir"
+# Create workspace directory if it doesn't exist
+mkdir -p "$workspace_dir"
+
+# Copy example notebooks to workspace
+if [ -d "$notebooks_dir" ]; then
+    echo "Copying notebooks to workspace..."
+    cp -n "$notebooks_dir"/* "$workspace_dir/" 2>/dev/null || true
 fi
 
 # Remove existing container if it exists
@@ -50,11 +56,12 @@ docker run -d \
   -e ARMADA_QUEUE=${ARMADA_QUEUE} \
   -e IMAGE_NAME=${IMAGE_NAME} \
   -e ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-} \
-  -v "$notebooks_dir:/home/spark/workspace/notebooks:ro" \
+  -v "$workspace_dir:/home/spark/workspace" \
   -v "$root/conf:/opt/spark/conf:ro" \
   --rm \
   ${IMAGE_NAME} \
   /opt/spark/bin/jupyter-entrypoint.sh
 
 echo "Jupyter notebook is running at http://localhost:${JUPYTER_PORT}"
-echo "Notebooks are available in the container at /home/spark/workspace/notebooks"
+echo "Workspace is available in the container at /home/spark/workspace"
+echo "Notebooks are persisted in $workspace_dir"
