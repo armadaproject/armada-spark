@@ -152,25 +152,29 @@ class ArmadaSparkE2E
   // Gang Scheduling Tests
   // ========================================================================
 
-  test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
-    baseSparkPiTest("basic-spark-pi-gang", "cluster")
+  private def baseSparkPiGangTest(
+      testName: String,
+      deployMode: String,
+      executorCount: Int,
+      labels: Map[String, String]
+  ): E2ETestBuilder = {
+    baseSparkPiTest(testName, deployMode)
       .withGangJob("armada-spark")
-      .withExecutors(3)
-      .withPodLabels(Map("test-type" -> "basic"))
+      .withExecutors(executorCount)
+      .withPodLabels(labels)
+      .assertExecutorCount(executorCount)
+  }
+
+  test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
+    baseSparkPiGangTest("basic-spark-pi-gang", "cluster", 3, Map("test-type" -> "basic"))
       .assertDriverExists()
-      .assertExecutorCount(3)
       .assertPodLabels(Map("test-type" -> "basic"))
       .assertGangJob("armada-spark", 4) // 1 driver + 3 executors
       .run()
   }
 
   test("Basic SparkPi job with gang scheduling - staticClient", E2ETest) {
-    baseSparkPiTest("basic-spark-pi-client", "client")
-      .withGangJob("armada-spark")
-      .withExecutors(2)
-      .withPodLabels(Map("test-type" -> "client-mode"))
-      .assertExecutorCount(2)
-      .assertExecutorsHaveLabels(Map("test-type" -> "client-mode"))
+    baseSparkPiGangTest("basic-spark-pi-client", "client", 2, Map("test-type" -> "client-mode"))
       .assertExecutorGangJob("armada-spark", 2) // Only 2 executors, no driver
       .run()
   }
