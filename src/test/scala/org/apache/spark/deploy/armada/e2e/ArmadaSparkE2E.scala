@@ -141,6 +141,39 @@ class ArmadaSparkE2E
   // Base helper method
   // ========================================================================
 
+  private def loadProperties(): Properties = {
+    val props = new Properties()
+
+    // Check system properties first, then environment variables
+    def getPropertyOrEnv(propName: String, envName: String): Option[String] = {
+      sys.props.get(propName).orElse(sys.env.get(envName))
+    }
+
+    // Helper to set property if it exists in either system properties or environment variables
+    def set(property: String, envvar: String): Unit = {
+      getPropertyOrEnv(property, envvar).foreach(
+        props.setProperty(property, _)
+      )
+    }
+
+    // Set properties using the same precedence as the scripts
+    set("container.image", "IMAGE_NAME")
+    set("armada.master", "ARMADA_MASTER")
+    set("armada.lookout.url", "ARMADA_LOOKOUT_URL")
+    set("scala.version", "SCALA_VERSION")
+    set("spark.version", "SPARK_VERSION")
+    set("armada.queue", "ARMADA_QUEUE")
+
+    // Also check for binary versions
+    set("scala.binary.version", "SCALA_BIN_VERSION")
+    set("spark.binary.version", "SPARK_BIN_VERSION")
+
+    props
+  }
+
+  private def templatePath(name: String): String =
+    s"src/test/resources/e2e/templates/$name"
+
   /** Base builder for basic SparkPi job tests */
   private def baseSparkPiTest(testName: String, deployMode: String): E2ETestBuilder = {
     E2ETestBuilder(testName)
@@ -198,14 +231,24 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with node selectors - staticCluster", E2ETest) {
-    baseNodeSelectorTest("spark-pi-node-selectors", "cluster", 2, Map("test-type" -> "node-selector"))
+    baseNodeSelectorTest(
+      "spark-pi-node-selectors",
+      "cluster",
+      2,
+      Map("test-type" -> "node-selector")
+    )
       .assertDriverExists()
       .assertPodLabels(Map("test-type" -> "node-selector"))
       .run()
   }
 
   test("SparkPi job with node selectors - staticClient", E2ETest) {
-    baseNodeSelectorTest("spark-pi-node-selectors-client", "client", 2, Map("test-type" -> "node-selector-client"))
+    baseNodeSelectorTest(
+      "spark-pi-node-selectors-client",
+      "client",
+      2,
+      Map("test-type" -> "node-selector-client")
+    )
       .assertExecutorsHaveLabels(Map("test-type" -> "node-selector-client"))
       .run()
   }
@@ -303,7 +346,12 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job using job templates - staticClient", E2ETest) {
-    baseTemplateTest("spark-pi-templates-client", "client", 2, Map("test-type" -> "template-client"))
+    baseTemplateTest(
+      "spark-pi-templates-client",
+      "client",
+      2,
+      Map("test-type" -> "template-client")
+    )
       .assertExecutorsHaveLabels(Map("test-type" -> "template-client"))
       .run()
   }
@@ -371,7 +419,12 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with custom feature steps - staticClient", E2ETest) {
-    baseFeatureStepTest("spark-pi-feature-steps-client", "client", 2, Map("test-type" -> "feature-step-client"))
+    baseFeatureStepTest(
+      "spark-pi-feature-steps-client",
+      "client",
+      2,
+      Map("test-type" -> "feature-step-client")
+    )
       .assertExecutorsHaveLabels(Map("test-type" -> "feature-step-client"))
       .run()
   }
@@ -425,7 +478,9 @@ class ArmadaSparkE2E
             "spark.armada.driver.jobItemTemplate" -> templatePath(
               "spark-pi-driver-ingress-template.yaml"
             ),
-            "spark.armada.executor.jobItemTemplate" -> templatePath("spark-pi-executor-template.yaml")
+            "spark.armada.executor.jobItemTemplate" -> templatePath(
+              "spark-pi-executor-template.yaml"
+            )
           )
         )
     }
@@ -455,37 +510,4 @@ class ArmadaSparkE2E
       )
     ).run()
   }
-
-  private def loadProperties(): Properties = {
-    val props = new Properties()
-
-    // Check system properties first, then environment variables
-    def getPropertyOrEnv(propName: String, envName: String): Option[String] = {
-      sys.props.get(propName).orElse(sys.env.get(envName))
-    }
-
-    // Helper to set property if it exists in either system properties or environment variables
-    def set(property: String, envvar: String): Unit = {
-      getPropertyOrEnv(property, envvar).foreach(
-        props.setProperty(property, _)
-      )
-    }
-
-    // Set properties using the same precedence as the scripts
-    set("container.image", "IMAGE_NAME")
-    set("armada.master", "ARMADA_MASTER")
-    set("armada.lookout.url", "ARMADA_LOOKOUT_URL")
-    set("scala.version", "SCALA_VERSION")
-    set("spark.version", "SPARK_VERSION")
-    set("armada.queue", "ARMADA_QUEUE")
-
-    // Also check for binary versions
-    set("scala.binary.version", "SCALA_BIN_VERSION")
-    set("spark.binary.version", "SPARK_BIN_VERSION")
-
-    props
-  }
-
-  private def templatePath(name: String): String =
-    s"src/test/resources/e2e/templates/$name"
 }
