@@ -9,7 +9,12 @@ source "$scripts/init.sh"
 JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 SPARK_BLOCK_MANAGER_PORT="${SPARK_BLOCK_MANAGER_PORT:-10061}"
 SPARK_DRIVER_PORT="${SPARK_DRIVER_PORT:-7078}"
-SPARK_DRIVER_HOST="${SPARK_DRIVER_HOST:-10.0.0.80}"
+
+# SPARK_DRIVER_HOST is required - must be reachable from Kubernetes executors
+if [ -z "${SPARK_DRIVER_HOST:-}" ]; then
+    echo "Error: SPARK_DRIVER_HOST must be set."
+    echo ""
+fi
 
 # Setup example notebooks
 root="$(cd "$scripts/.."; pwd)"
