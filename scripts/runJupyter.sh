@@ -62,6 +62,17 @@ docker run -d \
   ${IMAGE_NAME} \
   /opt/spark/bin/jupyter-entrypoint.sh
 
-echo "Jupyter notebook is running at http://localhost:${JUPYTER_PORT}"
-echo "Workspace is available in the container at /home/spark/workspace"
-echo "Notebooks are persisted in $workspace_dir"
+# Wait for Jupyter server to be reachable
+for i in {1..10}; do
+    if curl -s -f -o /dev/null "http://localhost:${JUPYTER_PORT}" 2>/dev/null; then
+        echo "Jupyter notebook is running at http://localhost:${JUPYTER_PORT}"
+        echo "Workspace is available in the container at /home/spark/workspace"
+        echo "Notebooks are persisted in $workspace_dir"
+        exit 0
+    fi
+    sleep 1
+done
+
+echo "Error: Jupyter server is not reachable. The container may have exited."
+echo "This likely means Python/Jupyter is not installed in the image (INCLUDE_PYTHON=false)."
+exit 1
