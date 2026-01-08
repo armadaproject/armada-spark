@@ -14,6 +14,13 @@ SPARK_DRIVER_PORT="${SPARK_DRIVER_PORT:-7078}"
 if [ -z "${SPARK_DRIVER_HOST:-}" ]; then
     echo "Error: SPARK_DRIVER_HOST must be set."
     echo ""
+    exit 1
+fi
+
+# Ensure queue exists on Armada
+if ! armadactl get queue $ARMADA_QUEUE >& /dev/null; then
+    echo "Creating Armada queue: $ARMADA_QUEUE"
+    armadactl create queue $ARMADA_QUEUE
 fi
 
 # Setup example notebooks
