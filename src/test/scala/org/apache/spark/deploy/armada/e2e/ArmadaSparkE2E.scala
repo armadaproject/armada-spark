@@ -214,8 +214,11 @@ class ArmadaSparkE2E
   // Python Tests
   // ========================================================================
 
-  /** Base builder for Python SparkPi job tests */
-  private def basePythonSparkPiTest(testName: String, deployMode: String): E2ETestBuilder = {
+  private def basePythonSparkPiTest(
+      testName: String,
+      deployMode: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
     baseSparkPiTest(testName, deployMode)
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
@@ -224,20 +227,18 @@ class ArmadaSparkE2E
           "spark.kubernetes.executor.disableConfigMap" -> "true"
         )
       )
+      .withExecutors(executorCount)
+      .assertExecutorCount(executorCount)
   }
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {
-    basePythonSparkPiTest("python-spark-pi", "cluster")
-      .withExecutors(2)
+    basePythonSparkPiTest("python-spark-pi", "cluster", 2)
       .assertDriverExists()
-      .assertExecutorCount(2)
       .run()
   }
 
   test("Basic python SparkPi job - staticClient", E2ETest) {
-    basePythonSparkPiTest("python-spark-pi-client", "client")
-      .withExecutors(2)
-      .assertExecutorCount(2)
+    basePythonSparkPiTest("python-spark-pi-client", "client", 2)
       .run()
   }
 
