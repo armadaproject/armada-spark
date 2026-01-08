@@ -77,6 +77,7 @@ import org.apache.spark.deploy.k8s.submit.{
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
 import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
@@ -799,7 +800,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
-      conf.getInt("spark.driver.port", ArmadaClientApplication.DRIVER_PORT),
+      conf.getInt(DRIVER_PORT.toString, ArmadaClientApplication.DRIVER_PORT),
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -825,7 +826,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig,
         javaOptEnvVars(conf),
         driverHostname,
-        conf.getInt("spark.driver.port", ArmadaClientApplication.DRIVER_PORT),
+        conf.getInt(DRIVER_PORT.toString, ArmadaClientApplication.DRIVER_PORT),
         configGenerator.getVolumes,
         conf
       )
@@ -1369,11 +1370,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           mainClass,
           "--conf",
-          s"spark.driver.port=$port",
+          DRIVER_PORT.toString + s"=$port",
           "--conf",
           s"spark.app.id=${armadaJobConfig.applicationId}",
           "--conf",
-          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
+          DRIVER_HOST_ADDRESS.toString + "=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(
