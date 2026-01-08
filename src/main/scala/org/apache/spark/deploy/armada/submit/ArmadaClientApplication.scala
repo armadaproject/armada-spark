@@ -62,6 +62,8 @@ import org.apache.spark.deploy.armada.Config.{
 }
 import org.apache.spark.deploy.armada.DeploymentModeHelper
 import io.armadaproject.armada.ArmadaClient
+import io.fabric8.kubernetes.api.model
+import io.fabric8.kubernetes.api.model.PodBuilder
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.deploy.SparkApplication
@@ -75,6 +77,7 @@ import org.apache.spark.deploy.k8s.submit.{
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
 import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
@@ -83,7 +86,6 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import java.util.UUID
 
 /** Encapsulates arguments to the submission client.
   *
@@ -176,6 +178,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"Connecting to Armada Server - host: $host, port: $port")
+    log(s"gbjdriver port is ${DRIVER_PORT.key}")
 
     val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
     val healthTimeout =
@@ -499,7 +502,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .get(ARMADA_SERVER_INTERNAL_URL)
       .filter(_.nonEmpty)
       .map { internalUrl =>
-        s"local://armada://$internalUrl"
+        s"$internalUrl"
       }
       .getOrElse(armadaClientUrl)
 
@@ -798,7 +801,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
-      ArmadaClientApplication.DRIVER_PORT,
+      conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -824,7 +827,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig,
         javaOptEnvVars(conf),
         driverHostname,
-        ArmadaClientApplication.DRIVER_PORT,
+        conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
         configGenerator.getVolumes,
         conf
       )
@@ -845,7 +848,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .filter(_.nonEmpty)
       .getOrElse("none")
     log(
-      s"Submitted driver job with ID: $driverJobId, Error: $error"
+      s"Submitted driver job with ID: $jobSetId:$driverJobId, Error: $error"
     )
     driverJobId
   }
@@ -859,7 +862,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
       val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      log(s"Submitted executor job with ID: $jobSetId:${item.jobId}, Error: $error")
       item.jobId
     }
   }
@@ -1167,7 +1170,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     import scala.jdk.CollectionConverters._
     val afterCLIVolumes = if (volumes.nonEmpty) {
       val currentSpec =
-        Option(afterTemplatePod.getSpec).getOrElse(new io.fabric8.kubernetes.api.model.PodSpec())
+        Option(afterTemplatePod.getSpec).getOrElse(new model.PodSpec())
       val currentVolumes = Option(currentSpec.getVolumes)
         .map(_.asScala.toSeq)
         .getOrElse(Seq.empty)
@@ -1179,7 +1182,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         fabric8CLIVolumes
       )(v => Option(v.getName))
 
-      new io.fabric8.kubernetes.api.model.PodBuilder(afterTemplatePod)
+      new PodBuilder(afterTemplatePod)
         .editOrNewSpec()
         .withVolumes(mergedVolumes.asJava)
         .endSpec()
@@ -1242,8 +1245,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
-        if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
-        else currentPodSpec.nodeSelector
+        if (resolvedConfig.nodeSelectors.nonEmpty)
+          resolvedConfig.nodeSelectors ++ getGangNodeSelector
+        else currentPodSpec.nodeSelector ++ getGangNodeSelector
       )
 
     JobSubmitRequestItem(
@@ -1268,6 +1272,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .getOrElse(Map.empty) ++ resolvedConfig.annotations,
       podSpec = Some(finalPodSpec)
     )
+  }
+
+  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
+  // node should be selected
+  private def getGangNodeSelector = {
+    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    if (nodeLabel.nonEmpty)
+      Map(nodeLabel -> nodeValue)
+    else Map.empty
   }
 
   private def newDriverContainer(
@@ -1357,11 +1371,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           mainClass,
           "--conf",
-          s"spark.driver.port=$port",
+          DRIVER_PORT.key + s"=$port",
           "--conf",
           s"spark.app.id=${armadaJobConfig.applicationId}",
           "--conf",
-          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
+          DRIVER_HOST_ADDRESS.key + "=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(
