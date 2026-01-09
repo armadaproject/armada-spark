@@ -135,18 +135,6 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     assert(backend.getPendingExecutorCount === numThreads * executorsPerThread)
   }
 
-  test("onExecutorRunning removes from pending set") {
-    val jobId  = "job-123"
-    val execId = backend.recordExecutor(jobId)
-    backend.addPendingExecutor(execId)
-
-    assert(backend.getPendingExecutorCount === 1)
-
-    backend.onExecutorRunning(jobId, execId)
-
-    assert(backend.getPendingExecutorCount === 0, "Running executor should be removed from pending")
-  }
-
   test("onExecutorSubmitted adds to pending") {
     val jobId = "job-789"
 

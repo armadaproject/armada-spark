@@ -76,15 +76,50 @@ class TestOrchestrator(
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
+  private def waitForPod(
+      selector: String,
+      namespace: String,
+      failureMessage: String,
+      jobCompleted: () => Boolean
+  ): Boolean = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
+
+    var podRunning      = false
+    var attempts        = 0
+    val maxWaitAttempts = 60 // 2 minutes max to wait for pod
+
+    while (!podRunning && !jobCompleted() && attempts < maxWaitAttempts) {
+      try {
+        val pods = Await.result(
+          k8sClient.getPodsByLabel(selector, namespace),
+          10.seconds
+        )
+        pods.headOption.foreach { pod =>
+          if (pod.getStatus != null && pod.getStatus.getPhase == "Running") {
+            podRunning = true
+          }
+        }
+      } catch {
+        case _: Exception =>
+      }
+
+      if (!podRunning) {
+        Thread.sleep(2000)
+        attempts += 1
+      }
+    }
+
+    podRunning
+  }
+
   private def runAssertionsWhileJobRunning(
       assertions: Seq[TestAssertion],
       context: TestContext,
       queueName: String,
-      jobCompleted: () => Boolean
+      jobCompleted: () => Boolean,
+      isClientMode: Boolean = false
   ): Map[String, AssertionResult] = {
-    import scala.concurrent.Await
-    import scala.concurrent.duration._
-
     val assertionContext = AssertionContext(
       context.namespace,
       queueName,
@@ -93,39 +128,23 @@ class TestOrchestrator(
       armadaClient
     )
 
-    // Wait for Spark driver pod to be scheduled and running
-    val driverSelector  = s"spark-role=driver,test-id=${context.testId}"
-    var driverRunning   = false
-    var attempts        = 0
-    val maxWaitAttempts = 60 // 2 minutes max to wait for driver
-
-    while (!driverRunning && !jobCompleted() && attempts < maxWaitAttempts) {
-      try {
-        val driverPods = Await.result(
-          k8sClient.getPodsByLabel(driverSelector, context.namespace),
-          10.seconds
-        )
-        driverPods.headOption match {
-          case Some(pod) if pod.getStatus != null && pod.getStatus.getPhase == "Running" =>
-            driverRunning = true
-          case Some(_) =>
-          case None    =>
-        }
-      } catch {
-        case _: Exception =>
-      }
-
-      if (!driverRunning) {
-        Thread.sleep(2000)
-        attempts += 1
-      }
+    val (selector, failureMessage) = if (!isClientMode) {
+      // Wait for Spark driver pod to be scheduled and running
+      (
+        s"spark-role=driver,test-id=${context.testId}",
+        "Driver pod never started, Armada may not have scheduled it"
+      )
+    } else {
+      // In client mode, wait for at least one executor pod to start
+      (
+        s"spark-role=executor,test-id=${context.testId}",
+        "Executor pods never started, Armada may not have scheduled them"
+      )
     }
 
-    if (!driverRunning) {
+    if (!waitForPod(selector, context.namespace, failureMessage, jobCompleted)) {
       return assertions.map { assertion =>
-        assertion.name -> AssertionResult.Failure(
-          "Driver pod never started, Armada may not have scheduled it"
-        )
+        assertion.name -> AssertionResult.Failure(failureMessage)
       }.toMap
     }
 
@@ -144,37 +163,52 @@ class TestOrchestrator(
     import scala.concurrent.duration._
 
     // Give Armada some time to schedule resources after driver starts (executors need time to come up)
-    val maxWaitTime                 = 30.seconds
-    val startTime                   = System.currentTimeMillis()
-    var attempts                    = 0
-    var lastResult: AssertionResult = AssertionResult.Failure("Not yet checked")
+    val maxWaitTime                    = 30.seconds
+    val gracePeriodAfterCompletion     = 10.seconds
+    val startTime                      = System.currentTimeMillis()
+    var attempts                       = 0
+    var lastResult: AssertionResult    = AssertionResult.Failure("Not yet checked")
+    var jobCompletedTime: Option[Long] = None
 
-    while (!jobCompleted() && (System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
-      attempts += 1
-      try {
-        val result = Await.result(assertion.assert(context)(ec), 10.seconds)
-        lastResult = result
-
-        result match {
-          case AssertionResult.Success =>
-            return result
-          case AssertionResult.Failure(_) =>
-          // For the first few attempts, be patient - resources may still be scheduling
-        }
-      } catch {
-        case ex: Exception =>
-          lastResult = AssertionResult.Failure(ex.getMessage)
-        // Don't log retries to avoid clutter
+    while ((System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
+      val nowCompleted = jobCompleted()
+      if (nowCompleted && jobCompletedTime.isEmpty) {
+        jobCompletedTime = Some(System.currentTimeMillis())
       }
 
-      Thread.sleep(2000)
+      // Allow assertions to continue for grace period even after job completes
+      val inGracePeriod = jobCompletedTime.isEmpty || {
+        val elapsedSinceCompletion = System.currentTimeMillis() - jobCompletedTime.get
+        elapsedSinceCompletion < gracePeriodAfterCompletion.toMillis
+      }
+
+      if (inGracePeriod) {
+        attempts += 1
+        try {
+          val result = Await.result(assertion.assert(context)(ec), 10.seconds)
+          lastResult = result
+
+          result match {
+            case AssertionResult.Success =>
+              return result
+            case AssertionResult.Failure(_) =>
+            // For the first few attempts, be patient - resources may still be scheduling
+          }
+        } catch {
+          case ex: Exception =>
+            lastResult = AssertionResult.Failure(ex.getMessage)
+          // Don't log retries to avoid clutter
+        }
+
+        Thread.sleep(2000)
+      }
     }
 
     lastResult match {
       case AssertionResult.Success =>
         lastResult
       case AssertionResult.Failure(msg) =>
-        if (jobCompleted()) {
+        if (jobCompletedTime.isDefined) {
           AssertionResult.Failure(
             s"${assertion.name}: Job completed before assertion could pass"
           )
@@ -193,8 +227,9 @@ class TestOrchestrator(
     // Determine deployment mode type
     val sparkConf = new SparkConf(false)
     config.sparkConfs.foreach { case (key, value) => sparkConf.set(key, value) }
-    val modeHelper = DeploymentModeHelper(sparkConf)
-    val modeType   = modeHelper.toString
+    val modeHelper   = DeploymentModeHelper(sparkConf)
+    val modeType     = modeHelper.toString
+    val isClientMode = !modeHelper.isDriverInCluster
 
     println(s"\n========== Starting E2E Test: $name ==========")
     println(s"Test ID: ${context.testId}")
@@ -207,8 +242,8 @@ class TestOrchestrator(
       _ <- armadaClient.ensureQueueExists(queueName).recoverWith { case ex =>
         throw new RuntimeException(s"Failed to ensure queue $queueName", ex)
       }
-      _      <- submitJob(testJobSetId, queueName, name, config, context)
-      result <- watchJob(queueName, testJobSetId, config, context)
+      _      <- submitJob(testJobSetId, queueName, name, config, context, modeHelper)
+      result <- watchJob(queueName, testJobSetId, config, context, isClientMode)
     } yield result
 
     resultFuture
@@ -252,7 +287,8 @@ class TestOrchestrator(
       queueName: String,
       testName: String,
       config: TestConfig,
-      context: TestContext
+      context: TestContext,
+      modeHelper: DeploymentModeHelper
   ): Future[Unit] = Future {
     // Use spark-examples JAR with the correct path based on Scala binary version and Spark version
     // Following the same pattern as scripts/init.sh
@@ -267,9 +303,12 @@ class TestOrchestrator(
       .map(existing => s"$existing,$contextLabelString")
       .getOrElse(contextLabelString)
 
+    val deployMode = if (modeHelper.isDriverInCluster) "cluster" else "client"
+
     val enhancedSparkConfs = config.sparkConfs ++ Map(
       "spark.armada.pod.labels"           -> mergedLabels,
-      "spark.armada.scheduling.namespace" -> context.namespace
+      "spark.armada.scheduling.namespace" -> context.namespace,
+      "spark.submit.deployMode"           -> deployMode
     )
 
     val dockerCommand = buildDockerCommand(
@@ -282,7 +321,8 @@ class TestOrchestrator(
       enhancedSparkConfs,
       appResource,
       config.lookoutUrl,
-      config.pythonScript
+      config.pythonScript,
+      modeHelper
     )
 
     println(s"\n[SUBMIT] Submitting Spark job via Docker:")
@@ -307,7 +347,9 @@ class TestOrchestrator(
 
     @tailrec
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
-      val result = ProcessExecutor.executeWithResult(dockerCommand, jobSubmitTimeout)
+      // In client mode, spark-submit runs until application completes, so use longer timeout
+      val timeout = if (!modeHelper.isDriverInCluster) jobWatchTimeout else jobSubmitTimeout
+      val result  = ProcessExecutor.executeWithResult(dockerCommand, timeout)
 
       if (result.exitCode != 0) {
         val allOutput            = result.stdout + "\n" + result.stderr
@@ -355,7 +397,8 @@ class TestOrchestrator(
       queueName: String,
       jobSetId: String,
       config: TestConfig,
-      context: TestContext
+      context: TestContext,
+      isClientMode: Boolean = false
   ): Future[TestResult] = Future {
     val podMonitor = new SimplePodMonitor(context.namespace)
 
@@ -380,15 +423,16 @@ class TestOrchestrator(
       monitorThread.start()
     }
 
-    // If we have assertions, run them after driver starts but while job is running
+    // If we have assertions, run them after driver/executors start but while job is running
     val assertionThread = if (config.assertions.nonEmpty) {
       val thread = new Thread(() => {
-        // Wait for driver to start, then run assertions while job is active
+        // Wait for driver (cluster mode) or executors (client mode) to start, then run assertions while job is active
         assertionResults = runAssertionsWhileJobRunning(
           config.assertions,
           context,
           queueName,
-          jobCompleted = () => jobCompleted
+          jobCompleted = () => jobCompleted,
+          isClientMode = isClientMode
         )
       })
       thread.setDaemon(true)
@@ -483,8 +527,12 @@ class TestOrchestrator(
       sparkConfs: Map[String, String],
       appResource: String,
       lookoutUrl: String,
-      pythonScript: Option[String]
+      pythonScript: Option[String],
+      modeHelper: DeploymentModeHelper
   ): Seq[String] = {
+    val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
+    val isClientMode = !modeHelper.isDriverInCluster
+
     val baseCommand = Seq(
       "docker",
       "run",
@@ -498,7 +546,7 @@ class TestOrchestrator(
       "--master",
       masterUrl,
       "--deploy-mode",
-      "cluster",
+      deployMode,
       "--name",
       s"e2e-$testName"
     )
@@ -508,8 +556,7 @@ class TestOrchestrator(
       case None    => baseCommand ++ Seq("--class", "org.apache.spark.examples.SparkPi")
     }
 
-    val defaultConfs = Map(
-      "spark.armada.internalUrl"             -> "armada://armada-server.armada:50051",
+    val baseDefaultConfs = Map(
       "spark.armada.queue"                   -> queueName,
       "spark.armada.jobSetId"                -> jobSetId,
       "spark.executor.instances"             -> "2",
@@ -528,6 +575,24 @@ class TestOrchestrator(
       "spark.driver.extraJavaOptions"        -> "-XX:-UseContainerSupport",
       "spark.executor.extraJavaOptions"      -> "-XX:-UseContainerSupport"
     )
+
+    // Add deploy-mode specific configs based on modeHelper
+    val deployModeConfs = if (isClientMode) {
+      // In client mode, driver runs externally, so we need to set spark.driver.host
+      // For E2E tests running on kind cluster, the driver host is always 172.18.0.1
+      // (the Docker bridge network gateway IP that kind uses)
+      Map(
+        "spark.driver.host" -> "172.18.0.1",
+        "spark.driver.port" -> "7078"
+      )
+    } else {
+      // In cluster mode, driver runs in a pod, so use internal URL
+      Map(
+        "spark.armada.internalUrl" -> "armada://armada-server.armada:50051"
+      )
+    }
+
+    val defaultConfs = baseDefaultConfs ++ deployModeConfs
 
     val allConfs = defaultConfs ++ sparkConfs
     val confArgs = allConfs.flatMap { case (key, value) =>
