@@ -175,10 +175,24 @@ class ArmadaSparkE2E
     s"src/test/resources/e2e/templates/$name"
 
   /** Base builder for basic SparkPi job tests */
-  private def baseSparkPiTest(testName: String, deployMode: String): E2ETestBuilder = {
-    E2ETestBuilder(testName)
+  private def baseSparkPiTest(
+      testName: String,
+      deployMode: String,
+      labels: Map[String, String] = Map.empty
+  ): E2ETestBuilder = {
+    val test = E2ETestBuilder(testName)
       .withBaseConfig(baseConfig)
       .withDeployMode(deployMode)
+      .withPodLabels(labels)
+
+      if (deployMode == "cluster") {
+        test
+          .assertDriverExists()
+          .assertPodLabels(labels)
+      } else {
+        test
+          .assertExecutorsHaveLabels(labels)
+      }
   }
 
   // ========================================================================
@@ -186,28 +200,23 @@ class ArmadaSparkE2E
   // ========================================================================
 
   private def baseSparkPiGangTest(
-      testName: String,
       deployMode: String,
       executorCount: Int,
-      labels: Map[String, String]
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode)
+    baseSparkPiTest("basic-spark-pi-gang" + deployMode, deployMode, Map("test-type" -> "basic-gang"))
       .withGangJob("armada-spark")
       .withExecutors(executorCount)
-      .withPodLabels(labels)
       .assertExecutorCount(executorCount)
   }
 
   test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
-    baseSparkPiGangTest("basic-spark-pi-gang", "cluster", 3, Map("test-type" -> "basic"))
-      .assertDriverExists()
-      .assertPodLabels(Map("test-type" -> "basic"))
+    baseSparkPiGangTest("cluster", 3)
       .assertGangJob("armada-spark", 4) // 1 driver + 3 executors
       .run()
   }
 
   test("Basic SparkPi job with gang scheduling - staticClient", E2ETest) {
-    baseSparkPiGangTest("basic-spark-pi-client", "client", 2, Map("test-type" -> "client-mode"))
+    baseSparkPiGangTest("client", 2)
       .assertExecutorGangJob("armada-spark", 2) // Only 2 executors, no driver
       .run()
   }
@@ -222,10 +231,9 @@ class ArmadaSparkE2E
       executorCount: Int,
       labels: Map[String, String]
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode)
+    baseSparkPiTest(testName, deployMode, labels)
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .withExecutors(executorCount)
-      .withPodLabels(labels)
       .assertExecutorCount(executorCount)
       .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
   }
@@ -237,8 +245,6 @@ class ArmadaSparkE2E
       2,
       Map("test-type" -> "node-selector")
     )
-      .assertDriverExists()
-      .assertPodLabels(Map("test-type" -> "node-selector"))
       .run()
   }
 
@@ -249,7 +255,6 @@ class ArmadaSparkE2E
       2,
       Map("test-type" -> "node-selector-client")
     )
-      .assertExecutorsHaveLabels(Map("test-type" -> "node-selector-client"))
       .run()
   }
 
@@ -260,9 +265,10 @@ class ArmadaSparkE2E
   private def basePythonSparkPiTest(
       testName: String,
       deployMode: String,
-      executorCount: Int
+      executorCount: Int,
+      labels: Map[String, String] = Map("test-type" -> "python")
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode)
+    baseSparkPiTest(testName, deployMode, labels)
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
@@ -276,7 +282,6 @@ class ArmadaSparkE2E
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {
     basePythonSparkPiTest("python-spark-pi", "cluster", 2)
-      .assertDriverExists()
       .run()
   }
 
@@ -295,7 +300,7 @@ class ArmadaSparkE2E
       executorCount: Int,
       labels: Map[String, String]
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode)
+    baseSparkPiTest(testName, deployMode, labels)
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
@@ -304,7 +309,6 @@ class ArmadaSparkE2E
         )
       )
       .withExecutors(executorCount)
-      .withPodLabels(labels)
       .assertExecutorCount(executorCount)
       // Assert template-specific labels from executor template (common to both modes)
       .assertExecutorsHaveLabels(
@@ -325,8 +329,6 @@ class ArmadaSparkE2E
 
   test("SparkPi job using job templates - staticCluster", E2ETest) {
     baseTemplateTest("spark-pi-templates", "cluster", 2, Map("test-type" -> "template"))
-      .assertDriverExists()
-      .assertPodLabels(Map("test-type" -> "template"))
       // Assert template-specific labels from driver template
       .assertDriverHasLabels(
         Map(
@@ -352,7 +354,6 @@ class ArmadaSparkE2E
       2,
       Map("test-type" -> "template-client")
     )
-      .assertExecutorsHaveLabels(Map("test-type" -> "template-client"))
       .run()
   }
 
@@ -379,10 +380,9 @@ class ArmadaSparkE2E
           "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
       )
     }
-    baseSparkPiTest(testName, deployMode)
+    baseSparkPiTest(testName, deployMode, labels)
       .withSparkConf(featureSteps)
       .withExecutors(executorCount)
-      .withPodLabels(labels)
       .assertExecutorCount(executorCount)
       // Assert executor feature step labels (common to both modes)
       .assertExecutorsHaveLabels(
@@ -401,7 +401,6 @@ class ArmadaSparkE2E
 
   test("SparkPi job with custom feature steps - staticCluster", E2ETest) {
     baseFeatureStepTest("spark-pi-feature-steps", "cluster", 2, Map("test-type" -> "feature-step"))
-      .assertDriverExists()
       // Assert driver feature step labels (cluster-specific)
       .assertDriverHasLabels(
         Map(
@@ -425,7 +424,6 @@ class ArmadaSparkE2E
       2,
       Map("test-type" -> "feature-step-client")
     )
-      .assertExecutorsHaveLabels(Map("test-type" -> "feature-step-client"))
       .run()
   }
 
@@ -441,12 +439,9 @@ class ArmadaSparkE2E
   )(
       configureIngress: E2ETestBuilder => E2ETestBuilder
   ): E2ETestBuilder = {
-    configureIngress(baseSparkPiTest(testName, "cluster"))
+    configureIngress(baseSparkPiTest(testName, "cluster", labels))
       .withExecutors(executorCount)
-      .withPodLabels(labels)
-      .assertDriverExists()
       .assertExecutorCount(executorCount)
-      .assertPodLabels(labels)
       .assertIngressAnnotations(ingressAnnotations)
   }
 
