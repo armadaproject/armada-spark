@@ -137,10 +137,6 @@ class ArmadaSparkE2E
 
   implicit val orch: TestOrchestrator = orchestrator
 
-  // ========================================================================
-  // Base helper method
-  // ========================================================================
-
   private def loadProperties(): Properties = {
     val props = new Properties()
 
@@ -173,6 +169,10 @@ class ArmadaSparkE2E
 
   private def templatePath(name: String): String =
     s"src/test/resources/e2e/templates/$name"
+
+  // ========================================================================
+  // Base helper method
+  // ========================================================================
 
   /** Base builder for basic SparkPi job tests */
   private def baseSparkPiTest(
