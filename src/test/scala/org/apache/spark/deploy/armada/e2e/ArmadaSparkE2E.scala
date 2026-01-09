@@ -226,12 +226,10 @@ class ArmadaSparkE2E
   // ========================================================================
 
   private def baseNodeSelectorTest(
-      testName: String,
       deployMode: String,
-      executorCount: Int,
-      labels: Map[String, String]
+      executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode, labels)
+    baseSparkPiTest("spark-pi-node-selectors" + deployMode, deployMode, Map("test-type" -> "node-selector"))
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .withExecutors(executorCount)
       .assertExecutorCount(executorCount)
@@ -239,22 +237,12 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with node selectors - staticCluster", E2ETest) {
-    baseNodeSelectorTest(
-      "spark-pi-node-selectors",
-      "cluster",
-      2,
-      Map("test-type" -> "node-selector")
-    )
+    baseNodeSelectorTest("cluster", 2)
       .run()
   }
 
   test("SparkPi job with node selectors - staticClient", E2ETest) {
-    baseNodeSelectorTest(
-      "spark-pi-node-selectors-client",
-      "client",
-      2,
-      Map("test-type" -> "node-selector-client")
-    )
+    baseNodeSelectorTest("client", 2)
       .run()
   }
 
@@ -263,12 +251,10 @@ class ArmadaSparkE2E
   // ========================================================================
 
   private def basePythonSparkPiTest(
-      testName: String,
       deployMode: String,
-      executorCount: Int,
-      labels: Map[String, String] = Map("test-type" -> "python")
+      executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode, labels)
+    baseSparkPiTest("python-spark-pi" + deployMode, deployMode, Map("test-type" -> "python"))
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
@@ -281,12 +267,12 @@ class ArmadaSparkE2E
   }
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {
-    basePythonSparkPiTest("python-spark-pi", "cluster", 2)
+    basePythonSparkPiTest("cluster", 2)
       .run()
   }
 
   test("Basic python SparkPi job - staticClient", E2ETest) {
-    basePythonSparkPiTest("python-spark-pi-client", "client", 2)
+    basePythonSparkPiTest("client", 2)
       .run()
   }
 
@@ -295,12 +281,10 @@ class ArmadaSparkE2E
   // ========================================================================
 
   private def baseTemplateTest(
-      testName: String,
       deployMode: String,
-      executorCount: Int,
-      labels: Map[String, String]
+      executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(testName, deployMode, labels)
+    val builder = baseSparkPiTest("spark-pi-templates" + deployMode, deployMode, Map("test-type" -> "template"))
       .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
@@ -310,7 +294,6 @@ class ArmadaSparkE2E
       )
       .withExecutors(executorCount)
       .assertExecutorCount(executorCount)
-      // Assert template-specific labels from executor template (common to both modes)
       .assertExecutorsHaveLabels(
         Map(
           "app"             -> "spark-pi",
@@ -318,42 +301,40 @@ class ArmadaSparkE2E
           "template-source" -> "e2e-test"
         )
       )
-      // Assert template-specific annotations from executor template (common to both modes)
       .assertExecutorsHaveAnnotations(
         Map(
           "armada/component" -> "spark-executor",
           "armada/template"  -> "spark-pi-executor"
         )
       )
+
+    if (deployMode == "cluster") {
+      builder
+        .assertDriverHasLabels(
+          Map(
+            "app"             -> "spark-pi",
+            "component"       -> "driver",
+            "template-source" -> "e2e-test"
+          )
+        )
+        .assertDriverHasAnnotations(
+          Map(
+            "armada/component" -> "spark-driver",
+            "armada/template"  -> "spark-pi-driver"
+          )
+        )
+    } else {
+      builder
+    }
   }
 
   test("SparkPi job using job templates - staticCluster", E2ETest) {
-    baseTemplateTest("spark-pi-templates", "cluster", 2, Map("test-type" -> "template"))
-      // Assert template-specific labels from driver template
-      .assertDriverHasLabels(
-        Map(
-          "app"             -> "spark-pi",
-          "component"       -> "driver",
-          "template-source" -> "e2e-test"
-        )
-      )
-      // Assert template-specific annotations from driver template
-      .assertDriverHasAnnotations(
-        Map(
-          "armada/component" -> "spark-driver",
-          "armada/template"  -> "spark-pi-driver"
-        )
-      )
+    baseTemplateTest("cluster", 2)
       .run()
   }
 
   test("SparkPi job using job templates - staticClient", E2ETest) {
-    baseTemplateTest(
-      "spark-pi-templates-client",
-      "client",
-      2,
-      Map("test-type" -> "template-client")
-    )
+    baseTemplateTest("client", 2)
       .run()
   }
 
@@ -362,10 +343,8 @@ class ArmadaSparkE2E
   // ========================================================================
 
   private def baseFeatureStepTest(
-      testName: String,
       deployMode: String,
-      executorCount: Int,
-      labels: Map[String, String]
+      executorCount: Int
   ): E2ETestBuilder = {
     val featureSteps = if (deployMode == "cluster") {
       Map(
@@ -380,50 +359,45 @@ class ArmadaSparkE2E
           "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
       )
     }
-    baseSparkPiTest(testName, deployMode, labels)
+    val builder = baseSparkPiTest("spark-pi-feature-steps" + deployMode, deployMode, Map("test-type" -> "feature-step"))
       .withSparkConf(featureSteps)
       .withExecutors(executorCount)
       .assertExecutorCount(executorCount)
-      // Assert executor feature step labels (common to both modes)
       .assertExecutorsHaveLabels(
         Map(
           "feature-step"      -> "executor-applied",
           "feature-step-role" -> "executor"
         )
       )
-      // Assert executor feature step annotation (common to both modes)
       .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
-      // Assert executor pod assertion for activeDeadlineSeconds (common to both modes)
       .withExecutorPodAssertion { pod =>
         Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
       }
+
+    if (deployMode == "cluster") {
+      builder
+        .assertDriverHasLabels(
+          Map(
+            "feature-step"      -> "driver-applied",
+            "feature-step-role" -> "driver"
+          )
+        )
+        .assertDriverHasAnnotation("driver-feature-step", "configured")
+        .withDriverPodAssertion { pod =>
+          Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
+        }
+    } else {
+      builder
+    }
   }
 
   test("SparkPi job with custom feature steps - staticCluster", E2ETest) {
-    baseFeatureStepTest("spark-pi-feature-steps", "cluster", 2, Map("test-type" -> "feature-step"))
-      // Assert driver feature step labels (cluster-specific)
-      .assertDriverHasLabels(
-        Map(
-          "feature-step"      -> "driver-applied",
-          "feature-step-role" -> "driver"
-        )
-      )
-      // Assert driver feature step annotation (cluster-specific)
-      .assertDriverHasAnnotation("driver-feature-step", "configured")
-      // Assert driver pod assertion for activeDeadlineSeconds (cluster-specific)
-      .withDriverPodAssertion { pod =>
-        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
-      }
+    baseFeatureStepTest("cluster", 2)
       .run()
   }
 
   test("SparkPi job with custom feature steps - staticClient", E2ETest) {
-    baseFeatureStepTest(
-      "spark-pi-feature-steps-client",
-      "client",
-      2,
-      Map("test-type" -> "feature-step-client")
-    )
+    baseFeatureStepTest("client", 2)
       .run()
   }
 
