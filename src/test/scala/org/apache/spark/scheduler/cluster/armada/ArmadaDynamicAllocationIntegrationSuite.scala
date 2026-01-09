@@ -181,11 +181,6 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
     }
 
     assert(backend.getPendingExecutorCount === 10)
-
-    assert(
-      backend.getPendingExecutorCount === 10,
-      "Executors stay pending until registered with Spark"
-    )
   }
 
   // Helper methods
