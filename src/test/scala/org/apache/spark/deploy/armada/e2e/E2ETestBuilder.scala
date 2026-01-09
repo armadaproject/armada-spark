@@ -236,19 +236,24 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Helper method to create a predicate that validates gang scheduling annotations */
+  private def hasValidGangAnnotations(
+      nodeUniformityLabel: String,
+      expectedCardinality: Int
+  ): Pod => Boolean = { pod =>
+    val annotations = pod.getMetadata.getAnnotations
+    Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+    Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
+      .contains(expectedCardinality.toString) &&
+    Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+      .contains(nodeUniformityLabel)
+  }
+
   /** Assert that driver and all executors have correct gang scheduling annotations */
   def assertGangJob(nodeUniformityLabel: String, expectedCardinality: Int): E2ETestBuilder = {
-    def hasValidGangAnnotations(pod: Pod): Boolean = {
-      val annotations = pod.getMetadata.getAnnotations
-      Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
-        .contains(expectedCardinality.toString) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-        .contains(nodeUniformityLabel)
-    }
-
-    withDriverPodAssertion(hasValidGangAnnotations)
-    withExecutorPodAssertion(hasValidGangAnnotations)
+    val validator = hasValidGangAnnotations(nodeUniformityLabel, expectedCardinality)
+    withDriverPodAssertion(validator)
+    withExecutorPodAssertion(validator)
   }
 
   /** Assert that executors have correct gang scheduling annotations (for client mode where driver
@@ -258,16 +263,8 @@ class E2ETestBuilder(testName: String) {
       nodeUniformityLabel: String,
       expectedCardinality: Int
   ): E2ETestBuilder = {
-    def hasValidGangAnnotations(pod: Pod): Boolean = {
-      val annotations = pod.getMetadata.getAnnotations
-      Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
-        .contains(expectedCardinality.toString) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-        .contains(nodeUniformityLabel)
-    }
-
-    withExecutorPodAssertion(hasValidGangAnnotations)
+    val validator = hasValidGangAnnotations(nodeUniformityLabel, expectedCardinality)
+    withExecutorPodAssertion(validator)
   }
 
   def build(): TestConfig = {
