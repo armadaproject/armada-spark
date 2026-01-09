@@ -220,8 +220,8 @@ class ArmadaSparkE2E
   }
 
   test("Basic SparkPi job with gang scheduling - staticClient", E2ETest) {
-    baseSparkPiGangTest("client", 2)
-      .assertExecutorGangJob("armada-spark", 2) // Only 2 executors, no driver
+    baseSparkPiGangTest("client", 3)
+      .assertExecutorGangJob("armada-spark", 3) // Only 3 executors, no driver
       .run()
   }
 
