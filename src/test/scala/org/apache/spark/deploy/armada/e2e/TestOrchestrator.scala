@@ -533,13 +533,6 @@ class TestOrchestrator(
     val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
     val isClientMode = !modeHelper.isDriverInCluster
 
-    // In client mode, masterUrl needs to have "local://" prefix
-    val finalMasterUrl = if (isClientMode && !masterUrl.startsWith("local://")) {
-      s"local://$masterUrl"
-    } else {
-      masterUrl
-    }
-
     val baseCommand = Seq(
       "docker",
       "run",
@@ -551,7 +544,7 @@ class TestOrchestrator(
       "/opt/spark/bin/spark-class",
       "org.apache.spark.deploy.SparkSubmit",
       "--master",
-      finalMasterUrl,
+      masterUrl,
       "--deploy-mode",
       deployMode,
       "--name",
