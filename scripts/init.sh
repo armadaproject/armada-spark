@@ -70,7 +70,7 @@ print_usage () {
     exit 1
 }
 
-while getopts "hekpi:a:m:P:s:c:q:M:A:e" opt; do
+while getopts "hekpi:a:m:P:s:c:q:M:A:ef" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
@@ -85,6 +85,7 @@ while getopts "hekpi:a:m:P:s:c:q:M:A:e" opt; do
     e) RUNNING_E2E_TESTS=true ;;
     M) DEPLOY_MODE=$OPTARG ;;
     A) ALLOCATION_MODE=$OPTARG ;;
+    f) USE_FALLBACK_STORAGE=true ;;
   esac
 done
 
@@ -96,6 +97,7 @@ export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
+export USE_FALLBACK_STORAGE="${USE_FALLBACK_STORAGE:-false}"
 
 # Validation
 
@@ -144,6 +146,13 @@ if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     exit 1
 fi
 
+if [ "$USE_FALLBACK_STORAGE" = "true" ]; then
+    if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
+        echo fallback storage currently only supported for spark 3.5.3/scala 2.12
+        echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
+        exit 1
+    fi
+fi
 
 shift $((OPTIND - 1))
 FINAL_ARGS=("${@:-}")   
