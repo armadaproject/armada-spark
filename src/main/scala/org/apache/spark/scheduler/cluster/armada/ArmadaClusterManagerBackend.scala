@@ -378,9 +378,6 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Called by event watcher when executor job is running
     */
   private[armada] def onExecutorRunning(jobId: String, executorId: String): Unit = {
-    pendingExecutors.synchronized {
-      pendingExecutors -= executorId
-    }
     logInfo(s"Executor $executorId (job $jobId) is running")
   }
 
@@ -433,10 +430,13 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  /** Get the count of pending executors.
+  /** Get the count of pending executors. Excludes executors that have already registered with
+    * Spark.
     */
   private[armada] def getPendingExecutorCount: Int = {
     pendingExecutors.synchronized {
+      val registeredIds = getExecutorIds().toSet
+      pendingExecutors --= registeredIds
       pendingExecutors.size
     }
   }
