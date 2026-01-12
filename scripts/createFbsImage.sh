@@ -4,8 +4,8 @@ repo=${FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
 branch=${FALLBACK_STORAGE_BRANCH:-fallback-storage-v3.5.3}
 # create the spark image with fallback storage support
-git clone $repo
-cd $dir
+#git clone $repo
+cd $repo_dir
 git checkout $branch
 #override devpod setting
 export SPARK_HOME=`pwd`
