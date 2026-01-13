@@ -27,11 +27,10 @@ import org.apache.spark.scheduler.{
 import org.apache.spark.util.ThreadUtils
 
 private[spark] class ArmadaClusterManager extends ExternalClusterManager with Logging {
-  val master   = "armada"
-  val protocol = s"local://$master://"
+  val master = "armada"
 
   override def canCreate(masterURL: String): Boolean = {
-    masterURL.toLowerCase.startsWith(protocol)
+    masterURL.toLowerCase.startsWith(master)
   }
 
   private def isLocal(conf: SparkConf): Boolean =
