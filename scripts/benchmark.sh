@@ -36,13 +36,6 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
     )
 
-ARMADA_S3_BUCKET_NAME=${ARMADA_S3_BUCKET_NAME:-kafka-s3}
-ARMADA_S3_BUCKET_ENDPOINT=${ARMADA_S3_BUCKET_ENDPOINT:-http://192.168.59.6}
-ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/eks-spark-benchmark-assembly-1.0.jar}
-ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/data/10t}
-ARMADA_USER_DIR=${ARMADA_USER_DIR:-s3a://$ARMADA_S3_BUCKET_NAME/$USER}
-ARMADA_BENCHMARK_CLASS=${ARMADA_BENCHMARK_CLASS:-com.amazonaws.eks.tpcds.BenchmarkSQL}
-ARMADA_BENCHMARK_TOOLS=${ARMADA_BENCHMARK_TOOLS:-/opt/tpcds-kit/tools}
 
 # Run Armada Spark via docker image
 docker run --user 185 -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
@@ -53,7 +46,7 @@ docker run --user 185 -v $scripts/../conf:/opt/spark/conf --rm --network host $I
     "${EXTRA_CONF[@]}" \
     --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_USER_DIR/shuffle/ \
+    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.hadoop.fs.s3a.bucket.ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
     --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \
     --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \

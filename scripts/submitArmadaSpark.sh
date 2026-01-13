@@ -116,6 +116,7 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark} \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
+    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.local.dir=/tmp \
     "${DEPLOY_MODE_ARGS[@]}" \
     "${EXTRA_CONF[@]}" \
