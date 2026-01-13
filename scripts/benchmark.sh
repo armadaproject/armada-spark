@@ -38,7 +38,7 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
 
 
 # Run Armada Spark via docker image
-docker run --user 185 -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name spark-benchmark \
