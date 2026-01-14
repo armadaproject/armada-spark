@@ -24,7 +24,12 @@ ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/dat
 ARMADA_BENCHMARK_CLASS=${ARMADA_BENCHMARK_CLASS:-com.amazonaws.eks.tpcds.BenchmarkSQL}
 ARMADA_BENCHMARK_TOOLS=${ARMADA_BENCHMARK_TOOLS:-/opt/tpcds-kit/tools}
 
-
+ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-""}
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
+else
+    AUTH_ARG=""
+fi
 
 # Parse long options (--mode, --allocation) before getopts
 ARGS=()

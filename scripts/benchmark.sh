@@ -37,11 +37,6 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
     )
 
 
-if [ -n "$ARMADA_AUTH_TOKEN" ]; then
-    auth="--conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
-else
-    auth=""
-fi
 # Get benchmark jar file built from https://github.com/EnricoMi/eks-spark-benchmark
 if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" ]; then
     if [ ! -e "$scripts/../extraJars/eks-spark-benchmark-assembly-1.0.jar" ]; then
@@ -57,7 +52,7 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     --name spark-benchmark \
     --class $ARMADA_BENCHMARK_CLASS \
     "${EXTRA_CONF[@]}" \
-    $auth \
+    $AUTH_ARG \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.hadoop.fs.s3a.bucket.ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \

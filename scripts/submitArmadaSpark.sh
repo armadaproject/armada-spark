@@ -37,12 +37,6 @@ if [ "${USE_KIND}" == "true" ]; then
     kind load docker-image $IMAGE_NAME --name armada
 fi
 
-if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
-else
-    AUTH_ARG=""
-fi
-
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
@@ -112,7 +106,6 @@ docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/con
     $AUTH_ARG \
     --conf spark.home=/opt/spark \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY:-armada-spark} \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
