@@ -50,22 +50,10 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name spark-benchmark \
     --class $ARMADA_BENCHMARK_CLASS \
-    "${EXTRA_CONF[@]}" \
-    --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
-    --conf spark.hadoop.fs.s3a.bucket.ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \
-    --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \
-    --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
-    --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
     --conf spark.home=/opt/spark \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.kubernetes.file.upload.path=/tmp \
-    --conf spark.kubernetes.executor.disableConfigMap=true \
-    --conf spark.local.dir=/tmp \
-    --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
     $ARMADA_BENCHMARK_JAR \
     $ARMADA_BENCHMARK_DATA \
     $ARMADA_S3_USER_DIR/benchmark/results \
