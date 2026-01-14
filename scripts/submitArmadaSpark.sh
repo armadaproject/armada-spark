@@ -98,7 +98,6 @@ if [ "$DEPLOY_MODE" = "client" ]; then
         --conf spark.driver.bindAddress=0.0.0.0
     )
 else
-    export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
     DEPLOY_MODE_ARGS=(
         --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
     )

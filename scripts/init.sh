@@ -106,12 +106,13 @@ export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export USE_KIND="${USE_KIND:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
+export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 export USE_FALLBACK_STORAGE="${USE_FALLBACK_STORAGE:-false}"
-
+export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 # Validation
 
 if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then

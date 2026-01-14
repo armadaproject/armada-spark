@@ -36,13 +36,20 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
     )
 
+# Get benchmark jar file built from https://github.com/EnricoMi/eks-spark-benchmark
+if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" ]; then
+    if [ ! -e "$scripts/../extraJars/eks-spark-benchmark-assembly-1.0.jar" ]; then
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1g97dUxbZboI5jq_EjUXaOijtjDBcGsci' \
+               -O  $scripts/../extraJars/eks-spark-benchmark-assembly-1.0.jar
+      fi
+fi
 
 # Run Armada Spark via docker image
 docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name spark-benchmark \
-    --class $ARMADA_BENCHMARK_CLASS}
+    --class $ARMADA_BENCHMARK_CLASS \
     "${EXTRA_CONF[@]}" \
     --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN \
     --conf spark.armada.container.image=$IMAGE_NAME \
@@ -53,6 +60,7 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
     --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
     --conf spark.home=/opt/spark \
+    --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.kubernetes.file.upload.path=/tmp \
     --conf spark.kubernetes.executor.disableConfigMap=true \
@@ -60,10 +68,10 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
     $ARMADA_BENCHMARK_JAR \
     $ARMADA_BENCHMARK_DATA \
-    $ARMADA_USER_DIR/benchmark/results \
+    $ARMADA_S3_USER_DIR/benchmark/results \
     $ARMADA_BENCHMARK_TOOLS \
     parquet \
-    100g \
+    1g \
     1 \
     false \
     $TESTS_TO_RUN \

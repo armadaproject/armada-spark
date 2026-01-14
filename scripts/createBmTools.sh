@@ -16,7 +16,7 @@ if ! command -v lex &> /dev/null; then
 fi
 
 root="$(cd "$(dirname "$0")/.."; pwd)"
-databricks_repo=${DATABRICS_REPO:-https://github.com/databricks/tpcds-kit}
+databricks_repo=${DATABRICKS_REPO:-https://github.com/databricks/tpcds-kit}
 cd extraFiles
 git clone $databricks_repo tpcds-kit
 cd tpcds-kit/tools
