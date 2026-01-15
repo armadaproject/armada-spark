@@ -55,11 +55,9 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     $AUTH_ARG \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
-    --conf spark.hadoop.fs.s3a.bucket.ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \
-    --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$SPARK_SECRET_KEY:secret_key \
-    --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
-    --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$SPARK_SECRET_KEY:access_key \
+    --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
+    --conf spark.hadoop.fs.s3a.access.key=$ARMADA_S3_ACCESS_KEY \
+    --conf spark.hadoop.fs.s3a.secret.key=$ARMADA_S3_SECRET_KEY \
     --conf spark.home=/opt/spark \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
