@@ -380,6 +380,24 @@ private[spark] object Config {
       .stringConf
       .createOptional
 
+  val ARMADA_AUTH_SIGNIN_BINARY: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.signin.binary")
+      .doc(
+        "Path to the signin binary executable used to obtain an authentication token. " +
+          "This is used when the driver needs to authenticate " +
+          "with the Armada API in cluster mode."
+      )
+      .stringConf
+      .createOptional
+
+  val ARMADA_AUTH_SIGNIN_ARGS: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.signin.args")
+      .doc(
+        "Space-separated arguments to pass to the signin binary when obtaining an authentication token."
+      )
+      .stringConf
+      .createOptional
+
   val ARMADA_DELETE_EXECUTORS: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.deleteExecutors")
       .doc("Whether to delete executor jobs when the backend stops.")
@@ -413,6 +431,16 @@ private[spark] object Config {
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(_ > 0, "Check interval must be positive")
       .createWithDefaultString("10s")
+
+  val ARMADA_EVENT_WATCHER_USE_TLS: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.eventWatcher.useTls")
+      .doc(
+        "Whether to use TLS for the event watcher gRPC channel. " +
+          "Set to true to use TLS connections. " +
+          "Defaults to false (plaintext) for backward compatibility with master branch behavior."
+      )
+      .booleanConf
+      .createWithDefault(false)
 
   val ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.preemptionGracePeriod")
