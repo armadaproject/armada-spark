@@ -17,11 +17,13 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
+import java.io.File
 import java.util.concurrent.Executors
 
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.mockito.Mockito._
+import org.apache.spark.deploy.armada.Config._
 
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
@@ -35,6 +37,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
   var taskScheduler: TaskSchedulerImpl     = _
   var rpcEnv: RpcEnv                       = _
   var sparkConf: SparkConf                 = _
+  var tempDir: File                        = _
 
   before {
     sparkConf = new SparkConf(false)
@@ -56,13 +59,10 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     when(taskScheduler.sc).thenReturn(sc)
     when(env.rpcEnv).thenReturn(rpcEnv)
 
-    val executorService = Executors.newScheduledThreadPool(1)
-    backend = new ArmadaClusterManagerBackend(
-      taskScheduler,
-      sc,
-      executorService,
-      "armada://localhost:50051"
-    )
+    tempDir = java.nio.file.Files.createTempDirectory("armada-auth-test").toFile
+    tempDir.deleteOnExit()
+
+    backend = createBackend()
   }
 
   after {
@@ -73,6 +73,27 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
         case _: Exception => // Ignore cleanup errors
       }
     }
+    // Clean up temp directory
+    if (tempDir != null && tempDir.exists()) {
+      tempDir.listFiles().foreach(_.delete())
+      tempDir.delete()
+    }
+  }
+
+  def createBackend(): ArmadaClusterManagerBackend = {
+    val executorService = Executors.newScheduledThreadPool(1)
+    new ArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      executorService,
+      "armada://localhost:50051"
+    )
+  }
+
+  def getOrGenerateTokenUsingReflection(backend: ArmadaClusterManagerBackend): Option[String] = {
+    val method = classOf[ArmadaClusterManagerBackend].getDeclaredMethod("getOrGenerateToken")
+    method.setAccessible(true)
+    method.invoke(backend).asInstanceOf[Option[String]]
   }
 
   test("recordExecutor returns same ID for duplicate job") {
@@ -169,5 +190,35 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     // All threads should get the same ID
     val uniqueIds = results.values().toArray.toSet
     assert(uniqueIds.size === 1, s"All threads should get same ID, got: $uniqueIds")
+  }
+
+  test("getOrGenerateToken returns token from ARMADA_AUTH_TOKEN config") {
+    sparkConf.set(ARMADA_AUTH_TOKEN.key, "test-token-123")
+
+    val token = getOrGenerateTokenUsingReflection(backend)
+
+    assert(token === Some("test-token-123"))
+  }
+
+  test("getOrGenerateToken returns None when no token configured") {
+    val token = getOrGenerateTokenUsingReflection(backend)
+
+    assert(token === None)
+  }
+
+  test("getOrGenerateToken executes signin binary successfully") {
+    // Create a mock signin binary
+    val signinBinary = new File(tempDir, "signin")
+    val signinScript = "#!/bin/sh\necho \"mock-token-from-signin\"\n"
+    java.nio.file.Files.write(signinBinary.toPath, signinScript.getBytes)
+    signinBinary.setExecutable(true)
+
+    sparkConf
+      .set(ARMADA_AUTH_SIGNIN_BINARY.key, signinBinary.getAbsolutePath)
+      .set(ARMADA_AUTH_SIGNIN_ARGS.key, "access-token -c config client")
+
+    val token = getOrGenerateTokenUsingReflection(backend)
+
+    assert(token === Some("mock-token-from-signin"))
   }
 }
