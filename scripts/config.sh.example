@@ -1,0 +1,40 @@
+#!/bin/bash
+# Copy this file to config.sh and customize for your environment:
+#   cp scripts/config.sh.example scripts/config.sh
+
+# Docker image name for Spark containers
+export IMAGE_NAME="spark:armada"
+
+# Armada server configuration
+export ARMADA_MASTER="armada://localhost:30002"
+export ARMADA_QUEUE="test"
+export ARMADA_LOOKOUT_URL="http://localhost:30000"
+export ARMADA_INTERNAL_URL="armada://armada-server.armada:50051"
+export ARMADA_NAMESPACE="default"
+
+# Deployment mode: "client" or "cluster" and Allocation mode: "static" or "dynamic"
+export DEPLOY_MODE="cluster"
+export ALLOCATION_MODE="dynamic"
+
+# Client mode settings (only used when DEPLOY_MODE="client")
+export SPARK_DRIVER_HOST="172.18.0.1"
+export SPARK_DRIVER_PORT="7078"
+
+# Authentication - use either token or signin binary
+# export ARMADA_AUTH_TOKEN="your-token-here"
+
+# Signin binary (recommended for cluster mode)
+# export ARMADA_AUTH_SIGNIN_BINARY="/opt/spark/extraFiles/signin"
+# export ARMADA_AUTH_SIGNIN_ARGS="access-token -c client.config client-name"
+
+# Event watcher TLS
+# export ARMADA_EVENT_WATCHER_USE_TLS="false"
+
+# Application settings
+export INCLUDE_PYTHON="true"
+export USE_KIND="true"
+
+# Application code
+# export PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
+# export SCALA_CLASS="org.apache.spark.examples.SparkPi"
+# export CLASS_PATH="local:///opt/spark/examples/jars/spark-examples_2.12-3.5.3.jar"

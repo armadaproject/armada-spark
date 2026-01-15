@@ -67,6 +67,11 @@ print_usage () {
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
+    echo '   # Auth options (use either token or signin binary):'
+    echo '   ARMADA_AUTH_TOKEN=<token>'
+    echo '   # OR use signin binary to obtain token:'
+    echo '   ARMADA_AUTH_SIGNIN_BINARY=/path/to/signin'
+    echo '   ARMADA_AUTH_SIGNIN_ARGS="access-token -c client.config client-name"'
     exit 1
 }
 
@@ -94,6 +99,9 @@ export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
+export ARMADA_AUTH_SIGNIN_BINARY=${ARMADA_AUTH_SIGNIN_BINARY:-}
+export ARMADA_AUTH_SIGNIN_ARGS=${ARMADA_AUTH_SIGNIN_ARGS:-}
+export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 
