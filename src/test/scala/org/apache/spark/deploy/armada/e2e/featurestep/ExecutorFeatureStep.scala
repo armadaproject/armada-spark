@@ -21,27 +21,32 @@ import io.fabric8.kubernetes.api.model.{
   ContainerBuilder,
   PodBuilder,
   Quantity,
-  ResourceRequirementsBuilder
+  ResourceRequirements
 }
 import org.apache.spark.deploy.k8s.SparkPod
 import org.apache.spark.deploy.k8s.features.KubernetesFeatureConfigStep
+import java.util.HashMap
 
 class ExecutorFeatureStep extends KubernetesFeatureConfigStep {
 
   override def configurePod(pod: SparkPod): SparkPod = {
+    val resources = new ResourceRequirements()
+    val limits    = new HashMap[String, Quantity]()
+    limits.put("cpu", new Quantity("100m"))
+    limits.put("memory", new Quantity("64Mi"))
+    resources.setLimits(limits)
+
+    val requests = new HashMap[String, Quantity]()
+    requests.put("cpu", new Quantity("100m"))
+    requests.put("memory", new Quantity("64Mi"))
+    resources.setRequests(requests)
+
     val initContainer = new ContainerBuilder()
       .withName("executor-init")
       .withImage("alpine:latest")
       .withCommand("/bin/sh", "-c")
       .withArgs("echo 'Hello from executor init container!'")
-      .withResources(
-        new ResourceRequirementsBuilder()
-          .addToRequests("cpu", new Quantity("64m"))
-          .addToRequests("memory", new Quantity("64Mi"))
-          .addToLimits("cpu", new Quantity("64m"))
-          .addToLimits("memory", new Quantity("64Mi"))
-          .build()
-      )
+      .withResources(resources)
       .build()
 
     val configuredPod = new PodBuilder(pod.pod)

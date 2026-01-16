@@ -48,26 +48,6 @@ class E2ETestBuilder(testName: String) {
   private var failFastOnPodFailure         = true
   private var pythonScript: Option[String] = None
 
-  // Helper to merge labels with existing configuration
-  private def addLabels(configKey: String, newLabels: Map[String, String]): E2ETestBuilder = {
-    val existing = sparkConfs
-      .get(configKey)
-      .map { labelStr =>
-        labelStr
-          .split(",")
-          .map { pair =>
-            val parts = pair.split("=", 2)
-            if (parts.length == 2) parts(0) -> parts(1) else pair -> ""
-          }
-          .toMap
-      }
-      .getOrElse(Map.empty)
-
-    val merged   = existing ++ newLabels
-    val labelStr = merged.map { case (k, v) => s"$k=$v" }.mkString(",")
-    withSparkConf(configKey, labelStr)
-  }
-
   def withSparkConf(key: String, value: String): E2ETestBuilder = {
     sparkConfs += (key -> value)
     this
