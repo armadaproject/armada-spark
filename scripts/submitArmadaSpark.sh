@@ -37,18 +37,24 @@ if [ "${USE_KIND}" == "true" ]; then
     kind load docker-image $IMAGE_NAME --name armada
 fi
 
+# Build auth configuration arguments
+AUTH_ARGS=()
+# Pass token for initial submission (client side)
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
-else
-    AUTH_ARG=""
+    AUTH_ARGS+=("--conf" "spark.armada.auth.token=$ARMADA_AUTH_TOKEN")
+fi
+
+if [ "$ARMADA_AUTH_SIGNIN_BINARY" != "" ] && [ "$ARMADA_AUTH_SIGNIN_ARGS" != "" ]; then
+    AUTH_ARGS+=("--conf" "spark.armada.auth.signin.binary=$ARMADA_AUTH_SIGNIN_BINARY")
+    AUTH_ARGS+=("--conf" "spark.armada.auth.signin.args=$ARMADA_AUTH_SIGNIN_ARGS")
 fi
 
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
-# Set memory limits based on deploy mode
-EXECUTOR_MEMORY_LIMIT="1Gi"
-DRIVER_MEMORY_LIMIT="1Gi"
+# Set memory limits
+EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
+DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
@@ -60,6 +66,7 @@ if [ "$STATIC_MODE" = true ]; then
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     )
@@ -70,6 +77,7 @@ else
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
+        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
@@ -104,18 +112,40 @@ else
     )
 fi
 
+# Add block manager port if configured
+if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
+    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
+fi
+
 # Run Armada Spark via docker image
+# Build command with conditional AUTH_ARGS (handle empty array with set -u)
+SPARK_SUBMIT_ARGS=(
+    --master $ARMADA_MASTER
+    --deploy-mode $DEPLOY_MODE
+    --name $NAME
+    $CLASS_PROMPT $CLASS_ARG
+    --conf spark.home=/opt/spark
+    --conf spark.armada.container.image=$IMAGE_NAME
+    --conf spark.armada.queue=$ARMADA_QUEUE
+    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
+    --conf spark.kubernetes.file.upload.path=/tmp
+    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
+    --conf spark.local.dir=/tmp
+)
+
+# Add auth args only if array has elements
+if [ ${#AUTH_ARGS[@]} -gt 0 ]; then
+    SPARK_SUBMIT_ARGS+=("${AUTH_ARGS[@]}")
+fi
+
+# Add deploy mode args
+SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
+
+# Add extra conf
+SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
+
+# Add application and final args
+SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
+
 docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
-    /opt/spark/bin/spark-submit \
-    --master $ARMADA_MASTER --deploy-mode $DEPLOY_MODE \
-    --name $NAME \
-    $CLASS_PROMPT $CLASS_ARG \
-    $AUTH_ARG \
-    --conf spark.home=/opt/spark \
-    --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.kubernetes.file.upload.path=/tmp \
-    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
-    --conf spark.local.dir=/tmp \
-    "${DEPLOY_MODE_ARGS[@]}" \
-    "${EXTRA_CONF[@]}" \
-    $FIRST_ARG  "${FINAL_ARGS[@]}"
+    /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"

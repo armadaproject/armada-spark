@@ -16,6 +16,7 @@
  */
 package org.apache.spark.scheduler.cluster.armada
 
+import scala.sys.process._
 import java.util.concurrent.{ConcurrentHashMap, ScheduledExecutorService, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,7 +26,9 @@ import scala.concurrent.Future
 
 import api.submit.JobCancelRequest
 import io.armadaproject.armada.ArmadaClient
-import io.grpc.{ManagedChannel, ManagedChannelBuilder}
+import io.grpc.netty.NettyChannelBuilder
+import io.grpc.stub.MetadataUtils
+import io.grpc.{ManagedChannel, ManagedChannelBuilder, Metadata}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
@@ -101,6 +104,58 @@ private[spark] class ArmadaClusterManagerBackend(
   // LIFECYCLE METHODS
   // ========================================================================
 
+  /** Get auth token from config or generate using signin CLI */
+  private def getOrGenerateToken(): Option[String] = {
+    conf.get(ARMADA_AUTH_TOKEN) match {
+      case Some(token) =>
+        logDebug("Using auth token from configuration")
+        Some(token)
+      case None =>
+        // Try to generate token using signin binary if configured
+        val signinBinary = conf.get(ARMADA_AUTH_SIGNIN_BINARY)
+        val signinArgs   = conf.get(ARMADA_AUTH_SIGNIN_ARGS)
+
+        (signinBinary, signinArgs) match {
+          case (Some(binary), Some(args)) =>
+            try {
+              logInfo(s"Obtaining auth token using signin binary: $binary")
+              val command = binary +: args.split("\\s+").filter(_.nonEmpty).toSeq
+              val token   = command.!!.trim
+              if (token.nonEmpty) {
+                logInfo("Successfully obtained auth token using signin binary")
+                Some(token)
+              } else {
+                logWarning("Signin binary returned empty token")
+                None
+              }
+            } catch {
+              case e: Exception =>
+                logError(s"Failed to obtain auth token using signin binary: ${e.getMessage}", e)
+                None
+            }
+          case (Some(_), None) =>
+            logWarning(
+              "Signin binary path is configured but signin arguments are not. " +
+                "Set spark.armada.auth.signin.args to use token generation."
+            )
+            None
+          case (None, Some(_)) =>
+            logWarning(
+              "Signin arguments are configured but signin binary path is not. " +
+                "Set spark.armada.auth.signin.binary to use token generation."
+            )
+            None
+          case (None, None) =>
+            logWarning(
+              "No auth token provided and signin binary not configured. " +
+                "Set spark.armada.auth.token or configure spark.armada.auth.signin.binary " +
+                "and spark.armada.auth.signin.args to authenticate with Armada API."
+            )
+            None
+        }
+    }
+  }
+
   override def start(): Unit = {
     super.start()
 
@@ -127,12 +182,12 @@ private[spark] class ArmadaClusterManagerBackend(
               s"jobSetId=$jsId, queue=$q, namespace=$namespace"
           )
 
-          // Initialize Armada client
-          val token  = conf.get(ARMADA_AUTH_TOKEN)
+          // Initialize Armada client with auth token
+          val token  = getOrGenerateToken()
           val client = ArmadaClient(host, port, useSsl = false, token)
           armadaClient = Some(client)
 
-          createWatcher(q, jsId, host, port, client)
+          createWatcher(q, jsId, host, port, client, token)
 
           createAllocator(q, jsId, client)
 
@@ -176,13 +231,35 @@ private[spark] class ArmadaClusterManagerBackend(
       jsId: String,
       host: String,
       port: Int,
-      client: ArmadaClient
+      client: ArmadaClient,
+      token: Option[String]
   ): Unit = {
-    // Build gRPC channel to Armada server
-    val channel: ManagedChannel = ManagedChannelBuilder
-      .forAddress(host, port)
-      .usePlaintext()
-      .build()
+    // Configure TLS
+    val useTls         = conf.get(ARMADA_EVENT_WATCHER_USE_TLS)
+    val channelBuilder = NettyChannelBuilder.forAddress(host, port)
+
+    val channelBuilderWithTls = if (useTls) {
+      logInfo("Using TLS for event watcher gRPC channel")
+      channelBuilder.useTransportSecurity()
+    } else {
+      logInfo("Using plaintext for event watcher gRPC channel")
+      channelBuilder.usePlaintext()
+    }
+
+    val channel = token match {
+      case Some(t) =>
+        val metadata = new Metadata()
+        metadata.put(
+          Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
+          "Bearer " + t
+        )
+        channelBuilderWithTls
+          .intercept(MetadataUtils.newAttachHeadersInterceptor(metadata))
+          .build()
+      case None =>
+        channelBuilderWithTls.build()
+    }
+
     grpcChannel = Some(channel)
 
     // Start event watcher
