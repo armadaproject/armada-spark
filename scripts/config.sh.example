@@ -20,6 +20,9 @@ export ALLOCATION_MODE="dynamic"
 export SPARK_DRIVER_HOST="172.18.0.1"
 export SPARK_DRIVER_PORT="7078"
 
+# Block manager port (optional, defaults to ephemeral port if not set)
+# export SPARK_BLOCK_MANAGER_PORT="10061"
+
 # Authentication - use either token or signin binary
 # export ARMADA_AUTH_TOKEN="your-token-here"
 

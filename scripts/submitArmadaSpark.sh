@@ -109,6 +109,11 @@ else
     )
 fi
 
+# Add block manager port if configured
+if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
+    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
+fi
+
 # Run Armada Spark via docker image
 # Build command with conditional AUTH_ARGS (handle empty array with set -u)
 SPARK_SUBMIT_ARGS=(
