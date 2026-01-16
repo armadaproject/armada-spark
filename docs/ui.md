@@ -29,7 +29,7 @@ Uses [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) as a native si
 ### Quick Start
 
 ```bash
-/opt/spark/bin/spark-class org.apache.spark.deploy.ArmadaSparkSubmit \
+/opt/spark/bin/spark-submit \
   --master armada://localhost:50051 \
   --deploy-mode cluster \
   --name my-secure-job \
