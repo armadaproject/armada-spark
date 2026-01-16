@@ -39,9 +39,12 @@ fi
 
 # Build auth configuration arguments
 AUTH_ARGS=()
+# Pass token for initial submission (client side)
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
     AUTH_ARGS+=("--conf" "spark.armada.auth.token=$ARMADA_AUTH_TOKEN")
-elif [ "$ARMADA_AUTH_SIGNIN_BINARY" != "" ] && [ "$ARMADA_AUTH_SIGNIN_ARGS" != "" ]; then
+fi
+
+if [ "$ARMADA_AUTH_SIGNIN_BINARY" != "" ] && [ "$ARMADA_AUTH_SIGNIN_ARGS" != "" ]; then
     AUTH_ARGS+=("--conf" "spark.armada.auth.signin.binary=$ARMADA_AUTH_SIGNIN_BINARY")
     AUTH_ARGS+=("--conf" "spark.armada.auth.signin.args=$ARMADA_AUTH_SIGNIN_ARGS")
 fi
@@ -49,9 +52,9 @@ fi
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
-# Set memory limits based on deploy mode
-EXECUTOR_MEMORY_LIMIT="1Gi"
-DRIVER_MEMORY_LIMIT="1Gi"
+# Set memory limits
+EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
+DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
@@ -123,6 +126,8 @@ SPARK_SUBMIT_ARGS=(
     $CLASS_PROMPT $CLASS_ARG
     --conf spark.home=/opt/spark
     --conf spark.armada.container.image=$IMAGE_NAME
+    --conf spark.armada.queue=$ARMADA_QUEUE
+    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
     --conf spark.kubernetes.file.upload.path=/tmp
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
     --conf spark.local.dir=/tmp
