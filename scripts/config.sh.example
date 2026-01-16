@@ -23,10 +23,14 @@ export SPARK_DRIVER_PORT="7078"
 # Block manager port (optional, defaults to ephemeral port if not set)
 # export SPARK_BLOCK_MANAGER_PORT="10061"
 
-# Authentication - use either token or signin binary
+# Memory limits (optional, defaults to 1Gi if not set)
+# export EXECUTOR_MEMORY_LIMIT="1Gi"
+# export DRIVER_MEMORY_LIMIT="1Gi"
+
+# Token for initial submission (client side)
 # export ARMADA_AUTH_TOKEN="your-token-here"
 
-# Signin binary (recommended for cluster mode)
+# Signin binary
 # export ARMADA_AUTH_SIGNIN_BINARY="/opt/spark/extraFiles/signin"
 # export ARMADA_AUTH_SIGNIN_ARGS="access-token -c client.config client-name"
 
