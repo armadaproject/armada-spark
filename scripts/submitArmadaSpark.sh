@@ -40,6 +40,8 @@ fi
 # Build auth configuration arguments
 AUTH_ARGS=()
 # Pass token for initial submission (client side)
+# WARNING: Tokens passed via --conf are visible in command-line arguments and process lists.
+# For secure setups, use ARMADA_AUTH_SIGNIN_BINARY instead.
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
     AUTH_ARGS+=("--conf" "spark.armada.auth.token=$ARMADA_AUTH_TOKEN")
 fi

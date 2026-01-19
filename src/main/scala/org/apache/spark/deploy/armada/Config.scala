@@ -376,7 +376,11 @@ private[spark] object Config {
 
   val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.auth.token")
-      .doc("Armada auth token, (specific to the OIDC server being used.)")
+      .doc(
+        "Armada auth token (specific to the OIDC server being used). " +
+          "WARNING: This token will be visible in command-line arguments and process lists, which poses a security risk. " +
+          "For secure setups, use spark.armada.auth.signin.binary instead."
+      )
       .stringConf
       .createOptional
 
