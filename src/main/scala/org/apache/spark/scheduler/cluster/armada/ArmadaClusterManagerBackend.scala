@@ -104,6 +104,24 @@ private[spark] class ArmadaClusterManagerBackend(
   // LIFECYCLE METHODS
   // ========================================================================
 
+  /** Parse command-line arguments, handling quoted strings. Supports both single and double quotes.
+    * Quotes are removed from the result.
+    */
+  private def parseArgs(args: String): Seq[String] = {
+    // Group 1: double-quoted content, Group 2: single-quoted content, Group 3: unquoted
+    val pattern = """(?:"([^"]*)"|'([^']*)'|(\S+))""".r
+
+    pattern
+      .findAllMatchIn(args.trim)
+      .map { m =>
+        if (m.group(1) != null) m.group(1)
+        else if (m.group(2) != null) m.group(2)
+        else m.group(3)
+      }
+      .filter(_.nonEmpty)
+      .toSeq
+  }
+
   /** Get auth token from config or generate using signin CLI */
   private def getOrGenerateToken(): Option[String] = {
     conf.get(ARMADA_AUTH_TOKEN) match {
@@ -119,8 +137,9 @@ private[spark] class ArmadaClusterManagerBackend(
           case (Some(binary), Some(args)) =>
             try {
               logInfo(s"Obtaining auth token using signin binary: $binary")
-              val command = binary +: args.split("\\s+").filter(_.nonEmpty).toSeq
-              val token   = command.!!.trim
+              val parsedArgs = parseArgs(args)
+              val command    = binary +: parsedArgs
+              val token      = command.!!.trim
               if (token.nonEmpty) {
                 logInfo("Successfully obtained auth token using signin binary")
                 Some(token)

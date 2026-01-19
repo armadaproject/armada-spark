@@ -96,6 +96,16 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     method.invoke(backend).asInstanceOf[Option[String]]
   }
 
+  def parseArgsUsingReflection(
+      backend: ArmadaClusterManagerBackend,
+      args: String
+  ): Seq[String] = {
+    val method =
+      classOf[ArmadaClusterManagerBackend].getDeclaredMethod("parseArgs", classOf[String])
+    method.setAccessible(true)
+    method.invoke(backend, args).asInstanceOf[Seq[String]]
+  }
+
   test("recordExecutor returns same ID for duplicate job") {
     val jobId = "job-123"
 
@@ -220,5 +230,33 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     val token = getOrGenerateTokenUsingReflection(backend)
 
     assert(token === Some("mock-token-from-signin"))
+  }
+
+  test("parseArgs handles double-quoted arguments with spaces") {
+    val args = "\"access-token\" \"-c\" \"path/to/config folder/client.config\" \"my client name\""
+    val parsed = parseArgsUsingReflection(backend, args)
+
+    assert(parsed.length === 4)
+  }
+
+  test("parseArgs handles single-quoted arguments with spaces") {
+    val args   = "'access-token' '-c' 'client.config' 'my client name'"
+    val parsed = parseArgsUsingReflection(backend, args)
+
+    assert(parsed.length === 4)
+  }
+
+  test("parseArgs handles unquoted arguments") {
+    val args   = "access-token -c client.config client-name"
+    val parsed = parseArgsUsingReflection(backend, args)
+
+    assert(parsed.length === 4)
+  }
+
+  test("parseArgs handles mixed double and single quotes") {
+    val args   = "\"access-token\" '-c' \"client.config\" 'my client name'"
+    val parsed = parseArgsUsingReflection(backend, args)
+
+    assert(parsed.length === 4)
   }
 }

@@ -393,7 +393,12 @@ private[spark] object Config {
   val ARMADA_AUTH_SIGNIN_ARGS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.auth.signin.args")
       .doc(
-        "Space-separated arguments to pass to the signin binary when obtaining an authentication token."
+        "Space-separated arguments to pass to the signin binary when obtaining an authentication token. " +
+          "Arguments with spaces must be quoted (single or double quotes). Quotes are removed before being passed to the binary. " +
+          "Examples: " +
+          "\"access-token -c client.config client-name\" (unquoted), " +
+          "\"\\\"access-token\\\" \\\"-c\\\" \\\"path/to/config folder/client.config\\\" \\\"client-name\\\"\" (double-quoted with spaces), " +
+          "\"'access-token' '-c' 'client.config' 'my client name'\" (single-quoted with spaces)."
       )
       .stringConf
       .createOptional
