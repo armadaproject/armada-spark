@@ -81,7 +81,7 @@ import org.apache.spark.deploy.k8s.Config.{
   KUBERNETES_SUBMIT_GRACE_PERIOD
 }
 import org.apache.spark.{SecurityManager, SparkConf}
-import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS}
+import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS, DYN_ALLOCATION_ENABLED}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
@@ -437,7 +437,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): (String, Seq[String]) = {
     val modeHelper    = DeploymentModeHelper(conf)
     val executorCount = modeHelper.getExecutorCount
-    val isDynamic     = conf.getBoolean("spark.dynamicAllocation.enabled", false)
+    val isDynamic     = conf.getBoolean(DYN_ALLOCATION_ENABLED.key, false)
 
     // Allow minExecutors=0 for dynamic allocation
     if (!isDynamic && executorCount <= 0) {
