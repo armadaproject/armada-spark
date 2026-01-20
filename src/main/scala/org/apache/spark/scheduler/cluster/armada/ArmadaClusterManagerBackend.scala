@@ -16,7 +16,6 @@
  */
 package org.apache.spark.scheduler.cluster.armada
 
-import scala.sys.process._
 import java.util.concurrent.{ConcurrentHashMap, ScheduledExecutorService, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -104,77 +103,6 @@ private[spark] class ArmadaClusterManagerBackend(
   // LIFECYCLE METHODS
   // ========================================================================
 
-  /** Parse command-line arguments, handling quoted strings. Supports both single and double quotes.
-    * Quotes are removed from the result.
-    */
-  private def parseArgs(args: String): Seq[String] = {
-    // Group 1: double-quoted content, Group 2: single-quoted content, Group 3: unquoted
-    val pattern = """(?:"([^"]*)"|'([^']*)'|(\S+))""".r
-
-    pattern
-      .findAllMatchIn(args.trim)
-      .map { m =>
-        if (m.group(1) != null) m.group(1)
-        else if (m.group(2) != null) m.group(2)
-        else m.group(3)
-      }
-      .filter(_.nonEmpty)
-      .toSeq
-  }
-
-  /** Get auth token from config or generate using signin CLI */
-  private def getOrGenerateToken(): Option[String] = {
-    conf.get(ARMADA_AUTH_TOKEN) match {
-      case Some(token) =>
-        logDebug("Using auth token from configuration")
-        Some(token)
-      case None =>
-        // Try to generate token using signin binary if configured
-        val signinBinary = conf.get(ARMADA_AUTH_SIGNIN_BINARY)
-        val signinArgs   = conf.get(ARMADA_AUTH_SIGNIN_ARGS)
-
-        (signinBinary, signinArgs) match {
-          case (Some(binary), Some(args)) =>
-            try {
-              logInfo(s"Obtaining auth token using signin binary: $binary")
-              val parsedArgs = parseArgs(args)
-              val command    = binary +: parsedArgs
-              val token      = command.!!.trim
-              if (token.nonEmpty) {
-                logInfo("Successfully obtained auth token using signin binary")
-                Some(token)
-              } else {
-                logWarning("Signin binary returned empty token")
-                None
-              }
-            } catch {
-              case e: Exception =>
-                logError(s"Failed to obtain auth token using signin binary: ${e.getMessage}", e)
-                None
-            }
-          case (Some(_), None) =>
-            logWarning(
-              "Signin binary path is configured but signin arguments are not. " +
-                "Set spark.armada.auth.signin.args to use token generation."
-            )
-            None
-          case (None, Some(_)) =>
-            logWarning(
-              "Signin arguments are configured but signin binary path is not. " +
-                "Set spark.armada.auth.signin.binary to use token generation."
-            )
-            None
-          case (None, None) =>
-            logWarning(
-              "No auth token provided and signin binary not configured. " +
-                "Set spark.armada.auth.token or configure spark.armada.auth.signin.binary " +
-                "and spark.armada.auth.signin.args to authenticate with Armada API."
-            )
-            None
-        }
-    }
-  }
-
   override def start(): Unit = {
     super.start()
 
@@ -202,7 +130,7 @@ private[spark] class ArmadaClusterManagerBackend(
           )
 
           // Initialize Armada client with auth token
-          val token  = getOrGenerateToken()
+          val token  = ArmadaUtils.getAuthToken()
           val client = ArmadaClient(host, port, useSsl = false, token)
           armadaClient = Some(client)
 

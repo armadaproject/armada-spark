@@ -67,20 +67,15 @@ print_usage () {
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
-    echo '   # Auth options (use either token or signin binary):'
-    echo '   ARMADA_AUTH_TOKEN=<token>'
-    echo '   # OR use signin binary to obtain token:'
-    echo '   ARMADA_AUTH_SIGNIN_BINARY=/path/to/signin'
-    echo '   ARMADA_AUTH_SIGNIN_ARGS="access-token -c client.config client-name"'
+    echo '   # Auth: Set ARMADA_AUTH_TOKEN for initial submission, and place getAuthToken.sh at /opt/spark/extraFiles/getAuthToken.sh'
     exit 1
 }
 
-while getopts "hekpi:a:m:P:s:c:q:M:A:e" opt; do
+while getopts "hekpi:m:P:s:c:q:M:A:e" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
     p) INCLUDE_PYTHON=true ;;
-    a) ARMADA_AUTH_TOKEN=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
     q) ARMADA_QUEUE=$OPTARG ;;
@@ -99,8 +94,6 @@ export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
-export ARMADA_AUTH_SIGNIN_BINARY=${ARMADA_AUTH_SIGNIN_BINARY:-}
-export ARMADA_AUTH_SIGNIN_ARGS=${ARMADA_AUTH_SIGNIN_ARGS:-}
 export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
 export SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"

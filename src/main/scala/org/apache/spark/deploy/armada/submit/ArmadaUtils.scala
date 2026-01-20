@@ -17,7 +17,9 @@
 package org.apache.spark.deploy.armada.submit
 
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.armada.Config
 import scala.util.Try
+import scala.sys.process._
 
 object ArmadaUtilsExceptions {
   class MasterUrlParsingException extends RuntimeException
@@ -91,5 +93,32 @@ object ArmadaUtils {
   def getApplicationId(conf: SparkConf): String = {
     setDefaultAppId(conf)
     conf.get("spark.app.id")
+  }
+
+  /** Get auth token from environment variable or getAuthToken.sh script.
+    *
+    * First checks ARMADA_AUTH_TOKEN environment variable. If not found, tries getAuthToken.sh
+    * script. If neither exists, returns None (no authentication).
+    *
+    * @return
+    *   Some(token) if found, None otherwise
+    */
+  def getAuthToken(): Option[String] = {
+    sys.env.get("ARMADA_AUTH_TOKEN") match {
+      case Some(token) => Some(token)
+      case None =>
+        val authScript = new java.io.File("/opt/spark/extraFiles/getAuthToken.sh")
+        if (authScript.exists() && authScript.canExecute) {
+          try {
+            val token = Seq("sh", authScript.getAbsolutePath).!!.trim
+            if (token.nonEmpty) Some(token) else None
+          } catch {
+            case e: Exception =>
+              None
+          }
+        } else {
+          None
+        }
+    }
   }
 }

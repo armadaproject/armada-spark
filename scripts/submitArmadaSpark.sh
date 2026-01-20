@@ -36,21 +36,6 @@ if [ "${USE_KIND}" == "true" ]; then
     mkdir -p "$TMPDIR"
     kind load docker-image $IMAGE_NAME --name armada
 fi
-
-# Build auth configuration arguments
-AUTH_ARGS=()
-# Pass token for initial submission (client side)
-# WARNING: Tokens passed via --conf are visible in command-line arguments and process lists.
-# For secure setups, use ARMADA_AUTH_SIGNIN_BINARY instead.
-if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    AUTH_ARGS+=("--conf" "spark.armada.auth.token=$ARMADA_AUTH_TOKEN")
-fi
-
-if [ "$ARMADA_AUTH_SIGNIN_BINARY" != "" ] && [ "$ARMADA_AUTH_SIGNIN_ARGS" != "" ]; then
-    AUTH_ARGS+=("--conf" "spark.armada.auth.signin.binary=$ARMADA_AUTH_SIGNIN_BINARY")
-    AUTH_ARGS+=("--conf" "spark.armada.auth.signin.args=$ARMADA_AUTH_SIGNIN_ARGS")
-fi
-
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
@@ -120,7 +105,6 @@ if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
 fi
 
 # Run Armada Spark via docker image
-# Build command with conditional AUTH_ARGS (handle empty array with set -u)
 SPARK_SUBMIT_ARGS=(
     --master $ARMADA_MASTER
     --deploy-mode $DEPLOY_MODE
@@ -135,11 +119,6 @@ SPARK_SUBMIT_ARGS=(
     --conf spark.local.dir=/tmp
 )
 
-# Add auth args only if array has elements
-if [ ${#AUTH_ARGS[@]} -gt 0 ]; then
-    SPARK_SUBMIT_ARGS+=("${AUTH_ARGS[@]}")
-fi
-
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 
@@ -149,5 +128,10 @@ SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
 
-docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
+fi
+
+docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"

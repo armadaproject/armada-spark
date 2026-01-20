@@ -374,39 +374,6 @@ private[spark] object Config {
       .longConf
       .createOptional
 
-  val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
-    ConfigBuilder("spark.armada.auth.token")
-      .doc(
-        "Armada auth token (specific to the OIDC server being used). " +
-          "WARNING: This token will be visible in command-line arguments and process lists, which poses a security risk. " +
-          "For secure setups, use spark.armada.auth.signin.binary instead."
-      )
-      .stringConf
-      .createOptional
-
-  val ARMADA_AUTH_SIGNIN_BINARY: OptionalConfigEntry[String] =
-    ConfigBuilder("spark.armada.auth.signin.binary")
-      .doc(
-        "Path to the signin binary executable used to obtain an authentication token. " +
-          "This is used when the driver needs to authenticate " +
-          "with the Armada API in cluster mode."
-      )
-      .stringConf
-      .createOptional
-
-  val ARMADA_AUTH_SIGNIN_ARGS: OptionalConfigEntry[String] =
-    ConfigBuilder("spark.armada.auth.signin.args")
-      .doc(
-        "Space-separated arguments to pass to the signin binary when obtaining an authentication token. " +
-          "Arguments with spaces must be quoted (single or double quotes). Quotes are removed before being passed to the binary. " +
-          "Examples: " +
-          "\"access-token -c client.config client-name\" (unquoted), " +
-          "\"\\\"access-token\\\" \\\"-c\\\" \\\"path/to/config folder/client.config\\\" \\\"client-name\\\"\" (double-quoted with spaces), " +
-          "\"'access-token' '-c' 'client.config' 'my client name'\" (single-quoted with spaces)."
-      )
-      .stringConf
-      .createOptional
-
   val ARMADA_DELETE_EXECUTORS: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.deleteExecutors")
       .doc("Whether to delete executor jobs when the backend stops.")
@@ -446,7 +413,7 @@ private[spark] object Config {
       .doc(
         "Whether to use TLS for the event watcher gRPC channel. " +
           "Set to true to use TLS connections. " +
-          "Defaults to false (plaintext) for backward compatibility with master branch behavior."
+          "Defaults to false (plaintext)"
       )
       .booleanConf
       .createWithDefault(false)

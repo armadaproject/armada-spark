@@ -27,14 +27,9 @@ export SPARK_DRIVER_PORT="7078"
 # export EXECUTOR_MEMORY_LIMIT="1Gi"
 # export DRIVER_MEMORY_LIMIT="1Gi"
 
-# Authentication options:
-# WARNING: ARMADA_AUTH_TOKEN is passed as a command-line argument and is visible in process lists.
-# For secure setups, use ARMADA_AUTH_SIGNIN_BINARY instead.
+# Authentication:
+# For initial submission, set ARMADA_AUTH_TOKEN as environment variable:
 # export ARMADA_AUTH_TOKEN="your-token-here"
-
-# Signin binary (RECOMMENDED for secure setups)
-# export ARMADA_AUTH_SIGNIN_BINARY="/opt/spark/extraFiles/signin"
-# export ARMADA_AUTH_SIGNIN_ARGS="access-token -c client.config client-name"
 
 # Event watcher TLS
 # export ARMADA_EVENT_WATCHER_USE_TLS="false"

@@ -90,22 +90,6 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     )
   }
 
-  def getOrGenerateTokenUsingReflection(backend: ArmadaClusterManagerBackend): Option[String] = {
-    val method = classOf[ArmadaClusterManagerBackend].getDeclaredMethod("getOrGenerateToken")
-    method.setAccessible(true)
-    method.invoke(backend).asInstanceOf[Option[String]]
-  }
-
-  def parseArgsUsingReflection(
-      backend: ArmadaClusterManagerBackend,
-      args: String
-  ): Seq[String] = {
-    val method =
-      classOf[ArmadaClusterManagerBackend].getDeclaredMethod("parseArgs", classOf[String])
-    method.setAccessible(true)
-    method.invoke(backend, args).asInstanceOf[Seq[String]]
-  }
-
   test("recordExecutor returns same ID for duplicate job") {
     val jobId = "job-123"
 
@@ -202,61 +186,9 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     assert(uniqueIds.size === 1, s"All threads should get same ID, got: $uniqueIds")
   }
 
-  test("getOrGenerateToken returns token from ARMADA_AUTH_TOKEN config") {
-    sparkConf.set(ARMADA_AUTH_TOKEN.key, "test-token-123")
-
-    val token = getOrGenerateTokenUsingReflection(backend)
-
-    assert(token === Some("test-token-123"))
-  }
-
-  test("getOrGenerateToken returns None when no token configured") {
-    val token = getOrGenerateTokenUsingReflection(backend)
+  test("getAuthToken returns None when getAuthToken.sh script is not present") {
+    val token = org.apache.spark.deploy.armada.submit.ArmadaUtils.getAuthToken()
 
     assert(token === None)
-  }
-
-  test("getOrGenerateToken executes signin binary successfully") {
-    // Create a mock signin binary
-    val signinBinary = new File(tempDir, "signin")
-    val signinScript = "#!/bin/sh\necho \"mock-token-from-signin\"\n"
-    java.nio.file.Files.write(signinBinary.toPath, signinScript.getBytes)
-    signinBinary.setExecutable(true)
-
-    sparkConf
-      .set(ARMADA_AUTH_SIGNIN_BINARY.key, signinBinary.getAbsolutePath)
-      .set(ARMADA_AUTH_SIGNIN_ARGS.key, "access-token -c config client")
-
-    val token = getOrGenerateTokenUsingReflection(backend)
-
-    assert(token === Some("mock-token-from-signin"))
-  }
-
-  test("parseArgs handles double-quoted arguments with spaces") {
-    val args = "\"access-token\" \"-c\" \"path/to/config folder/client.config\" \"my client name\""
-    val parsed = parseArgsUsingReflection(backend, args)
-
-    assert(parsed.length === 4)
-  }
-
-  test("parseArgs handles single-quoted arguments with spaces") {
-    val args   = "'access-token' '-c' 'client.config' 'my client name'"
-    val parsed = parseArgsUsingReflection(backend, args)
-
-    assert(parsed.length === 4)
-  }
-
-  test("parseArgs handles unquoted arguments") {
-    val args   = "access-token -c client.config client-name"
-    val parsed = parseArgsUsingReflection(backend, args)
-
-    assert(parsed.length === 4)
-  }
-
-  test("parseArgs handles mixed double and single quotes") {
-    val args   = "\"access-token\" '-c' \"client.config\" 'my client name'"
-    val parsed = parseArgsUsingReflection(backend, args)
-
-    assert(parsed.length === 4)
   }
 }
