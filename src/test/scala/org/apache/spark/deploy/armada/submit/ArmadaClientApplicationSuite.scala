@@ -1653,7 +1653,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
   }
 
-  test("submitArmadaJob should validate executor count is greater than zero") {
+  test(
+    "submitArmadaJob should validate executor count is greater than zero for static allocation"
+  ) {
     val armadaJobConfig = armadaClientApp.ArmadaJobConfig(
       queue = "test-queue",
       jobSetId = "test-job-set",
@@ -1685,11 +1687,56 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     sparkConf.set("spark.executor.instances", "0")
+    sparkConf.set("spark.dynamicAllocation.enabled", "false")
 
     val exception = intercept[IllegalArgumentException] {
       armadaClientApp.submitArmadaJob(null, clientArguments, armadaJobConfig, sparkConf)
     }
     exception.getMessage should include("Executor count must be greater than 0")
+  }
+
+  test("submitArmadaJob should allow minExecutors=0 for dynamic allocation") {
+    val armadaJobConfig = armadaClientApp.ArmadaJobConfig(
+      queue = "test-queue",
+      jobSetId = "test-job-set",
+      jobTemplate = None,
+      driverJobItemTemplate = None,
+      executorJobItemTemplate = None,
+      cliConfig = armadaClientApp.CLIConfig(
+        queue = Some("test-queue"),
+        jobSetId = Some("test-job-set"),
+        namespace = Some("test-namespace"),
+        priority = Some(RUNTIME_PRIORITY),
+        containerImage = Some(DEFAULT_IMAGE_NAME),
+        podLabels = Map.empty,
+        driverLabels = Map.empty,
+        executorLabels = Map.empty,
+        armadaClusterUrl = Some("armada://localhost:50051"),
+        nodeSelectors = Map.empty,
+        nodeUniformityLabel = None,
+        executorConnectionTimeout = Some(300.seconds),
+        runAsUser = None,
+        driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
+        executorResources = armadaClientApp.ResourceConfig(None, None, None, None)
+      ),
+      applicationId = "armada-spark-app-id",
+      driverFeatureStepJobItem = None,
+      driverFeatureStepContainer = None,
+      executorFeatureStepJobItem = None,
+      executorFeatureStepContainer = None
+    )
+
+    sparkConf.set("spark.submit.deployMode", "cluster")
+    sparkConf.set("spark.dynamicAllocation.enabled", "true")
+    sparkConf.set("spark.dynamicAllocation.minExecutors", "0")
+
+    // Should not throw executor count validation exception
+    val exception = intercept[Throwable] {
+      armadaClientApp.submitArmadaJob(null, clientArguments, armadaJobConfig, sparkConf)
+    }
+    Option(exception.getMessage).getOrElse(
+      ""
+    ) should not include "Executor count must be greater than 0"
   }
 
   test("JobTemplateLoader should handle malformed YAML gracefully") {

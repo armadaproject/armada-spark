@@ -81,7 +81,7 @@ import org.apache.spark.deploy.k8s.Config.{
   KUBERNETES_SUBMIT_GRACE_PERIOD
 }
 import org.apache.spark.{SecurityManager, SparkConf}
-import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS}
+import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS, DYN_ALLOCATION_ENABLED}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
@@ -363,12 +363,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverJobId: String,
       executorCount: Int
   ): Seq[String] = {
-    if (executorCount <= 0) {
-      throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
-      )
-    }
-
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
@@ -443,9 +437,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): (String, Seq[String]) = {
     val modeHelper    = DeploymentModeHelper(conf)
     val executorCount = modeHelper.getExecutorCount
-    if (executorCount <= 0) {
+    val isDynamic     = conf.getBoolean(DYN_ALLOCATION_ENABLED.key, false)
+
+    // Allow minExecutors=0 for dynamic allocation
+    if (!isDynamic && executorCount <= 0) {
       throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
+        s"Executor count must be greater than 0 for static allocation, but got: $executorCount"
       )
     }
 
@@ -1783,12 +1780,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeUniformityLabel: Option[String],
       conf: SparkConf
   ): Map[String, String] = {
-    val modeHelper = DeploymentModeHelper(conf)
+    val modeHelper      = DeploymentModeHelper(conf)
+    val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
+      .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>
         GangSchedulingAnnotations(
           gangId,
-          modeHelper.getGangCardinality,
+          gangCardinality,
           label
         )
       )
