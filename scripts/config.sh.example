@@ -30,6 +30,9 @@ export SPARK_DRIVER_PORT="7078"
 # Authentication:
 # For initial submission, set ARMADA_AUTH_TOKEN as environment variable:
 # export ARMADA_AUTH_TOKEN="your-token-here"
+#
+# Configure path for authentication script for authentication:
+# export ARMADA_AUTH_SCRIPT_PATH="/path/to/your-auth-script.sh"
 
 # Event watcher TLS
 # export ARMADA_EVENT_WATCHER_USE_TLS="false"

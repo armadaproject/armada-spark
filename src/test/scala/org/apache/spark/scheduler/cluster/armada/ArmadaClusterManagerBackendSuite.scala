@@ -191,4 +191,25 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
 
     assert(token === None)
   }
+
+  test("getAuthToken uses custom script path from config") {
+    val customScriptPath = new java.io.File(tempDir, "custom-getAuthToken.sh")
+    java.nio.file.Files.write(
+      customScriptPath.toPath,
+      "#!/bin/sh\necho 'custom-token-123'".getBytes
+    )
+    customScriptPath.setExecutable(true)
+
+    sparkConf.set("spark.armada.auth.script.path", customScriptPath.getAbsolutePath)
+
+    val token = org.apache.spark.deploy.armada.submit.ArmadaUtils.getAuthToken(Some(sparkConf))
+
+    assert(token === Some("custom-token-123"))
+  }
+
+  test("getAuthToken returns None when script path config not set") {
+    val token = org.apache.spark.deploy.armada.submit.ArmadaUtils.getAuthToken(Some(sparkConf))
+
+    assert(token === None)
+  }
 }

@@ -193,7 +193,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     log(s"gbjdriver port is ${DRIVER_PORT.key}")
 
     val armadaClient =
-      ArmadaClient(host, port, useSsl = false, ArmadaUtils.getAuthToken())
+      ArmadaClient(host, port, useSsl = false, ArmadaUtils.getAuthToken(Some(sparkConf)))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 

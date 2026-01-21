@@ -122,6 +122,11 @@ SPARK_SUBMIT_ARGS=(
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 
+# Add auth script path if configured
+if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
+    SPARK_SUBMIT_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
+fi
+
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 

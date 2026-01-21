@@ -130,7 +130,7 @@ private[spark] class ArmadaClusterManagerBackend(
           )
 
           // Initialize Armada client with auth token
-          val token  = ArmadaUtils.getAuthToken()
+          val token  = ArmadaUtils.getAuthToken(Some(conf))
           val client = ArmadaClient(host, port, useSsl = false, token)
           armadaClient = Some(client)
 

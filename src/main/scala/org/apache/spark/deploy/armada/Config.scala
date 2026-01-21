@@ -374,6 +374,14 @@ private[spark] object Config {
       .longConf
       .createOptional
 
+  val ARMADA_AUTH_SCRIPT_PATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.script.path")
+      .doc(
+        "Path to an executable script for obtaining authentication tokens. "
+      )
+      .stringConf
+      .createOptional
+
   val ARMADA_DELETE_EXECUTORS: ConfigEntry[Boolean] =
     ConfigBuilder("spark.armada.deleteExecutors")
       .doc("Whether to delete executor jobs when the backend stops.")
