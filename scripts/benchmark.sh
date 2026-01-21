@@ -34,6 +34,10 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
         --conf spark.decommission.enabled=true
         --conf spark.storage.decommission.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
+        --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
+        --conf spark.storage.decommission.fallbackStorage.cleanUp=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.enabled=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
     )
 
 

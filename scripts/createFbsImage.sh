@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+tmp_dir=$(mktemp -d)
+echo cd $tmp_dir
+cd $tmp_dir
 repo=${ARMADA_FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
 branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-fallback-storage-v3.5.3}
