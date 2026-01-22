@@ -15,14 +15,15 @@ if ! command -v lex &> /dev/null; then
 fi
 
 tmp_dir=$(mktemp -d)
-echo cd $tmp_dir
+echo Creating temp dir: $tmp_dir
 cd $tmp_dir
+
 repo=${ARMADA_FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
 branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-fallback-storage-v3.5.3}
 
 # create the spark image with fallback storage support
-#git clone $repo
+git clone $repo
 cd $repo_dir
 git checkout $branch
 
@@ -31,9 +32,9 @@ export SPARK_HOME=`pwd`
 ./bin/docker-image-tool.sh -u 185 -t "spark.fbs.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
+# build the benchmarking tools
 mkdir docker
 cd docker
-# build the benchmarking tools
 databricks_repo=${DATABRICKS_REPO:-https://github.com/databricks/tpcds-kit}
 git clone $databricks_repo tpcds-kit
 pushd tpcds-kit/tools
@@ -50,6 +51,9 @@ if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" 
 fi
 
 # Copy the cert file into the local dir unless we are skipping
+# The cert file is need for clusters using TLS with self signed certs
+# e.g. To use our tig cluster, retrieve the cert from the jumpbox here:
+#  /usr/local/share/ca-certificates/testkube-ca.crt
 ARMADA_SKIP_CERT=${ARMADA_SKIP_CERT:-""}
 if [[ $ARMADA_SKIP_CERT != "true" ]]; then
     if [[ $1 == "" ]]; then
@@ -74,12 +78,6 @@ RUN mkdir /opt/tools
 COPY tpcds-kit /opt/tools/tpcds-kit
 COPY jars/* /opt/spark/jars
 $CRT_COMMANDS
-WORKDIR /opt/spark/work-dir
-ENTRYPOINT [ "/opt/entrypoint.sh" ]
-
-# Specify the Spark User
-USER 185
-
 EOF
 
 docker build --tag spark-py:spark.fbs.img2 .

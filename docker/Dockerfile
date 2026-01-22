@@ -34,7 +34,5 @@ RUN mkdir -p /opt/spark/coreJars && \
 
 ENV SPARK_DIST_CLASSPATH=/opt/spark/coreJars/*
 
-RUN keytool -importcert -file /opt/spark/extraFiles/ca.crt -keystore /opt/java/openjdk/lib/security/cacerts -alias mycert -storepass changeit -noprompt
-
 ARG spark_uid=185
 USER ${spark_uid}
