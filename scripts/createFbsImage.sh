@@ -71,7 +71,7 @@ WORKDIR /
 USER 0
 
 RUN mkdir /opt/tools
-COPY tpcds-kit /opt/tools
+COPY tpcds-kit /opt/tools/tpcds-kit
 COPY jars/* /opt/spark/jars
 $CRT_COMMANDS
 WORKDIR /opt/spark/work-dir
