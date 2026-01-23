@@ -95,38 +95,33 @@ object ArmadaUtils {
     conf.get("spark.app.id")
   }
 
-  /** Get auth token from environment variable or authentication script.
+  /** Get auth token from authentication script.
     *
-    * First checks ARMADA_AUTH_TOKEN environment variable. If not found, tries the authentication
-    * script specified in spark.armada.auth.script.path. If neither exists, returns None (no
-    * authentication).
+    * Executes the script specified in spark.armada.auth.script.path and returns its output as the token.
+    * Returns None if the script path is not configured or if the script execution fails.
     *
     * @param conf
-    *   Optional Spark configuration to read script path from (must be explicitly set)
+    *   Optional Spark configuration to read script path from
     * @return
     *   Some(token) if found, None otherwise
     */
   def getAuthToken(conf: Option[SparkConf] = None): Option[String] = {
-    sys.env.get("ARMADA_AUTH_TOKEN") match {
-      case Some(token) => Some(token)
-      case None =>
-        conf.flatMap(_.get(Config.ARMADA_AUTH_SCRIPT_PATH)) match {
-          case Some(scriptPath) =>
-            val authScript = new java.io.File(scriptPath)
-            if (authScript.exists() && authScript.canExecute) {
-              try {
-                val token = Seq("sh", authScript.getAbsolutePath).!!.trim
-                if (token.nonEmpty) Some(token) else None
-              } catch {
-                case e: Exception =>
-                  None
-              }
-            } else {
+    conf.flatMap(_.get(Config.ARMADA_AUTH_SCRIPT_PATH)) match {
+      case Some(scriptPath) =>
+        val authScript = new java.io.File(scriptPath)
+        if (authScript.exists() && authScript.canExecute) {
+          try {
+            val token = Seq("sh", authScript.getAbsolutePath).!!.trim
+            if (token.nonEmpty) Some(token) else None
+          } catch {
+            case e: Exception =>
               None
-            }
-          case None =>
-            None
+          }
+        } else {
+          None
         }
+      case None =>
+        None
     }
   }
 }
