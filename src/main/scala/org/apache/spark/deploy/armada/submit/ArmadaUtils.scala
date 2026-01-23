@@ -136,7 +136,7 @@ object ArmadaUtils {
     * @throws RuntimeException
     *   if script returns non-zero exit code or produces empty output
     */
-  private def executeScript(
+  def executeScript(
       script: java.io.File,
       scriptContext: String = "Script"
   ): Option[String] = {
