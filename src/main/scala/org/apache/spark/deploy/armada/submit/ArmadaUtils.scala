@@ -95,33 +95,86 @@ object ArmadaUtils {
     conf.get("spark.app.id")
   }
 
-  /** Get auth token from authentication script.
-    *
-    * Executes the script specified in spark.armada.auth.script.path and returns its output as the token.
-    * Returns None if the script path is not configured or if the script execution fails.
+  /** Gets the authentication token by executing the script specified in
+    * spark.armada.auth.script.path.
     *
     * @param conf
     *   Optional Spark configuration to read script path from
     * @return
-    *   Some(token) if found, None otherwise
+    *   Some(token) if script executed successfully, None if no auth script is configured
+    * @throws RuntimeException
+    *   if script path is configured but script doesn't exist, is not executable, fails to execute,
+    *   or returns an empty token
     */
   def getAuthToken(conf: Option[SparkConf] = None): Option[String] = {
-    conf.flatMap(_.get(Config.ARMADA_AUTH_SCRIPT_PATH)) match {
-      case Some(scriptPath) =>
-        val authScript = new java.io.File(scriptPath)
-        if (authScript.exists() && authScript.canExecute) {
-          try {
-            val token = Seq("sh", authScript.getAbsolutePath).!!.trim
-            if (token.nonEmpty) Some(token) else None
-          } catch {
-            case e: Exception =>
-              None
-          }
-        } else {
-          None
-        }
-      case None =>
-        None
+    val scriptPath = conf.flatMap(_.get(Config.ARMADA_AUTH_SCRIPT_PATH)).getOrElse(return None)
+
+    val authScript = new java.io.File(scriptPath)
+    if (!authScript.exists()) {
+      throw new RuntimeException(
+        s"Authentication script does not exist: $scriptPath"
+      )
+    }
+
+    if (!authScript.canExecute) {
+      throw new RuntimeException(
+        s"Authentication script is not executable: $scriptPath"
+      )
+    }
+
+    executeScript(authScript, "Authentication script")
+  }
+
+  /** Executes a script and returns its stdout output.
+    *
+    * @param script
+    *   The script file to execute
+    * @param scriptContext
+    *   Context string used in error messages (e.g., "Authentication script")
+    * @return
+    *   Some(output) if script executed successfully with non-empty output
+    * @throws RuntimeException
+    *   if script returns non-zero exit code or produces empty output
+    */
+  private def executeScript(
+      script: java.io.File,
+      scriptContext: String = "Script"
+  ): Option[String] = {
+    val scriptPath = script.getAbsolutePath
+    val stdout     = new StringBuilder
+    val stderr     = new StringBuilder
+    val processLogger = ProcessLogger(
+      line => stdout.append(line).append("\n"),
+      line => stderr.append(line).append("\n")
+    )
+
+    try {
+      val exitCode = Process(scriptPath) ! processLogger
+
+      if (exitCode != 0) {
+        val stderrOutput = stderr.toString.trim
+        throw new RuntimeException(
+          s"$scriptContext returned non-zero exit code: $exitCode. Script: $scriptPath" +
+            (if (stderrOutput.nonEmpty) s"\nstderr: $stderrOutput" else "")
+        )
+      }
+
+      val output = stdout.toString.trim
+      if (output.isEmpty) {
+        throw new RuntimeException(
+          s"$scriptContext returned empty output: $scriptPath"
+        )
+      }
+
+      Some(output)
+    } catch {
+      case e: RuntimeException =>
+        throw e
+      case e: Exception =>
+        throw new RuntimeException(
+          s"Failed to execute $scriptContext: $scriptPath",
+          e
+        )
     }
   }
 }
