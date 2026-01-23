@@ -78,6 +78,7 @@ RUN mkdir /opt/tools
 COPY tpcds-kit /opt/tools/tpcds-kit
 COPY jars/* /opt/spark/jars
 $CRT_COMMANDS
+RUN chown -R 185:185 /opt/spark
 EOF
 
 docker build --tag spark-py:spark.fbs.img2 .

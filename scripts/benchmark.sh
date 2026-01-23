@@ -29,8 +29,8 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
         --conf spark.dynamicAllocation.maxExecutors=40
         --conf spark.dynamicAllocation.initialExecutors=1
         --conf spark.dynamicAllocation.executorIdleTimeout=10
-	--conf spark.dynamicAllocation.schedulerBacklogTimeout=1
-	--conf spark.dynamicAllocation.cachedExecutorIdleTimeout=10
+        --conf spark.dynamicAllocation.schedulerBacklogTimeout=1
+        --conf spark.dynamicAllocation.cachedExecutorIdleTimeout=10
         --conf spark.decommission.enabled=true
         --conf spark.storage.decommission.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
@@ -40,15 +40,21 @@ JOBSET="${JOBSET:-armada-spark-benchmark}"
         --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
     )
 
-
-# Get benchmark jar file built from https://github.com/EnricoMi/eks-spark-benchmark
-if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" ]; then
-    if [ ! -e "$scripts/../extraJars/eks-spark-benchmark-assembly-1.0.jar" ]; then
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1g97dUxbZboI5jq_EjUXaOijtjDBcGsci' \
-               -O  $scripts/../extraJars/eks-spark-benchmark-assembly-1.0.jar
-      fi
+S3_CONF=()
+if [[ $ARMADA_S3_ACCESS_KEY != "" ]]; then
+    S3_CONF=(
+        --conf spark.hadoop.fs.s3a.access.key=$ARMADA_S3_ACCESS_KEY
+        --conf spark.hadoop.fs.s3a.secret.key=$ARMADA_S3_SECRET_KEY
+    )
+else if [[ $ARMADA_SPARK_SECRET_KEY != "" ]]; then
+    S3_CONF=(
+        --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
+        --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
+        --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
+        --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
+    )
+     fi
 fi
-
 # Run Armada Spark via docker image
 docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
@@ -56,12 +62,11 @@ docker run --user 185 -v $scripts/../benchmark:/opt/spark/conf --rm --network ho
     --name spark-benchmark \
     --class $ARMADA_BENCHMARK_CLASS \
     "${EXTRA_CONF[@]}" \
+    "${S3_CONF[@]}" \
     $AUTH_ARG \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.hadoop.fs.s3a.access.key=$ARMADA_S3_ACCESS_KEY \
-    --conf spark.hadoop.fs.s3a.secret.key=$ARMADA_S3_SECRET_KEY \
     --conf spark.home=/opt/spark \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
