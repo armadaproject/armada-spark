@@ -67,7 +67,7 @@ print_usage () {
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
-    echo '   # Auth: Set ARMADA_AUTH_TOKEN and ARMADA_AUTH_SCRIPT_PATH for authentication'
+    echo '   # Auth: Set ARMADA_AUTH_SCRIPT_PATH for authentication'
     exit 1
 }
 
