@@ -17,13 +17,11 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-import java.io.File
 import java.util.concurrent.Executors
 
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 import org.mockito.Mockito._
-import org.apache.spark.deploy.armada.Config._
 
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
@@ -37,7 +35,6 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
   var taskScheduler: TaskSchedulerImpl     = _
   var rpcEnv: RpcEnv                       = _
   var sparkConf: SparkConf                 = _
-  var tempDir: File                        = _
 
   before {
     sparkConf = new SparkConf(false)
@@ -59,10 +56,13 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     when(taskScheduler.sc).thenReturn(sc)
     when(env.rpcEnv).thenReturn(rpcEnv)
 
-    tempDir = java.nio.file.Files.createTempDirectory("armada-auth-test").toFile
-    tempDir.deleteOnExit()
-
-    backend = createBackend()
+    val executorService = Executors.newScheduledThreadPool(1)
+    backend = new ArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      executorService,
+      "armada://localhost:50051"
+    )
   }
 
   after {
@@ -73,21 +73,6 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
         case _: Exception => // Ignore cleanup errors
       }
     }
-    // Clean up temp directory
-    if (tempDir != null && tempDir.exists()) {
-      tempDir.listFiles().foreach(_.delete())
-      tempDir.delete()
-    }
-  }
-
-  def createBackend(): ArmadaClusterManagerBackend = {
-    val executorService = Executors.newScheduledThreadPool(1)
-    new ArmadaClusterManagerBackend(
-      taskScheduler,
-      sc,
-      executorService,
-      "armada://localhost:50051"
-    )
   }
 
   test("recordExecutor returns same ID for duplicate job") {
