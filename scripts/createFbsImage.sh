@@ -69,7 +69,6 @@ fi
 
 cat <<EOF > Dockerfile
 FROM spark-py:spark.fbs.img
-WORKDIR /
 
 # Reset to root to run installation tasks
 USER 0
@@ -78,7 +77,6 @@ RUN mkdir /opt/tools
 COPY tpcds-kit /opt/tools/tpcds-kit
 COPY jars/* /opt/spark/jars
 $CRT_COMMANDS
-RUN chown -R 185:185 /opt/spark
 EOF
 
 docker build --tag spark-py:spark.fbs.img2 .
