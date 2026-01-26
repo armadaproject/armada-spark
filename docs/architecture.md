@@ -170,7 +170,9 @@ Each option consists of a `String` unless otherwise noted.
 
 They can be set in the [conf](../conf/spark-defaults.conf) file.
 
-- `spark.armada.auth.token` - Armada auth token, (specific to the OIDC server being used.)
+- `ARMADA_AUTH_TOKEN` - Environment variable for Armada auth token (for initial submission). For further authentication between driver and executors, configure `spark.armada.auth.script.path` to point to an authentication script.
+- `spark.armada.auth.script.path` - Path to an executable script for obtaining authentication tokens in cluster mode. The script should output the token to stdout. If not specified, no script-based authentication will be attempted.
+
 - `spark.armada.container.image` - Container image to use for Spark containers.
 - `spark.armada.driver.limit.cores` - Specify the hard cpu limit for the driver pod
 - `spark.armada.driver.request.cores` - Specify the cpu request for the driver pod

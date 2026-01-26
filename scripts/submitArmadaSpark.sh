@@ -36,19 +36,12 @@ if [ "${USE_KIND}" == "true" ]; then
     mkdir -p "$TMPDIR"
     kind load docker-image $IMAGE_NAME --name armada
 fi
-
-if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
-else
-    AUTH_ARG=""
-fi
-
 # Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
 DISABLE_CONFIG_MAP=true
 
-# Set memory limits based on deploy mode
-EXECUTOR_MEMORY_LIMIT="1Gi"
-DRIVER_MEMORY_LIMIT="1Gi"
+# Set memory limits
+EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
+DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
@@ -60,6 +53,7 @@ if [ "$STATIC_MODE" = true ]; then
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     )
@@ -70,6 +64,7 @@ else
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
+        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
@@ -104,18 +99,44 @@ else
     )
 fi
 
+# Add block manager port if configured
+if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
+    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
+fi
+
 # Run Armada Spark via docker image
-docker run -e SPARK_PRINT_LAUNCH_COMMAND=true -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
-    /opt/spark/bin/spark-submit \
-    --master $ARMADA_MASTER --deploy-mode $DEPLOY_MODE \
-    --name $NAME \
-    $CLASS_PROMPT $CLASS_ARG \
-    $AUTH_ARG \
-    --conf spark.home=/opt/spark \
-    --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.kubernetes.file.upload.path=/tmp \
-    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP \
-    --conf spark.local.dir=/tmp \
-    "${DEPLOY_MODE_ARGS[@]}" \
-    "${EXTRA_CONF[@]}" \
-    $FIRST_ARG  "${FINAL_ARGS[@]}"
+SPARK_SUBMIT_ARGS=(
+    --master $ARMADA_MASTER
+    --deploy-mode $DEPLOY_MODE
+    --name $NAME
+    $CLASS_PROMPT $CLASS_ARG
+    --conf spark.home=/opt/spark
+    --conf spark.armada.container.image=$IMAGE_NAME
+    --conf spark.armada.queue=$ARMADA_QUEUE
+    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
+    --conf spark.kubernetes.file.upload.path=/tmp
+    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
+    --conf spark.local.dir=/tmp
+)
+
+# Add deploy mode args
+SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
+
+# Add auth script path if configured
+if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
+    SPARK_SUBMIT_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
+fi
+
+# Add extra conf
+SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
+
+# Add application and final args
+SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
+
+DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
+fi
+
+docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+    /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"

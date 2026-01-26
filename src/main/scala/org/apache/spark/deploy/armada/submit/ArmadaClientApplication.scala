@@ -18,7 +18,6 @@ package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
 import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
   ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
   ARMADA_DRIVER_LIMIT_CORES,
   ARMADA_DRIVER_LIMIT_MEMORY,
@@ -193,7 +192,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     log(s"Connecting to Armada Server - host: $host, port: $port")
     log(s"gbjdriver port is ${DRIVER_PORT.key}")
 
-    val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient =
+      ArmadaClient(host, port, useSsl = false, ArmadaUtils.getAuthToken(Some(sparkConf)))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 
@@ -799,10 +799,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorFeatureStepContainer: Option[Container]
   )
 
-  private def removeAuthToken(seq: Seq[String]): Seq[String] = {
-    seq.grouped(2).toSeq.filter(!_(1).contains("auth.token")).flatten
-  }
-
   private[submit] def createDriverJob(
       armadaJobConfig: ArmadaJobConfig,
       resolvedConfig: ResolvedJobConfig,
@@ -812,7 +808,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq: Seq[String],
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    val driverArgs = removeAuthToken(confSeq) ++ primaryResource ++ clientArguments.driverArgs
+    val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     val driverJobItem = mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
