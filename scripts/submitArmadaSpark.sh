@@ -93,7 +93,6 @@ if [ "$DEPLOY_MODE" = "client" ]; then
         --conf spark.driver.bindAddress=0.0.0.0
     )
 else
-    export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
     DEPLOY_MODE_ARGS=(
         --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
     )
@@ -117,6 +116,7 @@ SPARK_SUBMIT_ARGS=(
     --conf spark.kubernetes.file.upload.path=/tmp
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
     --conf spark.local.dir=/tmp
+    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
 )
 
 # Add deploy mode args
