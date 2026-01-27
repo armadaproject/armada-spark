@@ -24,13 +24,6 @@ ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/dat
 ARMADA_BENCHMARK_CLASS=${ARMADA_BENCHMARK_CLASS:-com.amazonaws.eks.tpcds.BenchmarkSQL}
 ARMADA_BENCHMARK_TOOLS=${ARMADA_BENCHMARK_TOOLS:-/opt/tools/tpcds-kit/tools}
 
-ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-""}
-if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    AUTH_ARG=" --conf spark.armada.auth.token=$ARMADA_AUTH_TOKEN"
-else
-    AUTH_ARG=""
-fi
-
 # Parse long options (--mode, --allocation) before getopts
 ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -121,6 +114,38 @@ export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 export USE_FALLBACK_STORAGE="${USE_FALLBACK_STORAGE:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
+
+ARMADA_AUTH_ARGS=()
+# Add auth script path if configured
+if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
+    ARMADA_AUTH_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
+fi
+
+# Build deploy-mode specific arguments array
+DEPLOY_MODE_ARGS=()
+if [ "$DEPLOY_MODE" = "client" ]; then
+    DEPLOY_MODE_ARGS=(
+        --conf spark.driver.host=$SPARK_DRIVER_HOST
+        --conf spark.driver.port=$SPARK_DRIVER_PORT
+        --conf spark.driver.bindAddress=0.0.0.0
+    )
+else
+    DEPLOY_MODE_ARGS=(
+        --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
+    )
+fi
+
+# Add block manager port if configured
+if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
+    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
+fi
+
+DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
+fi
+
+
 
 # Validation
 

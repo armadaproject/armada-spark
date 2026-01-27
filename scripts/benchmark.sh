@@ -31,13 +31,13 @@ else if [[ $ARMADA_SPARK_SECRET_KEY != "" ]]; then
      fi
 fi
 # Run Armada Spark via docker image
-docker run -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
+docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER --deploy-mode cluster \
     --name spark-benchmark \
     --class $ARMADA_BENCHMARK_CLASS \
     "${S3_CONF[@]}" \
-    $AUTH_ARG \
+    "${ARMADA_AUTH_ARGS[@]}" \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \

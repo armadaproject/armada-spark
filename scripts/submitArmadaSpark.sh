@@ -84,25 +84,6 @@ else
     )
 fi
 
-# Build deploy-mode specific arguments array
-DEPLOY_MODE_ARGS=()
-if [ "$DEPLOY_MODE" = "client" ]; then
-    DEPLOY_MODE_ARGS=(
-        --conf spark.driver.host=$SPARK_DRIVER_HOST
-        --conf spark.driver.port=$SPARK_DRIVER_PORT
-        --conf spark.driver.bindAddress=0.0.0.0
-    )
-else
-    DEPLOY_MODE_ARGS=(
-        --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
-    )
-fi
-
-# Add block manager port if configured
-if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
-    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
-fi
-
 # Run Armada Spark via docker image
 SPARK_SUBMIT_ARGS=(
     --master $ARMADA_MASTER
@@ -122,21 +103,14 @@ SPARK_SUBMIT_ARGS=(
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 
-# Add auth script path if configured
-if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
-    SPARK_SUBMIT_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
-fi
+# Add auth args
+SPARK_SUBMIT_ARGS+=("${ARMADA_AUTH_ARGS[@]}")
 
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
-
-DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
-if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
-    DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
-fi
 
 docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
