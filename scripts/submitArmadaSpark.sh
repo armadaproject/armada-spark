@@ -53,7 +53,6 @@ if [ "$STATIC_MODE" = true ]; then
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     )
@@ -64,7 +63,6 @@ else
         --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
         --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
-        --conf spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS
         --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT

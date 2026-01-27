@@ -121,6 +121,11 @@ if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
     ARMADA_AUTH_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
 fi
 
+if [ "$ARMADA_EVENT_WATCHER_USE_TLS" != "" ]; then
+    ARMADA_AUTH_ARGS+=("--conf" "spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS")
+fi
+
+
 # Build deploy-mode specific arguments array
 DEPLOY_MODE_ARGS=()
 if [ "$DEPLOY_MODE" = "client" ]; then
