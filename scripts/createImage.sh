@@ -52,8 +52,8 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
             ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
             cd ..
         fi
-     fi
 fi
+
 
 source "$scripts/prepExtraFiles.sh"
 
