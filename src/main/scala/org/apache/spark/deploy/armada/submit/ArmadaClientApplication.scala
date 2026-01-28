@@ -190,7 +190,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"Connecting to Armada Server - host: $host, port: $port")
-    log(s"gbjdriver port is ${DRIVER_PORT.key}")
 
     val armadaClient =
       ArmadaClient(host, port, useSsl = false, ArmadaUtils.getAuthToken(Some(sparkConf)))
