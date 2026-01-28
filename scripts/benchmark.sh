@@ -7,8 +7,8 @@ SPARK_CONF_DIR=/opt/spark/conf
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
 
-QUICK_TEST="q41-v2.4" 
-LONGER_TEST="q7-v2.4"  
+QUICK_TEST="q41-v2.4"
+LONGER_TEST="q7-v2.4"
 MULTIPLE_TESTS="q41-v2.4,q10-v2.4,q12-v2.4,q13-v2.4,q14a-v2.4,q14b-v2.4,q11-v2.4,q15-v2.4,q16-v2.4,q17-v2.4,q18-v2.4,q19-v2.4,q20-v2.4,q21-v2.4,q22-v2.4,q23a-v2.4" 
 ALL_TESTS=""
 TESTS_TO_RUN=$MULTIPLE_TESTS
