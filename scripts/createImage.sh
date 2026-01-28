@@ -9,11 +9,11 @@ source "$scripts/init.sh"
 
 image_prefix=apache/spark
 
-if [ "$USE_FALLBACK_STORAGE" = "true" ]; then
+if [ "$USE_FALLBACK_STORAGE" == "true" ]; then
     image_prefix="${FALLBACK_STORAGE_PREFIX:-gbj262/spark.fbs.img2}"
     image_tag="${FALLBACK_STORAGE_TAG:-latest}"
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
-else if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
+elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
         echo Checking for images for spark: $SPARK_VERSION scala: $SCALA_BIN_VERSION
         if [ "${INCLUDE_PYTHON}" == "false" ]; then
             echo Building image without Python.
