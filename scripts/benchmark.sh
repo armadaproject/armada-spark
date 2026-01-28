@@ -30,6 +30,7 @@ else if [[ $ARMADA_SPARK_SECRET_KEY != "" ]]; then
     )
      fi
 fi
+
 # Run Armada Spark via docker image
 docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit \
