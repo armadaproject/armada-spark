@@ -67,8 +67,11 @@ docker run -d \
   -e SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT} \
   -e ARMADA_MASTER=${ARMADA_MASTER} \
   -e ARMADA_QUEUE=${ARMADA_QUEUE} \
+  -e ARMADA_NAMESPACE=${ARMADA_NAMESPACE:-default} \
   -e IMAGE_NAME=${IMAGE_NAME} \
   -e ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-} \
+  -e ARMADA_AUTH_SCRIPT_PATH=${ARMADA_AUTH_SCRIPT_PATH:-} \
+  -e ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false} \
   -v "$workspace_dir:/home/spark/workspace" \
   -v "$root/conf:/opt/spark/conf:ro" \
   --rm \
