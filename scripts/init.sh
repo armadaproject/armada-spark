@@ -125,7 +125,6 @@ if [ "$ARMADA_EVENT_WATCHER_USE_TLS" != "" ]; then
     ARMADA_AUTH_ARGS+=("--conf" "spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS")
 fi
 
-
 # Build deploy-mode specific arguments array
 DEPLOY_MODE_ARGS=()
 if [ "$DEPLOY_MODE" = "client" ]; then
@@ -149,8 +148,6 @@ DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
     DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
 fi
-
-
 
 # Validation
 
@@ -178,8 +175,6 @@ if [ -z "${PYTHON_SCRIPT:-}" ]; then
 else
     INCLUDE_PYTHON=true
 fi
-
-
 
 # derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
 if [[ -z "${SCALA_VERSION:-}" ]]; then
