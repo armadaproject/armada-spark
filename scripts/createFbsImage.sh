@@ -1,8 +1,11 @@
 #!/bin/bash
 set -e
 
-# Builds the fallback storage, only needs to be run when the fallback storage spark branch is modified
+# Builds the fallback storage spark image;
 # Also includes the benchmarking tools
+# NOTE this script only needs to be run when the fallback storage spark branch is modified.
+# Normally you won't need to use this script as the image will be pulled from docker.
+
 
 scripts="$(cd "$(dirname "$0")"; pwd)"
 source "$scripts/init.sh"
