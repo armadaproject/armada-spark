@@ -151,3 +151,21 @@ The project includes a ready-to-use Spark job to test your setup:
 This job leverages the same configuration parameters (`ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_LOOKOUT_URL`) as the `scripts/config.sh` script.
 
 Use the -h option to see what other options are available.
+
+### Jupyter Notebook
+
+The Docker image includes Jupyter support. Run Jupyter with the example notebooks:
+
+```bash
+./scripts/runJupyter.sh
+```
+
+**Note:** The Docker image must be built with `INCLUDE_PYTHON=true` for Jupyter to work.
+
+This will start a Jupyter notebook server at `http://localhost:8888` (or the port specified by `JUPYTER_PORT` in `scripts/config.sh`). 
+The example notebooks from `example/jupyter/notebooks` are mounted in the container at `/home/spark/workspace/notebooks`.
+
+**Configuration:**
+- **Required:** `SPARK_DRIVER_HOST`
+- Override the Jupyter port if required by setting `JUPYTER_PORT` in `scripts/config.sh`
+- The script uses the same configuration (`ARMADA_MASTER`, `ARMADA_QUEUE`, `SPARK_DRIVER_HOST`, etc.) as other scripts
