@@ -9,51 +9,55 @@ source "$scripts/init.sh"
 
 image_prefix=apache/spark
 
-
+if [ "$USE_FALLBACK_STORAGE" == "true" ]; then
+    image_prefix="${FALLBACK_STORAGE_PREFIX:-gbj262/spark.fbs.img2}"
+    image_tag="${FALLBACK_STORAGE_TAG:-latest}"
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
-if [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
-  echo Checking for images for spark: $SPARK_VERSION scala: $SCALA_BIN_VERSION
-  if [ "${INCLUDE_PYTHON}" == "false" ]; then
-      echo Building image without Python.
-      image_prefix=spark
-      extra_build_params=""
-  else
-      echo Building Python image.
-      image_prefix=spark-py
-      extra_build_params=" -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile "
-  fi
-  if ! docker image inspect "$image_prefix:$image_tag" >/dev/null 2>/dev/null; then
-    echo "There are no Docker images released for Spark $SPARK_VERSION and Scala $SCALA_BIN_VERSION."
-    echo "A Docker image has to be built from Spark sources locally."
-    if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
-      echo "Checking out Spark sources for tag v$SPARK_VERSION."
-      git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
-    fi
-    echo "Building Spark Docker image $image_prefix:$image_tag."
-    cd ".spark-$SPARK_VERSION"
-    # Spark 3.3.4 does not compile without this fix
-    if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
-      sed -i -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
-      # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
-      spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
-      if [ -f "$spark_dockerfile" ]; then
-        sed -i -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
-        sed -i -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
-      fi
-    fi
-    ./dev/change-scala-version.sh $SCALA_BIN_VERSION
-    # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
-    # spark-examples jars are not released, so we need to build these from sources
-    ./build/mvn --batch-mode clean
-    ./build/mvn --batch-mode package -pl examples
-    ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
-    ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
-    cd ..
-  fi
+elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
+        echo Checking for images for spark: $SPARK_VERSION scala: $SCALA_BIN_VERSION
+        if [ "${INCLUDE_PYTHON}" == "false" ]; then
+            echo Building image without Python.
+            image_prefix=spark
+            extra_build_params=""
+        else
+            echo Building Python image.
+            image_prefix=spark-py
+            extra_build_params=" -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile "
+        fi
+        if ! docker image inspect "$image_prefix:$image_tag" >/dev/null 2>/dev/null; then
+            echo "There are no Docker images released for Spark $SPARK_VERSION and Scala $SCALA_BIN_VERSION."
+            echo "A Docker image has to be built from Spark sources locally."
+            if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
+                echo "Checking out Spark sources for tag v$SPARK_VERSION."
+                git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+            fi
+            echo "Building Spark Docker image $image_prefix:$image_tag."
+            cd ".spark-$SPARK_VERSION"
+            # Spark 3.3.4 does not compile without this fix
+            if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
+                sed -i -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+                # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
+                spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
+                if [ -f "$spark_dockerfile" ]; then
+                    sed -i -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+                    sed -i -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+                fi
+            fi
+            ./dev/change-scala-version.sh $SCALA_BIN_VERSION
+            # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
+            # spark-examples jars are not released, so we need to build these from sources
+            ./build/mvn --batch-mode clean
+            ./build/mvn --batch-mode package -pl examples
+            ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+            ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
+            cd ..
+        fi
 fi
+
 
 source "$scripts/prepExtraFiles.sh"
 
+echo using spark image: $image_prefix:$image_tag
 docker build \
   --tag $IMAGE_NAME \
   --build-arg spark_base_image_prefix=$image_prefix \
