@@ -80,3 +80,6 @@ scripts/armadactl
 e2e-test.log
 extraJars/*.jar
 scripts/.tmp/
+
+# Jupyter
+example/jupyter/workspace/

@@ -374,9 +374,11 @@ private[spark] object Config {
       .longConf
       .createOptional
 
-  val ARMADA_AUTH_TOKEN: OptionalConfigEntry[String] =
-    ConfigBuilder("spark.armada.auth.token")
-      .doc("Armada auth token, (specific to the OIDC server being used.)")
+  val ARMADA_AUTH_SCRIPT_PATH: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.auth.script.path")
+      .doc(
+        "Path to an executable script for obtaining authentication tokens. "
+      )
       .stringConf
       .createOptional
 
@@ -413,6 +415,16 @@ private[spark] object Config {
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(_ > 0, "Check interval must be positive")
       .createWithDefaultString("10s")
+
+  val ARMADA_EVENT_WATCHER_USE_TLS: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.eventWatcher.useTls")
+      .doc(
+        "Whether to use TLS for the event watcher gRPC channel. " +
+          "Set to true to use TLS connections. " +
+          "Defaults to false (plaintext)"
+      )
+      .booleanConf
+      .createWithDefault(false)
 
   val ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD: ConfigEntry[Long] =
     ConfigBuilder("spark.armada.executor.preemptionGracePeriod")

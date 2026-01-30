@@ -25,7 +25,9 @@ import scala.concurrent.Future
 
 import api.submit.JobCancelRequest
 import io.armadaproject.armada.ArmadaClient
-import io.grpc.{ManagedChannel, ManagedChannelBuilder}
+import io.grpc.netty.NettyChannelBuilder
+import io.grpc.stub.MetadataUtils
+import io.grpc.{ManagedChannel, ManagedChannelBuilder, Metadata}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
@@ -127,12 +129,12 @@ private[spark] class ArmadaClusterManagerBackend(
               s"jobSetId=$jsId, queue=$q, namespace=$namespace"
           )
 
-          // Initialize Armada client
-          val token  = conf.get(ARMADA_AUTH_TOKEN)
+          // Initialize Armada client with auth token
+          val token  = ArmadaUtils.getAuthToken(Some(conf))
           val client = ArmadaClient(host, port, useSsl = false, token)
           armadaClient = Some(client)
 
-          createWatcher(q, jsId, host, port, client)
+          createWatcher(q, jsId, host, port, client, token)
 
           createAllocator(q, jsId, client)
 
@@ -176,13 +178,35 @@ private[spark] class ArmadaClusterManagerBackend(
       jsId: String,
       host: String,
       port: Int,
-      client: ArmadaClient
+      client: ArmadaClient,
+      token: Option[String]
   ): Unit = {
-    // Build gRPC channel to Armada server
-    val channel: ManagedChannel = ManagedChannelBuilder
-      .forAddress(host, port)
-      .usePlaintext()
-      .build()
+    // Configure TLS
+    val useTls         = conf.get(ARMADA_EVENT_WATCHER_USE_TLS)
+    val channelBuilder = NettyChannelBuilder.forAddress(host, port)
+
+    val channelBuilderWithTls = if (useTls) {
+      logInfo("Using TLS for event watcher gRPC channel")
+      channelBuilder.useTransportSecurity()
+    } else {
+      logInfo("Using plaintext for event watcher gRPC channel")
+      channelBuilder.usePlaintext()
+    }
+
+    val channel = token match {
+      case Some(t) =>
+        val metadata = new Metadata()
+        metadata.put(
+          Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
+          "Bearer " + t
+        )
+        channelBuilderWithTls
+          .intercept(MetadataUtils.newAttachHeadersInterceptor(metadata))
+          .build()
+      case None =>
+        channelBuilderWithTls.build()
+    }
+
     grpcChannel = Some(channel)
 
     // Start event watcher

@@ -13,6 +13,17 @@ fi
 DEPLOY_MODE="${DEPLOY_MODE:-cluster}"
 ALLOCATION_MODE="${ALLOCATION_MODE:-dynamic}"
 
+# s3
+ARMADA_S3_BUCKET_NAME=${ARMADA_S3_BUCKET_NAME:-kafka-s3}
+ARMADA_S3_BUCKET_ENDPOINT=${ARMADA_S3_BUCKET_ENDPOINT:-http://192.168.59.6}
+ARMADA_S3_USER_DIR=${ARMADA_USER_DIR:-s3a://$ARMADA_S3_BUCKET_NAME/$USER}
+
+# benchmark
+ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/eks-spark-benchmark-assembly-1.0.jar}
+ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/data/10t}
+ARMADA_BENCHMARK_CLASS=${ARMADA_BENCHMARK_CLASS:-com.amazonaws.eks.tpcds.BenchmarkSQL}
+ARMADA_BENCHMARK_TOOLS=${ARMADA_BENCHMARK_TOOLS:-/opt/tools/tpcds-kit/tools}
+
 # Parse long options (--mode, --allocation) before getopts
 ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -67,15 +78,15 @@ print_usage () {
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
+    echo '   # Auth: Set ARMADA_AUTH_SCRIPT_PATH for authentication'
     exit 1
 }
 
-while getopts "hekpi:a:m:P:s:c:q:M:A:e" opt; do
+while getopts "hekpi:m:P:s:c:q:M:A:ef" opt; do
   case "$opt" in
     h) print_usage ;;
     k) USE_KIND=true ;;
     p) INCLUDE_PYTHON=true ;;
-    a) ARMADA_AUTH_TOKEN=$OPTARG ;;
     i) IMAGE_NAME=$OPTARG ;;
     m) ARMADA_MASTER=$OPTARG ;;
     q) ARMADA_QUEUE=$OPTARG ;;
@@ -85,6 +96,7 @@ while getopts "hekpi:a:m:P:s:c:q:M:A:e" opt; do
     e) RUNNING_E2E_TESTS=true ;;
     M) DEPLOY_MODE=$OPTARG ;;
     A) ALLOCATION_MODE=$OPTARG ;;
+    f) USE_FALLBACK_STORAGE=true ;;
   esac
 done
 
@@ -92,10 +104,50 @@ export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export USE_KIND="${USE_KIND:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
+export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
+export ARMADA_AUTH_SCRIPT_PATH=${ARMADA_AUTH_SCRIPT_PATH:-}
+export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
+export SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
+export USE_FALLBACK_STORAGE="${USE_FALLBACK_STORAGE:-false}"
+export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
+
+ARMADA_AUTH_ARGS=()
+# Add auth script path if configured
+if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
+    ARMADA_AUTH_ARGS+=("--conf" "spark.armada.auth.script.path=$ARMADA_AUTH_SCRIPT_PATH")
+fi
+
+if [ "$ARMADA_EVENT_WATCHER_USE_TLS" != "" ]; then
+    ARMADA_AUTH_ARGS+=("--conf" "spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS")
+fi
+
+# Build deploy-mode specific arguments array
+DEPLOY_MODE_ARGS=()
+if [ "$DEPLOY_MODE" = "client" ]; then
+    DEPLOY_MODE_ARGS=(
+        --conf spark.driver.host=$SPARK_DRIVER_HOST
+        --conf spark.driver.port=$SPARK_DRIVER_PORT
+        --conf spark.driver.bindAddress=0.0.0.0
+    )
+else
+    DEPLOY_MODE_ARGS=(
+        --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL
+    )
+fi
+
+# Add block manager port if configured
+if [ "$SPARK_BLOCK_MANAGER_PORT" != "" ]; then
+    DEPLOY_MODE_ARGS+=("--conf" "spark.blockManager.port=$SPARK_BLOCK_MANAGER_PORT")
+fi
+
+DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
+if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
+fi
 
 # Validation
 
@@ -124,8 +176,6 @@ else
     INCLUDE_PYTHON=true
 fi
 
-
-
 # derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
 if [[ -z "${SCALA_VERSION:-}" ]]; then
   export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version -q -DforceStdout)
@@ -144,6 +194,13 @@ if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     exit 1
 fi
 
+if [ "$USE_FALLBACK_STORAGE" = "true" ]; then
+    if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
+        echo fallback storage currently only supported for spark 3.5.3/scala 2.12
+        echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
+        exit 1
+    fi
+fi
 
 shift $((OPTIND - 1))
 FINAL_ARGS=("${@:-}")   
