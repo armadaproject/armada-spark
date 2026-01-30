@@ -43,7 +43,7 @@ private class ArmadaUtilsSuite
   test("Confirm initContainer sh command succeeds with server") {
     // start server
     val serverPort    = "54525"
-    val serverCommand = Seq("nc", "-l", serverPort)
+    val serverCommand = Seq("nc", "-l", "-p", serverPort)
     val server        = Process.apply(serverCommand).run
 
     // start client
