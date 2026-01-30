@@ -89,6 +89,28 @@ class ExecutorCountAssertion(expectedCount: Int) extends TestAssertion {
   }
 }
 
+/** Executor count reached-at-least assertion - verifies that at some point during the job the
+  * executor count reached at least minCount.
+  */
+class ExecutorCountReachedAtLeastAssertion(minCount: Int) extends TestAssertion {
+  override val name = s"Executor count should have reached at least $minCount at some point"
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
+    context.k8sClient.getPodsByLabel(labelSelector, context.namespace).map { pods =>
+      if (pods.size >= minCount) {
+        AssertionResult.Success
+      } else {
+        AssertionResult.Failure(
+          s"Executor count never reached at least $minCount (current: ${pods.size})"
+        )
+      }
+    }
+  }
+}
+
 /** Pod label assertion - verifies pods have expected labels */
 class PodLabelAssertion(
     podSelector: String,

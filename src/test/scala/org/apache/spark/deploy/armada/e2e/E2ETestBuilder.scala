@@ -47,6 +47,7 @@ class E2ETestBuilder(testName: String) {
   private var sparkVersion                 = "3.5.5"
   private var failFastOnPodFailure         = true
   private var pythonScript: Option[String] = None
+  private var appArgs: Seq[String]         = Seq("100")
 
   def withSparkConf(key: String, value: String): E2ETestBuilder = {
     sparkConfs += (key -> value)
@@ -69,6 +70,12 @@ class E2ETestBuilder(testName: String) {
   /** Use Python script instead of Scala class */
   def withPythonScript(script: String): E2ETestBuilder = {
     pythonScript = Some(script)
+    this
+  }
+
+  /** Application arguments. */
+  def withAppArgs(args: String*): E2ETestBuilder = {
+    appArgs = args.toSeq
     this
   }
 
@@ -104,9 +111,35 @@ class E2ETestBuilder(testName: String) {
     withSparkConf("spark.armada.scheduling.nodeUniformity", nodeUniformityLabel)
   }
 
+  /** Enable dynamic allocation. */
+  def withDynamicAllocation(
+      minExecutors: Int,
+      maxExecutors: Int,
+      schedulerBacklogTimeoutSeconds: Int = 5,
+      executorIdleTimeoutSeconds: Int = 60
+  ): E2ETestBuilder = {
+    withSparkConf("spark.dynamicAllocation.enabled", "true")
+    withSparkConf("spark.dynamicAllocation.minExecutors", minExecutors.toString)
+    withSparkConf("spark.dynamicAllocation.maxExecutors", maxExecutors.toString)
+    withSparkConf(
+      "spark.dynamicAllocation.schedulerBacklogTimeout",
+      s"${schedulerBacklogTimeoutSeconds}s"
+    )
+    withSparkConf(
+      "spark.dynamicAllocation.executorIdleTimeout",
+      s"${executorIdleTimeoutSeconds}s"
+    )
+  }
+
   /** Assert exact executor count */
   def assertExecutorCount(expected: Int): E2ETestBuilder = {
     assertions :+= new ExecutorCountAssertion(expected)
+    this
+  }
+
+  /** Assert that executor count reached at least minCount at some point during the job. */
+  def assertExecutorCountReachedAtLeast(minCount: Int): E2ETestBuilder = {
+    assertions :+= new ExecutorCountReachedAtLeastAssertion(minCount)
     this
   }
 
@@ -258,7 +291,8 @@ class E2ETestBuilder(testName: String) {
       sparkConfs = sparkConfs,
       assertions = assertions,
       failFastOnPodFailure = failFastOnPodFailure,
-      pythonScript = pythonScript
+      pythonScript = pythonScript,
+      appArgs = appArgs
     )
   }
 
@@ -272,13 +306,15 @@ class E2ETestBuilder(testName: String) {
     this.sparkVersion = config.sparkVersion
     this.sparkConfs ++= config.sparkConfs
     this.failFastOnPodFailure = config.failFastOnPodFailure
+    this.appArgs = config.appArgs
     this
   }
 
   def run()(implicit orchestrator: TestOrchestrator): TestResult = {
     import scala.concurrent.Await
+    import TestConstants.RunTimeout
     val future = orchestrator.runTest(testName, build())
-    val result = Await.result(future, 5.minutes)
+    val result = Await.result(future, RunTimeout)
 
     assert(result.status == JobSetStatus.Success, s"Job failed with status: ${result.status}")
 

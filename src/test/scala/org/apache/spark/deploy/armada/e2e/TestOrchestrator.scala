@@ -39,7 +39,8 @@ case class TestConfig(
     sparkConfs: Map[String, String] = Map.empty,
     assertions: Seq[TestAssertion] = Seq.empty,
     failFastOnPodFailure: Boolean = true,
-    pythonScript: Option[String] = None
+    pythonScript: Option[String] = None,
+    appArgs: Seq[String] = Seq("100")
 )
 
 /** Manages test isolation with unique namespace and queue per test. Ensures cleanup of resources
@@ -322,7 +323,8 @@ class TestOrchestrator(
       appResource,
       config.lookoutUrl,
       config.pythonScript,
-      modeHelper
+      modeHelper,
+      config.appArgs
     )
 
     println(s"\n[SUBMIT] Submitting Spark job via Docker:")
@@ -528,7 +530,8 @@ class TestOrchestrator(
       appResource: String,
       lookoutUrl: String,
       pythonScript: Option[String],
-      modeHelper: DeploymentModeHelper
+      modeHelper: DeploymentModeHelper,
+      appArgs: Seq[String] = Seq("100")
   ): Seq[String] = {
     val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
     val isClientMode = !modeHelper.isDriverInCluster
@@ -599,7 +602,7 @@ class TestOrchestrator(
       Seq("--conf", s"$key=$value")
     }.toSeq
 
-    commandWithApp ++ confArgs ++ Seq(appResource, "100")
+    commandWithApp ++ confArgs ++ (appResource +: appArgs)
   }
 
   private def buildVolumeMounts(): Seq[String] = {

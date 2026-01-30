@@ -45,6 +45,9 @@
 # vscode
 /.vscode
 
+# cursor
+.cursor/
+
 # Standard symbolic link to build/quick/bin
 /qbin
 
