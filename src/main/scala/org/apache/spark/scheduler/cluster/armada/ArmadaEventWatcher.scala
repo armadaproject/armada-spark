@@ -23,7 +23,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import api.event.{
-  EventGrpc,
   EventMessage,
   JobSubmittedEvent,
   JobQueuedEvent,
@@ -42,7 +41,6 @@ import org.apache.spark.internal.Logging
 /** Keeps track of the armada event stream for the jobset
   */
 private[spark] class ArmadaEventWatcher(
-    grpcChannel: ManagedChannel,
     queue: String,
     jobSetId: String,
     backend: ArmadaClusterManagerBackend,

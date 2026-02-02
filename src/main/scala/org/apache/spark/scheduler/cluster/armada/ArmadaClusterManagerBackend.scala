@@ -27,7 +27,7 @@ import api.submit.JobCancelRequest
 import io.armadaproject.armada.ArmadaClient
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.stub.MetadataUtils
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, Metadata}
+import io.grpc.Metadata
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
@@ -85,7 +85,6 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
   /** Armada connection details */
-  private var grpcChannel: Option[ManagedChannel]      = None
   private var armadaClient: Option[ArmadaClient]       = None
   private var eventWatcher: Option[ArmadaEventWatcher] = None
   private var queue: Option[String]                    = None
@@ -207,10 +206,8 @@ private[spark] class ArmadaClusterManagerBackend(
         channelBuilderWithTls.build()
     }
 
-    grpcChannel = Some(channel)
-
     // Start event watcher
-    val watcher = new ArmadaEventWatcher(channel, q, jsId, this, jobIdToExecutor, client)
+    val watcher = new ArmadaEventWatcher(q, jsId, this, jobIdToExecutor, client)
     eventWatcher = Some(watcher)
     watcher.start()
     logInfo(s"Armada Event Watcher started for queue=$q jobSetId=$jsId at $host:$port")
@@ -262,15 +259,6 @@ private[spark] class ArmadaClusterManagerBackend(
       ThreadUtils.shutdown(executorService)
     }
 
-    // Shutdown gRPC channel
-    Utils.tryLogNonFatalError {
-      grpcChannel.foreach { ch =>
-        ch.shutdown()
-        ch.awaitTermination(5, TimeUnit.SECONDS)
-      }
-    }
-
-    grpcChannel = None
     eventWatcher = None
     armadaClient = None
     executorAllocator = None
