@@ -186,13 +186,28 @@ class ArmadaSparkE2E
       .withDeployMode(deployMode)
       .withPodLabels(labels)
 
-    if (deployMode == "cluster") {
+    val testWithModeSpecificAsserts = if (deployMode == "cluster") {
       test
         .assertDriverExists()
         .assertPodLabels(labels)
     } else {
       test
         .assertExecutorsHaveLabels(labels)
+    }
+
+    if (allocation == "dynamic") {
+      testWithModeSpecificAsserts
+        .withAppArgs("1000")
+        .withSparkConf(
+          Map(
+            "spark.executor.instances"             -> "1",
+            "spark.armada.executor.limit.memory"   -> "1Gi",
+            "spark.armada.executor.request.memory" -> "1Gi",
+            "spark.executor.memory"                -> "768m"
+          )
+        )
+    } else {
+      testWithModeSpecificAsserts
     }
   }
 
@@ -243,30 +258,18 @@ class ArmadaSparkE2E
       deployMode,
       allocation,
       Map("test-type" -> s"node-selector")
-    ).withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+    )
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
 
     if (allocation == "static") {
       base
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
-        .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
     } else {
-      // Use more tasks (1000) so the job runs longer and dynamically requested executors have
-      // time to register before the job finishes; 500 tasks often caused a race where a
-      // late-requested executor connected just as the driver was shutting down (StacklessClosedChannelException).
       base
         .withDynamicAllocation(minExecutors = executorCount, maxExecutors = 4)
-        .withAppArgs("1000")
-        .withSparkConf(
-          Map(
-            "spark.executor.instances"             -> "1",
-            "spark.armada.executor.limit.memory"   -> "1Gi",
-            "spark.armada.executor.request.memory" -> "1Gi",
-            "spark.executor.memory"                -> "768m"
-          )
-        )
-        .assertExecutorCountReachedAtLeast(2)
-        .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+        .assertExecutorCountReachedAtLeast(executorCount)
     }
   }
 
@@ -281,7 +284,12 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with node selectors - dynamicCluster", E2ETest) {
-    baseNodeSelectorTest("cluster", "dynamic", 1)
+    baseNodeSelectorTest("cluster", "dynamic", 2)
+      .run()
+  }
+
+  test("SparkPi job with node selectors - dynamicClient", E2ETest) {
+    baseNodeSelectorTest("client", "dynamic", 2)
       .run()
   }
 
