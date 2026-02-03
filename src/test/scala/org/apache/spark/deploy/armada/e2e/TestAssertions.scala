@@ -89,6 +89,29 @@ class ExecutorCountAssertion(expectedCount: Int) extends TestAssertion {
   }
 }
 
+class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertion {
+  override val name = s"Executor count max should have reached at least $expectedMinMax"
+
+  private var maxSeen: Int = 0
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
+    context.k8sClient.getPodsByLabel(labelSelector, context.namespace).map { pods =>
+      val count = pods.size
+      maxSeen = math.max(maxSeen, count)
+      if (maxSeen >= expectedMinMax) {
+        AssertionResult.Success
+      } else {
+        AssertionResult.Failure(
+          s"Executor count max never reached $expectedMinMax (max seen: $maxSeen, current: $count)"
+        )
+      }
+    }
+  }
+}
+
 /** Pod label assertion - verifies pods have expected labels */
 class PodLabelAssertion(
     podSelector: String,
