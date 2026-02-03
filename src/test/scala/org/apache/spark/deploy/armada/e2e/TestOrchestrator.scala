@@ -39,7 +39,8 @@ case class TestConfig(
     sparkConfs: Map[String, String] = Map.empty,
     assertions: Seq[TestAssertion] = Seq.empty,
     failFastOnPodFailure: Boolean = true,
-    pythonScript: Option[String] = None
+    pythonScript: Option[String] = None,
+    appArgs: Seq[String] = Seq("100")
 )
 
 /** Manages test isolation with unique namespace and queue per test. Ensures cleanup of resources
@@ -152,74 +153,82 @@ class TestOrchestrator(
       }.toMap
     }
 
-    assertions.map { assertion =>
-      val result = validateScheduling(assertion, assertionContext, jobCompleted)
-      assertion.name -> result
-    }.toMap
+    validateAllAssertions(assertions, assertionContext, jobCompleted)
   }
 
-  private def validateScheduling(
+  private def runAssertion(
       assertion: TestAssertion,
       context: AssertionContext,
-      jobCompleted: () => Boolean
-  ): AssertionResult = {
+      jobCompleted: () => Boolean,
+      maxWaitTime: FiniteDuration,
+      gracePeriodAfterCompletion: FiniteDuration
+  )(implicit ec: ExecutionContext): Future[(String, AssertionResult)] = Future {
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
-    // Give Armada some time to schedule resources after driver starts (executors need time to come up)
-    val maxWaitTime                    = 30.seconds
-    val gracePeriodAfterCompletion     = 10.seconds
-    val startTime                      = System.currentTimeMillis()
-    var attempts                       = 0
-    var lastResult: AssertionResult    = AssertionResult.Failure("Not yet checked")
-    var jobCompletedTime: Option[Long] = None
+    val startTime                                  = System.currentTimeMillis()
+    var jobCompletedTime                           = Option.empty[Long]
+    var lastResult: AssertionResult                = AssertionResult.Failure("Not yet checked")
+    var outcome: Option[(String, AssertionResult)] = None
 
-    while ((System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
-      val nowCompleted = jobCompleted()
-      if (nowCompleted && jobCompletedTime.isEmpty) {
-        jobCompletedTime = Some(System.currentTimeMillis())
-      }
+    while (outcome.isEmpty) {
+      val now       = System.currentTimeMillis()
+      val completed = jobCompleted()
+      if (completed && jobCompletedTime.isEmpty) jobCompletedTime = Some(now)
 
-      // Allow assertions to continue for grace period even after job completes
-      val inGracePeriod = jobCompletedTime.isEmpty || {
-        val elapsedSinceCompletion = System.currentTimeMillis() - jobCompletedTime.get
-        elapsedSinceCompletion < gracePeriodAfterCompletion.toMillis
-      }
+      val graceExpired =
+        jobCompletedTime.exists(t => (now - t) > gracePeriodAfterCompletion.toMillis)
+      val timeout = (now - startTime) > maxWaitTime.toMillis
 
-      if (inGracePeriod) {
-        attempts += 1
+      if (timeout || graceExpired) {
+        val finalResult = lastResult match {
+          case AssertionResult.Failure(msg) if jobCompletedTime.isDefined =>
+            AssertionResult.Failure(s"$msg (job completed before assertion could pass)")
+          case r => r
+        }
+        outcome = Some((assertion.name, finalResult))
+      } else {
         try {
           val result = Await.result(assertion.assert(context)(ec), 10.seconds)
           lastResult = result
-
           result match {
             case AssertionResult.Success =>
-              return result
-            case AssertionResult.Failure(_) =>
-            // For the first few attempts, be patient - resources may still be scheduling
+              outcome = Some((assertion.name, result))
+            case _ =>
           }
         } catch {
           case ex: Exception =>
             lastResult = AssertionResult.Failure(ex.getMessage)
-          // Don't log retries to avoid clutter
         }
-
-        Thread.sleep(2000)
+        if (outcome.isEmpty) Thread.sleep(1000)
       }
     }
+    outcome.get
+  }
 
-    lastResult match {
-      case AssertionResult.Success =>
-        lastResult
-      case AssertionResult.Failure(msg) =>
-        if (jobCompletedTime.isDefined) {
-          AssertionResult.Failure(
-            s"${assertion.name}: Job completed before assertion could pass"
-          )
-        } else {
-          lastResult
-        }
+  private def validateAllAssertions(
+      assertions: Seq[TestAssertion],
+      context: AssertionContext,
+      jobCompleted: () => Boolean
+  ): Map[String, AssertionResult] = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
+
+    val maxWaitTime                = 60.seconds
+    val gracePeriodAfterCompletion = 20.seconds
+    val overallTimeout             = maxWaitTime + gracePeriodAfterCompletion + 15.seconds
+
+    val futures = assertions.map { assertion =>
+      runAssertion(
+        assertion,
+        context,
+        jobCompleted,
+        maxWaitTime,
+        gracePeriodAfterCompletion
+      )
     }
+    val results = Await.result(Future.sequence(futures), overallTimeout)
+    results.toMap
   }
 
   def runTest(name: String, config: TestConfig): Future[TestResult] = {
@@ -353,7 +362,8 @@ class TestOrchestrator(
       appResource,
       config.lookoutUrl,
       config.pythonScript,
-      modeHelper
+      modeHelper,
+      config.appArgs
     )
 
     println(s"\n[SUBMIT] Submitting Spark job via Docker:")
@@ -583,7 +593,8 @@ class TestOrchestrator(
       appResource: String,
       lookoutUrl: String,
       pythonScript: Option[String],
-      modeHelper: DeploymentModeHelper
+      modeHelper: DeploymentModeHelper,
+      appArgs: Seq[String] = Seq("100")
   ): Seq[String] = {
     val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
     val isClientMode = !modeHelper.isDriverInCluster
@@ -654,7 +665,7 @@ class TestOrchestrator(
       Seq("--conf", s"$key=$value")
     }.toSeq
 
-    commandWithApp ++ confArgs ++ Seq(appResource, "100")
+    commandWithApp ++ confArgs ++ (appResource +: appArgs)
   }
 
   private def buildVolumeMounts(): Seq[String] = {
