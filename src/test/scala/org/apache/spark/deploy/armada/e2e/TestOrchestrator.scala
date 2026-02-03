@@ -113,6 +113,15 @@ class TestOrchestrator(
     podRunning
   }
 
+  /** Runs all test assertions while the Spark job is still running (driver/executors present).
+    *
+    * Parallel assertion flow:
+    *   1. Wait for the relevant pod(s) to be Running (driver in cluster mode, executors in client
+    *      mode).
+    *   2. Once pods are up, run every assertion in parallel via validateAllAssertions.
+    *   3. Each assertion runs in its own Future with a 1s sampling loop, so we can observe
+    *      transient state (e.g. peak executor count) that might disappear after job completion.
+    */
   private def runAssertionsWhileJobRunning(
       assertions: Seq[TestAssertion],
       context: TestContext,
@@ -148,74 +157,92 @@ class TestOrchestrator(
       }.toMap
     }
 
-    assertions.map { assertion =>
-      val result = validateScheduling(assertion, assertionContext, jobCompleted)
-      assertion.name -> result
-    }.toMap
+    validateAllAssertions(assertions, assertionContext, jobCompleted)
   }
 
-  private def validateScheduling(
+  /** Runs a single assertion in a loop until it succeeds, times out, or the job completes.
+    *
+    * Exit conditions:
+    *   - Assertion returns Success → return that result and exit.
+    *   - maxWaitTime elapsed: return last result (success or failure).
+    *   - Job completed and gracePeriodAfterCompletion has elapsed: return last result.
+    */
+  private def runAssertion(
       assertion: TestAssertion,
       context: AssertionContext,
-      jobCompleted: () => Boolean
-  ): AssertionResult = {
+      jobCompleted: () => Boolean,
+      maxWaitTime: FiniteDuration,
+      gracePeriodAfterCompletion: FiniteDuration
+  )(implicit ec: ExecutionContext): Future[(String, AssertionResult)] = Future {
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
-    // Give Armada some time to schedule resources after driver starts (executors need time to come up)
-    val maxWaitTime                    = 30.seconds
-    val gracePeriodAfterCompletion     = 10.seconds
-    val startTime                      = System.currentTimeMillis()
-    var attempts                       = 0
-    var lastResult: AssertionResult    = AssertionResult.Failure("Not yet checked")
-    var jobCompletedTime: Option[Long] = None
+    val startTime                                  = System.currentTimeMillis()
+    var jobCompletedTime                           = Option.empty[Long]
+    var lastResult: AssertionResult                = AssertionResult.Failure("Not yet checked")
+    var outcome: Option[(String, AssertionResult)] = None
 
-    while ((System.currentTimeMillis() - startTime) < maxWaitTime.toMillis) {
-      val nowCompleted = jobCompleted()
-      if (nowCompleted && jobCompletedTime.isEmpty) {
-        jobCompletedTime = Some(System.currentTimeMillis())
-      }
+    while (outcome.isEmpty) {
+      val now       = System.currentTimeMillis()
+      val completed = jobCompleted()
+      if (completed && jobCompletedTime.isEmpty) jobCompletedTime = Some(now)
 
-      // Allow assertions to continue for grace period even after job completes
-      val inGracePeriod = jobCompletedTime.isEmpty || {
-        val elapsedSinceCompletion = System.currentTimeMillis() - jobCompletedTime.get
-        elapsedSinceCompletion < gracePeriodAfterCompletion.toMillis
-      }
+      // Stop if we've exceeded max wait time, or job finished and grace period after completion has passed
+      val graceExpired =
+        jobCompletedTime.exists(t => (now - t) > gracePeriodAfterCompletion.toMillis)
+      val timeout = (now - startTime) > maxWaitTime.toMillis
 
-      if (inGracePeriod) {
-        attempts += 1
+      if (timeout || graceExpired) {
+        val finalResult = lastResult match {
+          case AssertionResult.Failure(msg) if jobCompletedTime.isDefined =>
+            AssertionResult.Failure(s"$msg (job completed before assertion could pass)")
+          case r => r
+        }
+        outcome = Some((assertion.name, finalResult))
+      } else {
         try {
           val result = Await.result(assertion.assert(context)(ec), 10.seconds)
           lastResult = result
-
           result match {
             case AssertionResult.Success =>
-              return result
-            case AssertionResult.Failure(_) =>
-            // For the first few attempts, be patient - resources may still be scheduling
+              outcome = Some((assertion.name, result))
+            case _ =>
+            // Stay in loop; we'll retry after 1s (state may change, e.g. more executors)
           }
         } catch {
           case ex: Exception =>
             lastResult = AssertionResult.Failure(ex.getMessage)
-          // Don't log retries to avoid clutter
         }
-
-        Thread.sleep(2000)
+        if (outcome.isEmpty) Thread.sleep(1000)
       }
     }
+    outcome.get
+  }
 
-    lastResult match {
-      case AssertionResult.Success =>
-        lastResult
-      case AssertionResult.Failure(msg) =>
-        if (jobCompletedTime.isDefined) {
-          AssertionResult.Failure(
-            s"${assertion.name}: Job completed before assertion could pass"
-          )
-        } else {
-          lastResult
-        }
+  /** Runs every assertion in parallel: one Future per assertion, each running runAssertion. */
+  private def validateAllAssertions(
+      assertions: Seq[TestAssertion],
+      context: AssertionContext,
+      jobCompleted: () => Boolean
+  ): Map[String, AssertionResult] = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration._
+
+    val maxWaitTime                = 60.seconds
+    val gracePeriodAfterCompletion = 20.seconds
+    val overallTimeout             = maxWaitTime + gracePeriodAfterCompletion + 15.seconds
+
+    val futures = assertions.map { assertion =>
+      runAssertion(
+        assertion,
+        context,
+        jobCompleted,
+        maxWaitTime,
+        gracePeriodAfterCompletion
+      )
     }
+    val results = Await.result(Future.sequence(futures), overallTimeout)
+    results.toMap
   }
 
   def runTest(name: String, config: TestConfig): Future[TestResult] = {
@@ -528,7 +555,8 @@ class TestOrchestrator(
       appResource: String,
       lookoutUrl: String,
       pythonScript: Option[String],
-      modeHelper: DeploymentModeHelper
+      modeHelper: DeploymentModeHelper,
+      appArgs: Seq[String] = Seq("100")
   ): Seq[String] = {
     val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
     val isClientMode = !modeHelper.isDriverInCluster
@@ -599,7 +627,7 @@ class TestOrchestrator(
       Seq("--conf", s"$key=$value")
     }.toSeq
 
-    commandWithApp ++ confArgs ++ Seq(appResource, "100")
+    commandWithApp ++ confArgs ++ (appResource +: appArgs)
   }
 
   private def buildVolumeMounts(): Seq[String] = {
