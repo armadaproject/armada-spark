@@ -129,7 +129,7 @@ class E2ETestBuilder(testName: String) {
       "spark.dynamicAllocation.executorIdleTimeout",
       s"${executorIdleTimeoutSeconds}s"
     )
-    withSparkConf("spark.armada.allocation.checkInterval", "5s")
+    withSparkConf("spark.armada.allocation.checkInterval", "1s")
   }
 
   /** Assert exact executor count */
