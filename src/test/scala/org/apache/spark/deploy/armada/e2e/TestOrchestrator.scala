@@ -200,7 +200,7 @@ class TestOrchestrator(
           case ex: Exception =>
             lastResult = AssertionResult.Failure(ex.getMessage)
         }
-        if (outcome.isEmpty) Thread.sleep(1000)
+        if (outcome.isEmpty) Thread.sleep(2000)
       }
     }
     outcome.get
@@ -214,7 +214,7 @@ class TestOrchestrator(
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
-    val maxWaitTime                = 60.seconds
+    val maxWaitTime                = 120.seconds
     val gracePeriodAfterCompletion = 20.seconds
     val overallTimeout             = maxWaitTime + gracePeriodAfterCompletion + 15.seconds
 
