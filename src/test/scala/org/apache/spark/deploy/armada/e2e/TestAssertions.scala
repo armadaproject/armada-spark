@@ -102,6 +102,7 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
       val count = pods.size
       maxSeen = math.max(maxSeen, count)
       if (maxSeen >= expectedMinMax) {
+        println(s"Executor count max reached $expectedMinMax (max seen: $maxSeen, current: $count)")
         AssertionResult.Success
       } else {
         AssertionResult.Failure(
