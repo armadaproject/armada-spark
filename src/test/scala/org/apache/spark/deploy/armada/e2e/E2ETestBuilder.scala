@@ -119,6 +119,10 @@ class E2ETestBuilder(testName: String) {
       executorIdleTimeoutSeconds: Int = 60
   ): E2ETestBuilder = {
     withSparkConf("spark.dynamicAllocation.enabled", "true")
+    // Required for Spark < 3.4.0 (shuffle tracking is enabled by default from 3.4.0+)
+    // This allows dynamic allocation without an external shuffle service
+    // Ref: https://issues.apache.org/jira/browse/SPARK-39846
+    withSparkConf("spark.dynamicAllocation.shuffleTracking.enabled", "true")
     withSparkConf("spark.dynamicAllocation.minExecutors", minExecutors.toString)
     withSparkConf("spark.dynamicAllocation.maxExecutors", maxExecutors.toString)
     withSparkConf(
