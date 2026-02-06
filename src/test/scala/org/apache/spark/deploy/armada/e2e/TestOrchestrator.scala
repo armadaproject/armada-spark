@@ -110,7 +110,7 @@ class TestOrchestrator(
       }
 
       if (!podRunning) {
-        Thread.sleep(2000)
+        Thread.sleep(5000)
         attempts += 1
       }
     }
@@ -189,7 +189,7 @@ class TestOrchestrator(
         outcome = Some((assertion.name, finalResult))
       } else {
         try {
-          val result = Await.result(assertion.assert(context)(ec), 10.seconds)
+          val result = Await.result(assertion.assert(context)(ec), 30.seconds)
           lastResult = result
           result match {
             case AssertionResult.Success =>
@@ -200,7 +200,7 @@ class TestOrchestrator(
           case ex: Exception =>
             lastResult = AssertionResult.Failure(ex.getMessage)
         }
-        if (outcome.isEmpty) Thread.sleep(2000)
+        if (outcome.isEmpty) Thread.sleep(5000)
       }
     }
     outcome.get

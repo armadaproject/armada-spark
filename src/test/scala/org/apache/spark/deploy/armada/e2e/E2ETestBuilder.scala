@@ -273,6 +273,22 @@ class E2ETestBuilder(testName: String) {
     withExecutorPodAssertion(validator)
   }
 
+  /** Assert gang annotations on all pods seen across polls, without checking cardinality. Use for
+    * dynamic allocation where pods come and go with different cardinality values. Waits until at
+    * least expectedMinExecutors executor pods with valid annotations have been seen.
+    */
+  def assertGangJobForDynamic(
+      nodeUniformityLabel: String,
+      expectedMinExecutors: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicGangAnnotationAssertion(
+      nodeUniformityLabel,
+      expectedMinExecutors,
+      "executor"
+    )
+    this
+  }
+
   /** Assert that executors have correct gang scheduling annotations (for client mode where driver
     * is external)
     */

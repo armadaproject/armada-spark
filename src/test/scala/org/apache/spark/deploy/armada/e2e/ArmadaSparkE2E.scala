@@ -220,15 +220,28 @@ class ArmadaSparkE2E
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(
-      "basic-spark-pi-gang" + deployMode,
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"basic-spark-pi-gang-$suffix",
       deployMode,
       allocation,
       Map("test-type" -> "basic-gang")
     )
       .withGangJob("armada-spark")
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
+
+    if (allocation == "static") {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+    } else {
+      base
+        .withDynamicAllocation(
+          minExecutors = executorCount,
+          maxExecutors = 4,
+          schedulerBacklogTimeoutSeconds = 3,
+          executorIdleTimeoutSeconds = 90
+        )
+    }
   }
 
   test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
@@ -240,6 +253,15 @@ class ArmadaSparkE2E
   test("Basic SparkPi job with gang scheduling - staticClient", E2ETest) {
     baseSparkPiGangTest("client", "static", 3)
       .assertExecutorGangJob("armada-spark", 3) // Only 3 executors, no driver
+      .run()
+  }
+
+  test("Basic SparkPi job with gang scheduling - dynamicCluster", E2ETest) {
+    baseSparkPiGangTest("cluster", "dynamic", 2)
+      .assertGangJobForDynamic(
+        "armada-spark",
+        3
+      ) // at least 2 min executors + 1 scaled up executor seen
       .run()
   }
 

@@ -18,6 +18,7 @@
 package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
+import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -107,6 +108,56 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
       } else {
         AssertionResult.Failure(
           s"Executor count max never reached $expectedMinMax (max seen: $maxSeen, current: $count)"
+        )
+      }
+    }
+  }
+}
+
+/** Tracks all pods seen across polls and verifies each has gang annotations (GANG_ID and
+  * GANG_NODE_UNIFORMITY_LABEL). Use for dynamic allocation where pods come and go.
+  */
+class DynamicGangAnnotationAssertion(
+    nodeUniformityLabel: String,
+    expectedMinPods: Int,
+    podRole: String = "executor"
+) extends TestAssertion {
+  override val name =
+    s"At least $expectedMinPods $podRole pods should have gang annotations ($nodeUniformityLabel)"
+
+  // pod name -> whether it passed validation
+  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val labelSelector = s"spark-role=$podRole,test-id=${context.testId}"
+    context.k8sClient.getPodsByLabel(labelSelector, context.namespace).map { pods =>
+      pods.foreach { pod =>
+        val name = pod.getMetadata.getName
+        if (!seenPods.contains(name)) {
+          val annotations = pod.getMetadata.getAnnotations
+          val valid = annotations != null &&
+            Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+            Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+              .contains(nodeUniformityLabel)
+          seenPods(name) = valid
+        }
+      }
+
+      val validCount = seenPods.count(_._2)
+      val failed     = seenPods.filter(!_._2).keys.toSeq
+
+      if (failed.nonEmpty) {
+        AssertionResult.Failure(
+          s"${failed.size} $podRole pod(s) missing gang annotations: ${failed.mkString(", ")}"
+        )
+      } else if (validCount >= expectedMinPods) {
+        println(s"Seen $validCount valid $podRole pod(s)")
+        AssertionResult.Success
+      } else {
+        AssertionResult.Failure(
+          s"Only seen $validCount valid $podRole pod(s) so far, need at least $expectedMinPods"
         )
       }
     }
