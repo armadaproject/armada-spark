@@ -19,15 +19,18 @@ package org.apache.spark.scheduler.cluster.armada
 
 import java.util.concurrent.Executors
 
+import scala.util.control.NonFatal
+
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
 import org.mockito.Mockito._
 
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskSchedulerImpl
 
-class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
+class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
   var backend: ArmadaClusterManagerBackend = _
   var sc: SparkContext                     = _
@@ -67,31 +70,29 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
 
   after {
     if (backend != null) {
-      try {
-        backend.stop()
-      } catch {
-        case _: Exception => // Ignore cleanup errors
-      }
+      try { backend.stop() }
+      catch { case NonFatal(_) => }
     }
   }
 
+  /** Ignores NullPointerException from removeExecutor when driverEndpoint is null in tests */
+  private def ignoreRpcErrors(block: => Unit): Unit = {
+    try { block }
+    catch { case _: NullPointerException => }
+  }
+
   test("recordExecutor returns same ID for duplicate job") {
-    val jobId = "job-123"
+    val id1 = backend.recordExecutor("job-123")
+    val id2 = backend.recordExecutor("job-123")
 
-    val id1 = backend.recordExecutor(jobId)
-    val id2 = backend.recordExecutor(jobId)
-
-    assert(id1 === id2, "recordExecutor should return same ID for same job")
+    id1 shouldBe id2
   }
 
   test("recordExecutor assigns unique IDs for different jobs") {
-    val jobId1 = "job-123"
-    val jobId2 = "job-456"
+    val id1 = backend.recordExecutor("job-123")
+    val id2 = backend.recordExecutor("job-456")
 
-    val id1 = backend.recordExecutor(jobId1)
-    val id2 = backend.recordExecutor(jobId2)
-
-    assert(id1 !== id2, "recordExecutor should return different IDs for different jobs")
+    id1 should not be id2
   }
 
   test("recordExecutor increments ID counter") {
@@ -99,19 +100,19 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     val id2 = backend.recordExecutor("job-2").toInt
     val id3 = backend.recordExecutor("job-3").toInt
 
-    assert(id2 === id1 + 1, "IDs should increment")
-    assert(id3 === id2 + 1, "IDs should increment")
+    id2 shouldBe id1 + 1
+    id3 shouldBe id2 + 1
   }
 
   test("addPendingExecutor and getPendingExecutorCount work correctly") {
-    assert(backend.getPendingExecutorCount === 0, "Should start with 0 pending")
+    backend.getPendingExecutorCount shouldBe 0
 
     backend.addPendingExecutor("1")
-    assert(backend.getPendingExecutorCount === 1)
+    backend.getPendingExecutorCount shouldBe 1
 
     backend.addPendingExecutor("2")
     backend.addPendingExecutor("3")
-    assert(backend.getPendingExecutorCount === 3)
+    backend.getPendingExecutorCount shouldBe 3
   }
 
   test("addPendingExecutor is thread-safe") {
@@ -122,8 +123,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
       new Thread {
         override def run(): Unit = {
           (0 until executorsPerThread).foreach { j =>
-            val id = s"exec-$i-$j"
-            backend.addPendingExecutor(id)
+            backend.addPendingExecutor(s"exec-$i-$j")
           }
         }
       }
@@ -132,23 +132,19 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     threads.foreach(_.start())
     threads.foreach(_.join())
 
-    assert(backend.getPendingExecutorCount === numThreads * executorsPerThread)
+    backend.getPendingExecutorCount shouldBe numThreads * executorsPerThread
   }
 
   test("onExecutorSubmitted adds to pending") {
-    val jobId = "job-789"
-
-    assert(backend.getPendingExecutorCount === 0)
-
-    backend.onExecutorSubmitted(jobId)
-
-    assert(backend.getPendingExecutorCount === 1)
+    backend.getPendingExecutorCount shouldBe 0
+    backend.onExecutorSubmitted("job-789")
+    backend.getPendingExecutorCount shouldBe 1
   }
 
   test("applicationId returns correct app ID") {
-    val appId = backend.applicationId()
-    assert(appId === "test-app-123")
+    backend.applicationId() shouldBe "test-app-123"
   }
+
   test("recordExecutor is idempotent with concurrent calls") {
     val jobId      = "concurrent-job"
     val numThreads = 20
@@ -166,8 +162,86 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter {
     threads.foreach(_.start())
     threads.foreach(_.join())
 
-    // All threads should get the same ID
     val uniqueIds = results.values().toArray.toSet
-    assert(uniqueIds.size === 1, s"All threads should get same ID, got: $uniqueIds")
+    uniqueIds.size shouldBe 1
+  }
+
+  test("getActiveExecutorIds excludes failed executors") {
+    val execId1 = backend.recordExecutor("job-1")
+    val execId2 = backend.recordExecutor("job-2")
+
+    ignoreRpcErrors { backend.onExecutorFailed("job-1", execId1, 1, "OOM") }
+
+    val active = backend.getActiveExecutorIds()
+    active should not contain execId1
+    active should contain(execId2)
+  }
+
+  test("getActiveExecutorIds excludes succeeded executors") {
+    val execId1 = backend.recordExecutor("job-1")
+    val execId2 = backend.recordExecutor("job-2")
+
+    ignoreRpcErrors { backend.onExecutorSucceeded("job-1", execId1) }
+
+    val active = backend.getActiveExecutorIds()
+    active should not contain execId1
+    active should contain(execId2)
+  }
+
+  test("getActiveExecutorIds excludes cancelled executors") {
+    val execId1 = backend.recordExecutor("job-1")
+    val execId2 = backend.recordExecutor("job-2")
+
+    ignoreRpcErrors { backend.onExecutorCancelled("job-1", execId1) }
+
+    val active = backend.getActiveExecutorIds()
+    active should not contain execId1
+    active should contain(execId2)
+  }
+
+  test("getActiveExecutorIds excludes unschedulable executors") {
+    val execId1 = backend.recordExecutor("job-1")
+    val execId2 = backend.recordExecutor("job-2")
+
+    ignoreRpcErrors {
+      backend.onExecutorUnableToSchedule("job-1", execId1, "No resources")
+    }
+
+    val active = backend.getActiveExecutorIds()
+    active should not contain execId1
+    active should contain(execId2)
+  }
+
+  test("terminal executors are removed from pendingExecutors") {
+    backend.onExecutorSubmitted("job-1")
+    backend.onExecutorSubmitted("job-2")
+    backend.getPendingExecutorCount shouldBe 2
+
+    val execId1 = backend.recordExecutor("job-1")
+    ignoreRpcErrors { backend.onExecutorFailed("job-1", execId1, 1, "failed") }
+
+    backend.getPendingExecutorCount shouldBe 1
+  }
+
+  test("thread safety of terminal executor tracking") {
+    val numJobs = 100
+    val jobIds  = (1 to numJobs).map(i => s"job-$i")
+    val execIds = jobIds.map(backend.recordExecutor)
+
+    val threads = execIds.zipWithIndex.collect {
+      case (execId, i) if i % 2 == 0 =>
+        new Thread {
+          override def run(): Unit = {
+            ignoreRpcErrors {
+              backend.onExecutorFailed(jobIds(i), execId, 1, "failed")
+            }
+          }
+        }
+    }
+
+    threads.foreach(_.start())
+    threads.foreach(_.join())
+
+    backend.getActiveExecutorIds().size shouldBe numJobs / 2
   }
 }

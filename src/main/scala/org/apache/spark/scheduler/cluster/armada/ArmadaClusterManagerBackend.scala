@@ -73,6 +73,10 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Tracks requested executors not yet seen in events */
   private val pendingExecutors = new mutable.HashSet[String]()
 
+  /** Tracks executors that have reached a terminal state (succeeded, failed, cancelled) */
+  private val terminalExecutors: java.util.Set[String] =
+    ConcurrentHashMap.newKeySet[String]()
+
   /** Initial executor count */
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
@@ -232,26 +236,36 @@ private[spark] class ArmadaClusterManagerBackend(
   override def stop(): Unit = {
     logInfo("Stopping Armada cluster scheduler backend")
 
-    // Call parent stop
+    // Call parent stop - sends StopExecutor RPCs to all executors
     Utils.tryLogNonFatalError {
       super.stop()
     }
 
-    // Stop event watcher
-    Utils.tryLogNonFatalError {
-      eventWatcher.foreach(_.stop())
-    }
-
-    // Stop executor allocator
+    // Stop executor allocator (no new executors needed during shutdown)
     Utils.tryLogNonFatalError {
       executorAllocator.foreach(_.stop())
     }
 
-    // Cancel individual executor jobs (not the driver) if configured
+    // Cancel non-terminal executor jobs if configured.
+    // The event watcher stays running during the grace period so it can
+    // receive terminal events (Succeeded/Failed) and mark executors in
+    // terminalExecutors. This allows executors that exit gracefully after
+    // receiving StopExecutor to show "Succeeded" in Armada instead of
+    // "Cancelled".
     if (conf.get(ARMADA_DELETE_EXECUTORS)) {
+      val gracePeriod = conf.get(ARMADA_KILL_GRACE_PERIOD)
+      logInfo(s"Waiting ${gracePeriod}ms for executors to exit gracefully")
+      try { Thread.sleep(gracePeriod) }
+      catch { case _: InterruptedException => }
+
       Utils.tryLogNonFatalError {
         cancelExecutorJobs()
       }
+    }
+
+    // Stop event watcher after grace period so terminal events are captured
+    Utils.tryLogNonFatalError {
+      eventWatcher.foreach(_.stop())
     }
 
     // Shutdown executor service
@@ -296,13 +310,10 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  /** Cancel all executor jobs (driver is already filtered out at submission time).
+  /** Cancel all non-terminal executor jobs (driver is already filtered out at submission time).
     */
   private def cancelExecutorJobs(): Unit = {
-    // Collect all executor IDs
-    val executorIds = executorToJobId.synchronized {
-      executorToJobId.asScala.keys.toSeq
-    }
+    val executorIds = getActiveExecutorIds()
 
     if (executorIds.nonEmpty) {
       cancelArmadaJobs(executorIds, "Spark application stopping - cancelling executors")
@@ -347,6 +358,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Send RPC kill signal to executors
     executorIds.foreach { id =>
+      terminalExecutors.add(id)
       removeExecutor(id, ExecutorKilled)
     }
 
@@ -408,7 +420,8 @@ private[spark] class ArmadaClusterManagerBackend(
       s"Armada job $jobId failed: $reason"
     )
 
-    removeExecutor(executorId, exitReason)
+    markTerminal(executorId)
+    safeRemoveExecutor(executorId, exitReason)
   }
 
   /** Called by event watcher when executor job is cancelled
@@ -416,7 +429,45 @@ private[spark] class ArmadaClusterManagerBackend(
   private[armada] def onExecutorCancelled(jobId: String, executorId: String): Unit = {
     val exitReason = ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId was cancelled")
 
-    removeExecutor(executorId, exitReason)
+    markTerminal(executorId)
+    safeRemoveExecutor(executorId, exitReason)
+  }
+
+  /** Called by event watcher when executor job succeeds
+    */
+  private[armada] def onExecutorSucceeded(jobId: String, executorId: String): Unit = {
+    markTerminal(executorId)
+    val exitReason = ExecutorExited(
+      0,
+      exitCausedByApp = false,
+      s"Armada job $jobId succeeded"
+    )
+    safeRemoveExecutor(executorId, exitReason)
+  }
+
+  /** Returns executor IDs that are NOT in a terminal state.
+    */
+  private[armada] def getActiveExecutorIds(): Seq[String] = {
+    executorToJobId.synchronized {
+      executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
+    }
+  }
+
+  /** Best-effort removeExecutor that tolerates RPC endpoint being gone during shutdown. During the
+    * grace period the CoarseGrainedScheduler endpoint may already be stopped, so removeExecutor can
+    * throw. The critical state (markTerminal) is always set before this is called.
+    */
+  private def safeRemoveExecutor(executorId: String, reason: ExecutorExited): Unit = {
+    Utils.tryLogNonFatalError {
+      removeExecutor(executorId, reason)
+    }
+  }
+
+  /** Mark an executor as having reached a terminal state and clean it from pending set.
+    */
+  private def markTerminal(executorId: String): Unit = {
+    terminalExecutors.add(executorId)
+    pendingExecutors.synchronized { pendingExecutors -= executorId }
   }
 
   private[armada] def onExecutorSubmitted(jobId: String): Unit = {
@@ -485,7 +536,8 @@ private[spark] class ArmadaClusterManagerBackend(
     val exitReason =
       ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId unable to schedule: $reason")
 
-    removeExecutor(executorId, exitReason)
+    markTerminal(executorId)
+    safeRemoveExecutor(executorId, exitReason)
   }
 
   // ========================================================================
