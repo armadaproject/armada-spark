@@ -197,7 +197,6 @@ class ArmadaSparkE2E
 
     if (allocation == "dynamic") {
       testWithModeSpecificAsserts
-        .withAppArgs("2000")
         .withSparkConf(
           Map(
             "spark.executor.instances"             -> "1",
@@ -324,7 +323,7 @@ class ArmadaSparkE2E
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(
+    val base = baseSparkPiTest(
       "python-spark-pi" + deployMode,
       deployMode,
       allocation,
@@ -337,8 +336,21 @@ class ArmadaSparkE2E
           "spark.kubernetes.executor.disableConfigMap" -> "true"
         )
       )
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
+
+    if (allocation == "static") {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+    } else {
+      base
+        .withDynamicAllocation(
+          minExecutors = executorCount,
+          maxExecutors = 4,
+          schedulerBacklogTimeoutSeconds = 3,
+          executorIdleTimeoutSeconds = 90
+        )
+        .assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    }
   }
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {
@@ -348,6 +360,11 @@ class ArmadaSparkE2E
 
   test("Basic python SparkPi job - staticClient", E2ETest) {
     basePythonSparkPiTest("client", "static", 2)
+      .run()
+  }
+
+  test("Basic python SparkPi job - dynamicCluster", E2ETest) {
+    basePythonSparkPiTest("cluster", "dynamic", 2)
       .run()
   }
 
