@@ -197,6 +197,7 @@ class ArmadaSparkE2E
 
     if (allocation == "dynamic") {
       testWithModeSpecificAsserts
+        .withAppArgs("500")
         .withSparkConf(
           Map(
             "spark.executor.instances"             -> "1",
