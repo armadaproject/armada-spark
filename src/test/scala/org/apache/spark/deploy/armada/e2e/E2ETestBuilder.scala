@@ -244,6 +244,24 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Assert dynamic executor pods have all specified labels (tracks across polls) */
+  def assertDynamicExecutorsHaveLabels(
+      labels: Map[String, String],
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorLabelAssertion(labels, expectedMinPods)
+    this
+  }
+
+  /** Assert dynamic executor pods have all specified annotations (tracks across polls) */
+  def assertDynamicExecutorsHaveAnnotations(
+      annotations: Map[String, String],
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorAnnotationAssertion(annotations, expectedMinPods)
+    this
+  }
+
   /** Assert driver pod matches a predicate */
   def withDriverPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
     assertions :+= new DriverPodAssertion(predicate)
