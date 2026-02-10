@@ -358,7 +358,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Send RPC kill signal to executors
     executorIds.foreach { id =>
-      terminalExecutors.add(id)
+      markTerminal(id)
       removeExecutor(id, ExecutorKilled)
     }
 
