@@ -10,6 +10,15 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
 fi
 
 cd "$CLAUDE_PROJECT_DIR"
+
+# Skip build verification if no build-relevant files changed
+CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null; git diff --name-only --cached HEAD 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null)
+BUILD_FILES=$(echo "$CHANGED_FILES" | grep -E '\.(scala|java)$|pom\.xml' | head -1)
+if [ -z "$BUILD_FILES" ]; then
+  echo '{"systemMessage": "Skipped build verification (no code changes detected)"}'
+  exit 0
+fi
+
 RESULT=$(mvn compile -q 2>&1)
 EXIT_CODE=$?
 

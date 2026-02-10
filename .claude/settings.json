@@ -79,15 +79,9 @@
     ]
   },
   "enabledPlugins": {
-    "backend-development@claude-code-workflows": true,
-    "code-review@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
-    "cicd-automation@claude-code-workflows": true,
-    "code-documentation@claude-code-workflows": true,
-    "documentation-generation@claude-code-workflows": true,
+    "comprehensive-review@claude-code-workflows": true,
     "unit-testing@claude-code-workflows": true,
-    "debugging-toolkit@claude-code-workflows": true,
-    "error-debugging@claude-code-workflows": true,
-    "dependency-management@claude-code-workflows": true
+    "error-debugging@claude-code-workflows": true
   }
 }

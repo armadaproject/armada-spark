@@ -3,8 +3,8 @@
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-# Only run for Scala source files
-if [[ "$FILE_PATH" != *.scala ]]; then
+# Only run for build-relevant files
+if [[ "$FILE_PATH" != *.scala && "$FILE_PATH" != *.java && "$FILE_PATH" != */pom.xml ]]; then
   exit 0
 fi
 
