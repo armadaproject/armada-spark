@@ -18,9 +18,20 @@
 package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
+import org.apache.spark.deploy.armada.Config
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
+
+case class PodSnapshot(allPods: Seq[Pod], namespace: String) {
+  def filterByLabels(labels: Map[String, String]): Seq[Pod] =
+    allPods.filter { pod =>
+      val podLabels = Option(pod.getMetadata.getLabels)
+        .map(_.asScala.toMap)
+        .getOrElse(Map.empty)
+      labels.forall { case (k, v) => podLabels.get(k).contains(v) }
+    }
+}
 
 trait TestAssertion {
   def name: String
@@ -32,8 +43,40 @@ case class AssertionContext(
     queueName: String,
     testId: String,
     k8sClient: K8sClient,
-    armadaClient: ArmadaClient
-)
+    armadaClient: ArmadaClient,
+    podSnapshot: Option[PodSnapshot] = None
+) {
+
+  /** Get pods by label - uses snapshot if available, else hits API */
+  def getPodsByLabel(
+      labelSelector: String
+  )(implicit ec: ExecutionContext): Future[Seq[Pod]] =
+    podSnapshot match {
+      case Some(snapshot) =>
+        val labels = Config.commaSeparatedLabelsToMap(labelSelector)
+        Future.successful(snapshot.filterByLabels(labels))
+      case None =>
+        k8sClient.getPodsByLabel(labelSelector, namespace)
+    }
+
+  /** Get pods with their node selectors - uses snapshot if available */
+  def getPodsWithNodeSelectors(
+      labelSelector: String
+  )(implicit ec: ExecutionContext): Future[Seq[(String, Map[String, String])]] =
+    podSnapshot match {
+      case Some(snapshot) =>
+        val labels = Config.commaSeparatedLabelsToMap(labelSelector)
+        Future.successful(snapshot.filterByLabels(labels).map { pod =>
+          val name = pod.getMetadata.getName
+          val ns = Option(pod.getSpec.getNodeSelector)
+            .map(_.asScala.toMap)
+            .getOrElse(Map.empty)
+          (name, ns)
+        })
+      case None =>
+        k8sClient.getPodsWithNodeSelectors(labelSelector, namespace)
+    }
+}
 
 sealed trait AssertionResult
 object AssertionResult {
@@ -52,9 +95,7 @@ class PodCountAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
-    k8sClient.getPodsByLabel(labelSelector, namespace).map { pods =>
+    context.getPodsByLabel(labelSelector).map { pods =>
       if (pods.size == expectedCount) {
         AssertionResult.Success
       } else {
@@ -99,7 +140,7 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     val labelSelector = s"spark-role=executor,test-id=${context.testId}"
-    context.k8sClient.getPodsByLabel(labelSelector, context.namespace).map { pods =>
+    context.getPodsByLabel(labelSelector).map { pods =>
       val count = pods.size
       maxSeen = math.max(maxSeen, count)
       if (maxSeen >= expectedMinMax) {
@@ -132,7 +173,7 @@ class DynamicGangAnnotationAssertion(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     val labelSelector = s"spark-role=$podRole,test-id=${context.testId}"
-    context.k8sClient.getPodsByLabel(labelSelector, context.namespace).map { pods =>
+    context.getPodsByLabel(labelSelector).map { pods =>
       pods.foreach { pod =>
         val name = pod.getMetadata.getName
         if (!seenPods.contains(name)) {
@@ -174,9 +215,7 @@ class PodLabelAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
-    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+    context.getPodsByLabel(podSelector).map { pods =>
       pods.headOption match {
         case None =>
           AssertionResult.Failure(s"No pod found with selector: $podSelector")
@@ -229,9 +268,7 @@ class NodeSelectorAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
-    k8sClient.getPodsWithNodeSelectors(podSelector, namespace).map { pods =>
+    context.getPodsWithNodeSelectors(podSelector).map { pods =>
       if (pods.isEmpty) {
         AssertionResult.Failure(s"No pods found with selector: $podSelector")
       } else {
@@ -266,9 +303,7 @@ class PodAnnotationAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
-    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+    context.getPodsByLabel(podSelector).map { pods =>
       if (pods.isEmpty) {
         AssertionResult.Failure(s"No pods found with selector: $podSelector")
       } else {
@@ -331,16 +366,14 @@ class IngressAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
     for {
       // Find driver pod using test-id label in the test namespace
-      pods <- k8sClient.getPodsByLabel(s"test-id=$testId", namespace)
+      pods <- context.getPodsByLabel(s"test-id=${context.testId}")
       podName = pods.headOption
         .getOrElse(throw new AssertionError("Driver pod not found"))
         .getMetadata
         .getName
-      ingress <- k8sClient.getIngressForPod(podName, namespace)
+      ingress <- context.k8sClient.getIngressForPod(podName, context.namespace)
     } yield {
       ingress match {
         case None =>
@@ -420,9 +453,7 @@ class GenericPodAssertion(
   override def assert(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    import context._
-
-    k8sClient.getPodsByLabel(podSelector, namespace).map { pods =>
+    context.getPodsByLabel(podSelector).map { pods =>
       if (pods.isEmpty) {
         AssertionResult.Failure(s"No pods found with selector: $podSelector")
       } else {

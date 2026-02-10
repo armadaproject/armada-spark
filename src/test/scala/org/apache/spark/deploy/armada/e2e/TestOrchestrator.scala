@@ -40,7 +40,8 @@ case class TestConfig(
     assertions: Seq[TestAssertion] = Seq.empty,
     failFastOnPodFailure: Boolean = true,
     pythonScript: Option[String] = None,
-    appArgs: Seq[String] = Seq("100")
+    appArgs: Seq[String] = Seq("100"),
+    assertionPollInterval: FiniteDuration = 5.seconds
 )
 
 /** Manages test isolation with unique namespace and queue per test. Ensures cleanup of resources
@@ -123,7 +124,8 @@ class TestOrchestrator(
       context: TestContext,
       queueName: String,
       jobCompleted: () => Boolean,
-      isClientMode: Boolean = false
+      isClientMode: Boolean = false,
+      pollInterval: FiniteDuration = 5.seconds
   ): Map[String, AssertionResult] = {
     val assertionContext = AssertionContext(
       context.namespace,
@@ -153,81 +155,82 @@ class TestOrchestrator(
       }.toMap
     }
 
-    validateAllAssertions(assertions, assertionContext, jobCompleted)
-  }
-
-  private def runAssertion(
-      assertion: TestAssertion,
-      context: AssertionContext,
-      jobCompleted: () => Boolean,
-      maxWaitTime: FiniteDuration,
-      gracePeriodAfterCompletion: FiniteDuration
-  )(implicit ec: ExecutionContext): Future[(String, AssertionResult)] = Future {
-    import scala.concurrent.Await
-    import scala.concurrent.duration._
-
-    val startTime                                  = System.currentTimeMillis()
-    var jobCompletedTime                           = Option.empty[Long]
-    var lastResult: AssertionResult                = AssertionResult.Failure("Not yet checked")
-    var outcome: Option[(String, AssertionResult)] = None
-
-    while (outcome.isEmpty) {
-      val now       = System.currentTimeMillis()
-      val completed = jobCompleted()
-      if (completed && jobCompletedTime.isEmpty) jobCompletedTime = Some(now)
-
-      val graceExpired =
-        jobCompletedTime.exists(t => (now - t) > gracePeriodAfterCompletion.toMillis)
-      val timeout = (now - startTime) > maxWaitTime.toMillis
-
-      if (timeout || graceExpired) {
-        val finalResult = lastResult match {
-          case AssertionResult.Failure(msg) if jobCompletedTime.isDefined =>
-            AssertionResult.Failure(s"$msg (job completed before assertion could pass)")
-          case r => r
-        }
-        outcome = Some((assertion.name, finalResult))
-      } else {
-        try {
-          val result = Await.result(assertion.assert(context)(ec), 30.seconds)
-          lastResult = result
-          result match {
-            case AssertionResult.Success =>
-              outcome = Some((assertion.name, result))
-            case _ =>
-          }
-        } catch {
-          case ex: Exception =>
-            lastResult = AssertionResult.Failure(ex.getMessage)
-        }
-        if (outcome.isEmpty) Thread.sleep(5000)
-      }
-    }
-    outcome.get
+    validateAllAssertions(assertions, assertionContext, jobCompleted, pollInterval)
   }
 
   private def validateAllAssertions(
       assertions: Seq[TestAssertion],
       context: AssertionContext,
-      jobCompleted: () => Boolean
+      jobCompleted: () => Boolean,
+      pollInterval: FiniteDuration = 5.seconds
   ): Map[String, AssertionResult] = {
     import scala.concurrent.Await
-    import scala.concurrent.duration._
 
-    val maxWaitTime                = 120.seconds
-    val gracePeriodAfterCompletion = 20.seconds
-    val overallTimeout             = maxWaitTime + gracePeriodAfterCompletion + 15.seconds
+    val maxWaitTime = 120.seconds
+    val gracePeriod = 20.seconds
+    val startTime   = System.currentTimeMillis()
 
-    val futures = assertions.map { assertion =>
-      runAssertion(
-        assertion,
-        context,
-        jobCompleted,
-        maxWaitTime,
-        gracePeriodAfterCompletion
-      )
+    val results                        = scala.collection.mutable.Map[String, AssertionResult]()
+    val pending                        = assertions.toBuffer
+    var jobCompletedTime: Option[Long] = None
+
+    while (pending.nonEmpty) {
+      val now = System.currentTimeMillis()
+      if (jobCompleted() && jobCompletedTime.isEmpty) {
+        jobCompletedTime = Some(now)
+      }
+
+      val graceExpired =
+        jobCompletedTime.exists(t => (now - t) > gracePeriod.toMillis)
+      val timedOut = (now - startTime) > maxWaitTime.toMillis
+
+      if (timedOut || graceExpired) {
+        pending.foreach { a =>
+          val msg = results.get(a.name) match {
+            case Some(AssertionResult.Failure(m)) if jobCompletedTime.isDefined =>
+              s"$m (job completed before assertion could pass)"
+            case Some(AssertionResult.Failure(m)) => m
+            case _                                => "Timed out waiting for assertion"
+          }
+          results(a.name) = AssertionResult.Failure(msg)
+        }
+        pending.clear()
+      } else {
+        // Single API call: fetch all pods in namespace
+        val snapshot =
+          try {
+            val pods = Await.result(
+              context.k8sClient.fetchAllPods(context.namespace),
+              30.seconds
+            )
+            Some(PodSnapshot(pods, context.namespace))
+          } catch {
+            case _: Exception => None
+          }
+
+        val snapshotCtx = snapshot match {
+          case Some(s) => context.copy(podSnapshot = Some(s))
+          case None    => context
+        }
+
+        // Run all pending assertions against the snapshot
+        val succeeded = scala.collection.mutable.Buffer[TestAssertion]()
+        pending.foreach { assertion =>
+          try {
+            val result =
+              Await.result(assertion.assert(snapshotCtx), 30.seconds)
+            results(assertion.name) = result
+            if (result == AssertionResult.Success) succeeded += assertion
+          } catch {
+            case ex: Exception =>
+              results(assertion.name) = AssertionResult.Failure(ex.getMessage)
+          }
+        }
+        pending --= succeeded
+
+        if (pending.nonEmpty) Thread.sleep(pollInterval.toMillis)
+      }
     }
-    val results = Await.result(Future.sequence(futures), overallTimeout)
     results.toMap
   }
 
@@ -490,7 +493,8 @@ class TestOrchestrator(
           context,
           queueName,
           jobCompleted = isJobCompleted,
-          isClientMode = isClientMode
+          isClientMode = isClientMode,
+          pollInterval = config.assertionPollInterval
         )
       })
       thread.setDaemon(true)

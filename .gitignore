@@ -88,5 +88,6 @@ scripts/.tmp/
 example/jupyter/workspace/
 
 # Claude Code
+plans/
 .claude/
 CLAUDE.md

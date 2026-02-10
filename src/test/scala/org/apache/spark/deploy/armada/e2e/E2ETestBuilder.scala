@@ -37,17 +37,18 @@ import org.scalatest.Assertions._
   * }}}
   */
 class E2ETestBuilder(testName: String) {
-  private var sparkConfs                   = Map.empty[String, String]
-  private var assertions                   = Seq.empty[TestAssertion]
-  private var baseQueueName                = "e2e-template"
-  private var imageName                    = "spark:armada"
-  private var masterUrl                    = "armada://localhost:30002"
-  private var lookoutUrl                   = "http://localhost:30000"
-  private var scalaVersion                 = "2.13"
-  private var sparkVersion                 = "3.5.5"
-  private var failFastOnPodFailure         = true
-  private var pythonScript: Option[String] = None
-  private var appArgs: Seq[String]         = Seq("100")
+  private var sparkConfs                            = Map.empty[String, String]
+  private var assertions                            = Seq.empty[TestAssertion]
+  private var baseQueueName                         = "e2e-template"
+  private var imageName                             = "spark:armada"
+  private var masterUrl                             = "armada://localhost:30002"
+  private var lookoutUrl                            = "http://localhost:30000"
+  private var scalaVersion                          = "2.13"
+  private var sparkVersion                          = "3.5.5"
+  private var failFastOnPodFailure                  = true
+  private var pythonScript: Option[String]          = None
+  private var appArgs: Seq[String]                  = Seq("100")
+  private var assertionPollInterval: FiniteDuration = 5.seconds
 
   def withSparkConf(key: String, value: String): E2ETestBuilder = {
     sparkConfs += (key -> value)
@@ -134,6 +135,8 @@ class E2ETestBuilder(testName: String) {
       s"${executorIdleTimeoutSeconds}s"
     )
     withSparkConf("spark.armada.allocation.checkInterval", "1s")
+    assertionPollInterval = 10.seconds
+    this
   }
 
   /** Assert exact executor count */
@@ -312,7 +315,8 @@ class E2ETestBuilder(testName: String) {
       assertions = assertions,
       failFastOnPodFailure = failFastOnPodFailure,
       pythonScript = pythonScript,
-      appArgs = appArgs
+      appArgs = appArgs,
+      assertionPollInterval = assertionPollInterval
     )
   }
 

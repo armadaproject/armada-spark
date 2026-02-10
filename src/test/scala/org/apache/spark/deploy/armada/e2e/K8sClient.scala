@@ -76,6 +76,13 @@ class K8sClient {
     }
   }
 
+  /** Fetch all pods in a namespace with a single API call. */
+  def fetchAllPods(
+      namespace: String
+  )(implicit ec: ExecutionContext): Future[Seq[Pod]] = Future {
+    client.pods().inNamespace(namespace).list().getItems.asScala.toSeq
+  }
+
   private def getPods(labelSelector: String, namespace: String): Seq[Pod] = {
     val labels = Config.commaSeparatedLabelsToMap(labelSelector)
     client
