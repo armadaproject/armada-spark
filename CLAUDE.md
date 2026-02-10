@@ -4,6 +4,8 @@
 
 Apache Spark plugin that integrates with [Armada](https://armadaproject.io/), a multi-cluster Kubernetes batch scheduler. Implements Spark's `ExternalClusterManager` SPI to submit and manage Spark jobs via Armada's gRPC API.
 
+**Default development target:** Spark 3.5.5 + Scala 2.13.8 + Java 17. Always build/test against this unless asked to work on a different version.
+
 ## Build & Run
 
 ```bash
@@ -44,6 +46,46 @@ src/main/scala/org/apache/spark/
 ```
 
 Version-specific sources live in `src/main/scala-spark-{version}/`.
+
+## Architecture
+
+```
+User submits Spark job
+  └─> ArmadaClusterManager (SPI entry: registers "armada://" master scheme)
+        ├─> TaskSchedulerImpl (Spark core task scheduling)
+        └─> ArmadaClusterManagerBackend (executor lifecycle, state tracking)
+              ├─> ArmadaExecutorAllocator (polls demand vs supply, submits batch jobs)
+              │     ├─> KubernetesExecutorBuilder.buildExecutorPod()
+              │     ├─> PodSpecConverter.fabric8ToProtobuf()
+              │     └─> ArmadaClient.submitJobs()
+              └─> ArmadaEventWatcher (daemon thread, gRPC event stream)
+                    └─> Handles: JobSubmitted, JobQueued, JobPending, JobRunning,
+                         JobSucceeded, JobFailed, JobCancelled, JobPreempted
+
+Cluster-mode submission (separate path):
+  └─> ArmadaClientApplication (SparkApplication SPI)
+        ├─> KubernetesDriverBuilder.buildDriverPod()
+        ├─> PodSpecConverter, PodMerger, ConfigGenerator
+        └─> ArmadaClient.submitJobs()
+```
+
+**Key classes:**
+- **ArmadaClusterManager** — SPI entry point; creates TaskSchedulerImpl + Backend
+- **ArmadaClusterManagerBackend** — Tracks executors via ConcurrentHashMaps (executorToJobId, jobIdToExecutor, pendingExecutors, terminalExecutors)
+- **ArmadaExecutorAllocator** — Runs on ScheduledExecutorService; respects `ARMADA_ALLOCATION_BATCH_SIZE`, `ARMADA_MAX_PENDING_JOBS`, `ARMADA_ALLOCATION_CHECK_INTERVAL`
+- **ArmadaEventWatcher** — Long-lived daemon thread with `volatile running` flag; 5s join timeout on shutdown
+- **PodSpecConverter** — Bidirectional Fabric8 <-> Protobuf; hardcodes None/empty for version-incompatible fields (dnsConfig, ephemeralContainers, hostUsers, os, schedulingGates)
+- **Config** — 100+ entries via Spark's `ConfigBuilder` API; all prefixed `spark.armada.*`
+
+## Common Pitfalls
+
+- **Version-specific SparkSubmit:** `src/main/scala-spark-{3.3,3.5,4.1}/` each override `prepareSubmitEnvironment()`. Spark 3.3 uses `args.master = ...`; Spark 3.5+ uses `args.maybeMaster = Option(...)`. Changes to submission logic likely need updates in all versions.
+- **Shade relocations:** All Armada transitive deps (gRPC, Netty, Protobuf, Jackson, ScalaPB) are relocated to `io.armadaproject.shaded.*`. At runtime, import paths are rewritten — never rely on unshaded `io.grpc.*` or `com.google.protobuf.*` classes from the plugin JAR.
+- **Provided scope:** `spark-core` and `spark-kubernetes` are `provided` — they exist at runtime but are NOT in the fat JAR. Do not add their transitive deps as compile-scope dependencies. Spark 4.x additionally needs `spark-common-utils` (activated by profile).
+- **Netty conflict:** Spark's `spark-core` bundles its own Netty. The plugin explicitly excludes `io.netty:*` from spark-core and ships its own shaded Netty. Never add unshaded Netty deps.
+- **Mockito + Scala:** Use `mock(classOf[Type])` (Java-style), not `mock[Type]`. Scala companion objects cannot be mocked directly — mock the trait/interface instead. Wrap backend calls in tests with `try/catch { case _: NullPointerException => }` because Spark's RPC layer throws NPEs in unit test contexts.
+- **SparkConf in tests:** Always use `new SparkConf(false)` to avoid loading system properties. Mock SparkContext/SparkEnv/RpcEnv but use real `ScheduledExecutorService`.
+- **Build-helper sources:** Maven's `build-helper-maven-plugin` adds `src/main/scala-spark-${spark.binary.version}` at compile time. Only one version-specific directory is active per build.
 
 ## Code Style
 

@@ -1,0 +1,28 @@
+# Build artifacts
+target/
+build/
+out/
+bin/
+
+# IDE/Editor caches
+.idea/
+.vscode/
+.metals/
+.bloop/
+*.iml
+
+# Spark test dependencies (~586MB)
+.spark-*/
+
+# Generated/temporary files
+dependency-reduced-pom.xml
+scripts/.tmp/
+extraJars/*.jar
+.history
+.bsp
+
+# Jupyter workspace
+example/jupyter/workspace/
+
+# macOS
+.DS_Store
