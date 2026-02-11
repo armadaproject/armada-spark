@@ -48,26 +48,6 @@ class E2ETestBuilder(testName: String) {
   private var failFastOnPodFailure         = true
   private var pythonScript: Option[String] = None
 
-  // Helper to merge labels with existing configuration
-  private def addLabels(configKey: String, newLabels: Map[String, String]): E2ETestBuilder = {
-    val existing = sparkConfs
-      .get(configKey)
-      .map { labelStr =>
-        labelStr
-          .split(",")
-          .map { pair =>
-            val parts = pair.split("=", 2)
-            if (parts.length == 2) parts(0) -> parts(1) else pair -> ""
-          }
-          .toMap
-      }
-      .getOrElse(Map.empty)
-
-    val merged   = existing ++ newLabels
-    val labelStr = merged.map { case (k, v) => s"$k=$v" }.mkString(",")
-    withSparkConf(configKey, labelStr)
-  }
-
   def withSparkConf(key: String, value: String): E2ETestBuilder = {
     sparkConfs += (key -> value)
     this
@@ -80,6 +60,10 @@ class E2ETestBuilder(testName: String) {
 
   def withExecutors(count: Int): E2ETestBuilder = {
     withSparkConf("spark.executor.instances", count.toString)
+  }
+
+  def withDeployMode(mode: String): E2ETestBuilder = {
+    withSparkConf("spark.submit.deployMode", mode)
   }
 
   /** Use Python script instead of Scala class */
@@ -232,19 +216,35 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Helper method to create a predicate that validates gang scheduling annotations */
+  private def hasValidGangAnnotations(
+      nodeUniformityLabel: String,
+      expectedCardinality: Int
+  ): Pod => Boolean = { pod =>
+    val annotations = pod.getMetadata.getAnnotations
+    Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+    Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
+      .contains(expectedCardinality.toString) &&
+    Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+      .contains(nodeUniformityLabel)
+  }
+
   /** Assert that driver and all executors have correct gang scheduling annotations */
   def assertGangJob(nodeUniformityLabel: String, expectedCardinality: Int): E2ETestBuilder = {
-    def hasValidGangAnnotations(pod: Pod): Boolean = {
-      val annotations = pod.getMetadata.getAnnotations
-      Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_CARDINALITY))
-        .contains(expectedCardinality.toString) &&
-      Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-        .contains(nodeUniformityLabel)
-    }
+    val validator = hasValidGangAnnotations(nodeUniformityLabel, expectedCardinality)
+    withDriverPodAssertion(validator)
+    withExecutorPodAssertion(validator)
+  }
 
-    withDriverPodAssertion(hasValidGangAnnotations)
-    withExecutorPodAssertion(hasValidGangAnnotations)
+  /** Assert that executors have correct gang scheduling annotations (for client mode where driver
+    * is external)
+    */
+  def assertExecutorGangJob(
+      nodeUniformityLabel: String,
+      expectedCardinality: Int
+  ): E2ETestBuilder = {
+    val validator = hasValidGangAnnotations(nodeUniformityLabel, expectedCardinality)
+    withExecutorPodAssertion(validator)
   }
 
   def build(): TestConfig = {

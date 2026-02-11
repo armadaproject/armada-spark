@@ -127,8 +127,8 @@ private[submit] object PodMerger {
   def mergeByName[T](base: Seq[T], overriding: Seq[T])(
       getName: T => Option[String]
   ): Seq[T] = {
-    val overridingNames = overriding.flatMap(getName(_).toSeq).toSet
-    val uniqueBase      = base.filterNot(item => getName(item).exists(overridingNames.contains))
-    uniqueBase ++ overriding
+    val baseMap       = base.flatMap(item => getName(item).map(_ -> item)).toMap
+    val overridingMap = overriding.flatMap(item => getName(item).map(_ -> item)).toMap
+    (baseMap ++ overridingMap).values.toSeq
   }
 }

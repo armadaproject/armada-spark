@@ -8,7 +8,7 @@ source "$scripts"/init.sh
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
 AOHOME=$(realpath "$scripts/../../armada-operator")
-ARMADACTL_VERSION='0.19.1'
+ARMADACTL_VERSION='0.20.23'
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'

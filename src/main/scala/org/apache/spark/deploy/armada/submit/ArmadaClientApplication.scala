@@ -18,7 +18,6 @@ package org.apache.spark.deploy.armada.submit
 
 import api.submit.JobSubmitRequestItem
 import org.apache.spark.deploy.armada.Config.{
-  ARMADA_AUTH_TOKEN,
   ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
   ARMADA_DRIVER_LIMIT_CORES,
   ARMADA_DRIVER_LIMIT_MEMORY,
@@ -41,6 +40,7 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_JOB_SET_ID,
   ARMADA_JOB_TEMPLATE,
   ARMADA_LOOKOUTURL,
+  ARMADA_OAUTH_ENABLED,
   ARMADA_RUN_AS_USER,
   ARMADA_SERVER_INTERNAL_URL,
   ARMADA_SPARK_DRIVER_INGRESS_ANNOTATIONS,
@@ -62,6 +62,8 @@ import org.apache.spark.deploy.armada.Config.{
 }
 import org.apache.spark.deploy.armada.DeploymentModeHelper
 import io.armadaproject.armada.ArmadaClient
+import io.fabric8.kubernetes.api.model
+import io.fabric8.kubernetes.api.model.PodBuilder
 import k8s.io.api.core.v1.generated._
 import k8s.io.apimachinery.pkg.api.resource.generated.Quantity
 import org.apache.spark.deploy.SparkApplication
@@ -73,8 +75,12 @@ import org.apache.spark.deploy.k8s.submit.{
   RMainAppResource
 }
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
-import org.apache.spark.deploy.k8s.Config.{CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE}
+import org.apache.spark.deploy.k8s.Config.{
+  CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE,
+  KUBERNETES_SUBMIT_GRACE_PERIOD
+}
 import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS, DYN_ALLOCATION_ENABLED}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
@@ -83,7 +89,6 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import java.util.UUID
 
 /** Encapsulates arguments to the submission client.
   *
@@ -142,10 +147,19 @@ private[spark] object ClientArguments {
 }
 
 private[spark] object ArmadaClientApplication {
-  private[submit] val DRIVER_PORT = 7078
-  private val DEFAULT_PRIORITY    = 0.0
-  private val DEFAULT_NAMESPACE   = "default"
-  private val DEFAULT_RUN_AS_USER = 185
+  private[submit] val DRIVER_PORT              = 7078
+  private val DEFAULT_PRIORITY                 = 0.0
+  private val DEFAULT_NAMESPACE                = "default"
+  private val DEFAULT_RUN_AS_USER              = 185
+  private val DEFAULT_SPARK_UI_PORT            = 4040
+  private val DEFAULT_DRIVER_GRACE_PERIOD_SECS = 30L
+
+  /** Returns the effective UI port - OAuth proxy port if enabled, otherwise Spark UI port. */
+  private[submit] def getEffectiveUIPort(conf: SparkConf): Int = {
+    OAuthSidecarBuilder.getOAuthProxyPort(conf).getOrElse {
+      conf.getInt("spark.ui.port", DEFAULT_SPARK_UI_PORT)
+    }
+  }
 }
 
 /** Main class and entry point of application submission in KUBERNETES mode.
@@ -154,11 +168,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
   private val gangId = Some(java.util.UUID.randomUUID.toString)
 
-  private val defaultAppId =
-    s"armada-spark-app-id-${UUID.randomUUID().toString.replaceAll("-", "")}"
-
-  private def getApplicationId(conf: SparkConf) =
-    conf.getOption("spark.app.id").getOrElse(defaultAppId)
+  private def getApplicationId(conf: SparkConf): String =
+    ArmadaUtils.getApplicationId(conf)
 
   private def log(msg: String): Unit = {
     // scalastyle:off println
@@ -180,7 +191,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val (host, port) = ArmadaUtils.parseMasterUrl(sparkConf.get("spark.master"))
     log(s"Connecting to Armada Server - host: $host, port: $port")
 
-    val armadaClient = ArmadaClient(host, port, useSsl = false, sparkConf.get(ARMADA_AUTH_TOKEN))
+    val armadaClient =
+      ArmadaClient(host, port, useSsl = false, ArmadaUtils.getAuthToken(Some(sparkConf)))
     val healthTimeout =
       Duration(sparkConf.get(ARMADA_HEALTH_CHECK_TIMEOUT), SECONDS)
 
@@ -350,12 +362,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverJobId: String,
       executorCount: Int
   ): Seq[String] = {
-    if (executorCount <= 0) {
-      throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
-      )
-    }
-
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
     val executorLabels = buildLabels(
@@ -379,12 +385,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val driverHostname = ArmadaUtils.buildServiceNameFromJobId(driverJobId)
+    // Derive driver hostname from deployment mode
+    val modeHelper             = DeploymentModeHelper(conf)
+    val resolvedDriverHostname = modeHelper.getDriverHostName(driverJobId)
     val executors = createExecutorJobs(
       armadaJobConfig,
       executorResolvedConfig,
       driverData.configGenerator,
-      driverHostname,
+      resolvedDriverHostname,
       executorCount,
       conf
     )
@@ -426,13 +434,23 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): (String, Seq[String]) = {
-    val executorCount = DeploymentModeHelper(conf).getExecutorCount
-    if (executorCount <= 0) {
+    val modeHelper    = DeploymentModeHelper(conf)
+    val executorCount = modeHelper.getExecutorCount
+    val isDynamic     = conf.getBoolean(DYN_ALLOCATION_ENABLED.key, false)
+
+    // Allow minExecutors=0 for dynamic allocation
+    if (!isDynamic && executorCount <= 0) {
       throw new IllegalArgumentException(
-        s"Executor count must be greater than 0, but got: $executorCount"
+        s"Executor count must be greater than 0 for static allocation, but got: $executorCount"
       )
     }
-    val driverJobId = submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
+
+    val driverJobId = if (modeHelper.isDriverInCluster) {
+      submitDriverJob(armadaClient, clientArguments, armadaJobConfig, conf)
+    } else {
+      armadaJobConfig.applicationId
+    }
+
     val executorJobIds = submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
@@ -500,7 +518,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .get(ARMADA_SERVER_INTERNAL_URL)
       .filter(_.nonEmpty)
       .map { internalUrl =>
-        s"local://armada://$internalUrl"
+        s"$internalUrl"
       }
       .getOrElse(armadaClientUrl)
 
@@ -780,10 +798,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorFeatureStepContainer: Option[Container]
   )
 
-  private def removeAuthToken(seq: Seq[String]): Seq[String] = {
-    seq.grouped(2).toSeq.filter(!_(1).contains("auth.token")).flatten
-  }
-
   private[submit] def createDriverJob(
       armadaJobConfig: ArmadaJobConfig,
       resolvedConfig: ResolvedJobConfig,
@@ -793,13 +807,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq: Seq[String],
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    val driverArgs = removeAuthToken(confSeq) ++ primaryResource ++ clientArguments.driverArgs
+    val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     val driverJobItem = mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
       resolvedConfig,
       armadaJobConfig,
-      ArmadaClientApplication.DRIVER_PORT,
+      conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
       clientArguments.mainClass,
       configGenerator.getVolumes,
       configGenerator.getVolumeMounts,
@@ -825,7 +839,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig,
         javaOptEnvVars(conf),
         driverHostname,
-        ArmadaClientApplication.DRIVER_PORT,
+        conf.getInt(DRIVER_PORT.key, ArmadaClientApplication.DRIVER_PORT),
         configGenerator.getVolumes,
         conf
       )
@@ -846,7 +860,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .filter(_.nonEmpty)
       .getOrElse("none")
     log(
-      s"Submitted driver job with ID: $driverJobId, Error: $error"
+      s"Submitted driver job with ID: $jobSetId:$driverJobId, Error: $error"
     )
     driverJobId
   }
@@ -860,7 +874,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val executorsResponse = armadaClient.submitJobs(queue, jobSetId, executors)
     executorsResponse.jobResponseItems.map { item =>
       val error = Some(item.error).filter(_.nonEmpty).getOrElse("none")
-      log(s"Submitted executor job with ID: ${item.jobId}, Error: $error")
+      log(s"Submitted executor job with ID: $jobSetId:${item.jobId}, Error: $error")
       item.jobId
     }
   }
@@ -946,13 +960,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val sidecars = extractSidecarContainers(baseJobItem.podSpec)
-
     val currentPodSpec    = PodSpecConverter.fabric8PodToProtobufPodSpec(afterCLIVolumes)
-    val allInitContainers = currentPodSpec.initContainers
+    val sidecars          = extractSidecarContainers(Some(currentPodSpec))
+    val oauthSidecar      = OAuthSidecarBuilder.buildOAuthSidecar(conf)
+    val allInitContainers = currentPodSpec.initContainers ++ oauthSidecar.toSeq
 
     // Set termination grace period for graceful decommissioning
-    val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
+    val gracePeriodSeconds = conf
+      .get(KUBERNETES_SUBMIT_GRACE_PERIOD)
+      .getOrElse(ArmadaClientApplication.DEFAULT_DRIVER_GRACE_PERIOD_SECS)
+      .toInt
 
     val finalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
@@ -991,10 +1008,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       services = services
     )
 
-    resolvedConfig.driverIngress match {
-      case Some(ingress) => finalJobItem.withIngress(Seq(ingress))
-      case None          => finalJobItem
-    }
+    resolvedConfig.driverIngress
+      .map(ingress => finalJobItem.withIngress(Seq(ingress)))
+      .getOrElse(finalJobItem)
   }
 
   private def createBlankTemplate(): JobSubmitRequestItem = {
@@ -1042,10 +1058,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .map(_.containers)
       .getOrElse(Seq.empty)
       .filterNot(c =>
-        c.name.exists { name =>
-          val lowerName = name.toLowerCase
-          lowerName == "driver" || lowerName == "executor"
-        }
+        // Spark's basic feature steps use these exact names for main containers
+        c.name.exists { name => Set("driver", "executor").contains(name.toLowerCase) }
       )
   }
 
@@ -1168,7 +1182,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     import scala.jdk.CollectionConverters._
     val afterCLIVolumes = if (volumes.nonEmpty) {
       val currentSpec =
-        Option(afterTemplatePod.getSpec).getOrElse(new io.fabric8.kubernetes.api.model.PodSpec())
+        Option(afterTemplatePod.getSpec).getOrElse(new model.PodSpec())
       val currentVolumes = Option(currentSpec.getVolumes)
         .map(_.asScala.toSeq)
         .getOrElse(Seq.empty)
@@ -1180,7 +1194,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         fabric8CLIVolumes
       )(v => Option(v.getName))
 
-      new io.fabric8.kubernetes.api.model.PodBuilder(afterTemplatePod)
+      new PodBuilder(afterTemplatePod)
         .editOrNewSpec()
         .withVolumes(mergedVolumes.asJava)
         .endSpec()
@@ -1243,8 +1257,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
-        if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
-        else currentPodSpec.nodeSelector
+        if (resolvedConfig.nodeSelectors.nonEmpty)
+          resolvedConfig.nodeSelectors ++ getGangNodeSelector
+        else currentPodSpec.nodeSelector ++ getGangNodeSelector
       )
 
     JobSubmitRequestItem(
@@ -1269,6 +1284,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .getOrElse(Map.empty) ++ resolvedConfig.annotations,
       podSpec = Some(finalPodSpec)
     )
+  }
+
+  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
+  // node should be selected
+  private def getGangNodeSelector = {
+    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    if (nodeLabel.nonEmpty)
+      Map(nodeLabel -> nodeValue)
+    else Map.empty
   }
 
   private def newDriverContainer(
@@ -1358,11 +1383,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           "--class",
           mainClass,
           "--conf",
-          s"spark.driver.port=$port",
+          DRIVER_PORT.key + s"=$port",
           "--conf",
           s"spark.app.id=${armadaJobConfig.applicationId}",
           "--conf",
-          "spark.driver.host=$(SPARK_DRIVER_BIND_ADDRESS)"
+          DRIVER_HOST_ADDRESS.key + "=$(SPARK_DRIVER_BIND_ADDRESS)"
         ) ++ additionalDriverArgs
       )
       .withVolumeMounts(
@@ -1377,20 +1402,38 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           limits = driverLimits
         )
       )
-      .withPorts({
-        Seq(
-          ContainerPort(
-            containerPort = Some(port),
-            name = Some("driver"),
-            protocol = Some("TCP")
-          ),
-          ContainerPort(
-            containerPort = Some(conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)),
-            name = Some("ui"),
-            protocol = Some("TCP")
-          )
-        )
-      })
+      .withPorts(buildDriverContainerPorts(port, conf))
+  }
+
+  /** Builds container ports for the driver.
+    *
+    * Always includes the driver port for executor communication. Includes UI port only when ingress
+    * is enabled without OAuth (OAuth sidecar handles UI exposure).
+    */
+  private def buildDriverContainerPorts(driverPort: Int, conf: SparkConf): Seq[ContainerPort] = {
+    val driverPortSpec = ContainerPort(
+      containerPort = Some(driverPort),
+      name = Some("driver"),
+      protocol = Some("TCP")
+    )
+
+    val ingressEnabled = conf.get(ARMADA_SPARK_DRIVER_INGRESS_ENABLED)
+    val oauthEnabled   = conf.get(ARMADA_OAUTH_ENABLED)
+
+    // Only expose UI port directly when ingress is enabled but OAuth is not.
+    // When OAuth is enabled, the OAuth sidecar handles UI port exposure.
+    val needsUIPort = ingressEnabled && !oauthEnabled
+    if (needsUIPort) {
+      val sparkUIPort = conf.getInt("spark.ui.port", ArmadaClientApplication.DEFAULT_SPARK_UI_PORT)
+      val uiPortSpec = ContainerPort(
+        containerPort = Some(sparkUIPort),
+        name = Some("ui"),
+        protocol = Some("TCP")
+      )
+      Seq(driverPortSpec, uiPortSpec)
+    } else {
+      Seq(driverPortSpec)
+    }
   }
 
   private def newExecutorContainer(
@@ -1546,43 +1589,37 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     cliValue.orElse(templateValue).getOrElse(defaultValue)
   }
 
-  // Service ordering: driver port first so executors can connect to service-0
+  /** Builds service configuration for the driver pod. Driver port is listed first so executors can
+    * connect to service-0.
+    */
   private[submit] def buildServiceConfig(
       driverPort: Int,
       conf: SparkConf
   ): Seq[api.submit.ServiceConfig] = {
-    val requiredPorts = scala.collection.mutable.LinkedHashSet(driverPort)
-
-    val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
-    requiredPorts += uiPort
-
+    val uiPort = ArmadaClientApplication.getEffectiveUIPort(conf)
     Seq(
       api.submit.ServiceConfig(
         `type` = api.submit.ServiceType.Headless,
-        ports = requiredPorts.toSeq,
+        ports = Seq(driverPort, uiPort),
         name = ""
       )
     )
   }
 
+  /** Resolves ingress configuration with precedence: CLI > Template > Default. Routes to OAuth
+    * proxy port if enabled, otherwise routes to Spark UI port.
+    */
   private[submit] def resolveIngressConfig(
       cliIngress: Option[IngressConfig],
       templateIngress: Option[api.submit.IngressConfig],
       conf: SparkConf
   ): api.submit.IngressConfig = {
-    val mergedAnnotations = templateIngress
-      .map(_.annotations)
-      .getOrElse(Map.empty) ++
-      cliIngress
-        .map(_.annotations)
-        .getOrElse(Map.empty)
-
-    val uiPort = conf.getOption("spark.ui.port").map(_.toInt).getOrElse(4040)
-    val ports  = Seq(uiPort)
-
+    val ingressPort = ArmadaClientApplication.getEffectiveUIPort(conf)
     api.submit.IngressConfig(
-      ports = ports,
-      annotations = mergedAnnotations,
+      `type` = api.submit.IngressType.Ingress,
+      ports = Seq(ingressPort),
+      annotations = templateIngress.map(_.annotations).getOrElse(Map.empty) ++
+        cliIngress.map(_.annotations).getOrElse(Map.empty),
       tlsEnabled = resolveValue(
         cliIngress.flatMap(_.tls),
         templateIngress.map(_.tlsEnabled),
@@ -1592,7 +1629,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         cliIngress.flatMap(_.certName),
         templateIngress.map(_.certName),
         ""
-      )
+      ),
+      useClusterIP = true
     )
   }
 
@@ -1737,12 +1775,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       nodeUniformityLabel: Option[String],
       conf: SparkConf
   ): Map[String, String] = {
-    val modeHelper = DeploymentModeHelper(conf)
+    val modeHelper      = DeploymentModeHelper(conf)
+    val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
+      .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>
         GangSchedulingAnnotations(
           gangId,
-          modeHelper.getGangCardinality,
+          gangCardinality,
           label
         )
       )
@@ -1756,4 +1796,5 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): Map[String, String] = {
     podLabels ++ templateLabels ++ roleSpecificLabels
   }
+
 }

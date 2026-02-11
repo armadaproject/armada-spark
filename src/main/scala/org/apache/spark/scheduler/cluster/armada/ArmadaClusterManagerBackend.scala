@@ -25,10 +25,13 @@ import scala.concurrent.Future
 
 import api.submit.JobCancelRequest
 import io.armadaproject.armada.ArmadaClient
-import io.grpc.{ManagedChannel, ManagedChannelBuilder}
+import io.grpc.netty.NettyChannelBuilder
+import io.grpc.stub.MetadataUtils
+import io.grpc.Metadata
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.armada.Config._
+import org.apache.spark.deploy.armada.DeploymentModeHelper
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
 import org.apache.spark.internal.config.SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO
 import org.apache.spark.resource.ResourceProfile
@@ -82,7 +85,6 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
   /** Armada connection details */
-  private var grpcChannel: Option[ManagedChannel]      = None
   private var armadaClient: Option[ArmadaClient]       = None
   private var eventWatcher: Option[ArmadaEventWatcher] = None
   private var queue: Option[String]                    = None
@@ -103,9 +105,13 @@ private[spark] class ArmadaClusterManagerBackend(
   override def start(): Unit = {
     super.start()
 
+    // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
+    ArmadaUtils.setDefaultAppId(conf)
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val jobSetIdOpt = sys.env.get("ARMADA_JOB_SET_ID")
+    val modeHelper  = DeploymentModeHelper(conf)
+    val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
       case (Some(q), Some(jsId)) =>
@@ -122,14 +128,27 @@ private[spark] class ArmadaClusterManagerBackend(
               s"jobSetId=$jsId, queue=$q, namespace=$namespace"
           )
 
-          // Initialize Armada client
-          val token  = conf.get(ARMADA_AUTH_TOKEN)
+          // Initialize Armada client with auth token
+          val token  = ArmadaUtils.getAuthToken(Some(conf))
           val client = ArmadaClient(host, port, useSsl = false, token)
           armadaClient = Some(client)
 
-          createWatcher(q, jsId, host, port, client)
+          createWatcher(q, jsId, host, port, client, token)
 
           createAllocator(q, jsId, client)
+
+          // proactively request executors in static client mode only
+          // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
+          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
+          val shouldProactivelyRequest =
+            !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
+
+          if (shouldProactivelyRequest) {
+            val executorCount  = modeHelper.getExecutorCount
+            val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
+            doRequestTotalExecutors(Map(defaultProfile -> executorCount))
+          }
+
         } catch {
           case e: Throwable =>
             logWarning(s"Failed to start Armada components: ${e.getMessage}", e)
@@ -158,17 +177,37 @@ private[spark] class ArmadaClusterManagerBackend(
       jsId: String,
       host: String,
       port: Int,
-      client: ArmadaClient
+      client: ArmadaClient,
+      token: Option[String]
   ): Unit = {
-    // Build gRPC channel to Armada server
-    val channel: ManagedChannel = ManagedChannelBuilder
-      .forAddress(host, port)
-      .usePlaintext()
-      .build()
-    grpcChannel = Some(channel)
+    // Configure TLS
+    val useTls         = conf.get(ARMADA_EVENT_WATCHER_USE_TLS)
+    val channelBuilder = NettyChannelBuilder.forAddress(host, port)
+
+    val channelBuilderWithTls = if (useTls) {
+      logInfo("Using TLS for event watcher gRPC channel")
+      channelBuilder.useTransportSecurity()
+    } else {
+      logInfo("Using plaintext for event watcher gRPC channel")
+      channelBuilder.usePlaintext()
+    }
+
+    val channel = token match {
+      case Some(t) =>
+        val metadata = new Metadata()
+        metadata.put(
+          Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
+          "Bearer " + t
+        )
+        channelBuilderWithTls
+          .intercept(MetadataUtils.newAttachHeadersInterceptor(metadata))
+          .build()
+      case None =>
+        channelBuilderWithTls.build()
+    }
 
     // Start event watcher
-    val watcher = new ArmadaEventWatcher(channel, q, jsId, this, jobIdToExecutor, client)
+    val watcher = new ArmadaEventWatcher(q, jsId, this, jobIdToExecutor, client)
     eventWatcher = Some(watcher)
     watcher.start()
     logInfo(s"Armada Event Watcher started for queue=$q jobSetId=$jsId at $host:$port")
@@ -220,15 +259,6 @@ private[spark] class ArmadaClusterManagerBackend(
       ThreadUtils.shutdown(executorService)
     }
 
-    // Shutdown gRPC channel
-    Utils.tryLogNonFatalError {
-      grpcChannel.foreach { ch =>
-        ch.shutdown()
-        ch.awaitTermination(5, TimeUnit.SECONDS)
-      }
-    }
-
-    grpcChannel = None
     eventWatcher = None
     armadaClient = None
     executorAllocator = None
@@ -360,9 +390,6 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Called by event watcher when executor job is running
     */
   private[armada] def onExecutorRunning(jobId: String, executorId: String): Unit = {
-    pendingExecutors.synchronized {
-      pendingExecutors -= executorId
-    }
     logInfo(s"Executor $executorId (job $jobId) is running")
   }
 
@@ -415,10 +442,13 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  /** Get the count of pending executors.
+  /** Get the count of pending executors. Excludes executors that have already registered with
+    * Spark.
     */
   private[armada] def getPendingExecutorCount: Int = {
     pendingExecutors.synchronized {
+      val registeredIds = getExecutorIds().toSet
+      pendingExecutors --= registeredIds
       pendingExecutors.size
     }
   }

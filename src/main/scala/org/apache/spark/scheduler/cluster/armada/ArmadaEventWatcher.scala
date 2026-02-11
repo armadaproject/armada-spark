@@ -23,8 +23,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import api.event.{
-  EventGrpc,
-  WatchRequest,
   EventMessage,
   JobSubmittedEvent,
   JobQueuedEvent,
@@ -35,8 +33,7 @@ import api.event.{
   JobCancelledEvent,
   JobPreemptingEvent,
   JobPreemptedEvent,
-  JobTerminatedEvent,
-  JobUnableToScheduleEvent
+  JobTerminatedEvent
 }
 import io.grpc.ManagedChannel
 import org.apache.spark.internal.Logging
@@ -44,7 +41,6 @@ import org.apache.spark.internal.Logging
 /** Keeps track of the armada event stream for the jobset
   */
 private[spark] class ArmadaEventWatcher(
-    grpcChannel: ManagedChannel,
     queue: String,
     jobSetId: String,
     backend: ArmadaClusterManagerBackend,
@@ -89,17 +85,11 @@ private[spark] class ArmadaEventWatcher(
 
     while (running) {
       try {
-        logInfo(s"Connecting to Armada event stream: queue=$queue, jobSetId=$jobSetId")
+        val watcher = submitClient.jobWatcher(queue, jobSetId, lastMessageId)
 
-        val eventStub    = EventGrpc.blockingStub(grpcChannel)
-        val watchRequest = WatchRequest(queue = queue, jobSetId = jobSetId, fromId = lastMessageId)
-
-        logInfo("Connected to Armada event stream (blocking)")
-
-        val iterator = eventStub.watch(watchRequest)
-        while (running && iterator.hasNext) {
+        while (running && watcher.hasNext) {
           try {
-            val streamMessage = iterator.next()
+            val streamMessage = watcher.next()
             if (streamMessage != null) {
               lastMessageId = streamMessage.id
               streamMessage.message.foreach(processEventMessage)
@@ -182,9 +172,6 @@ private[spark] class ArmadaEventWatcher(
 
       case EventMessage.Events.Preempted(event) =>
         handlePreempted(event)
-
-      case EventMessage.Events.UnableToSchedule(event) =>
-        handleUnableToSchedule(event)
 
       case EventMessage.Events.Leased(_) =>
         logInfo("Job leased event received")
@@ -308,22 +295,6 @@ private[spark] class ArmadaEventWatcher(
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
       logInfo(s"Executor $executorId (job $jobId) terminated")
-    }
-  }
-
-  private def handleUnableToSchedule(event: JobUnableToScheduleEvent): Unit = {
-    val jobId      = event.jobId
-    val executorId = jobIdToExecutor.get(jobId)
-    if (executorId != null) {
-      val reason = Option(event.reason).filter(_.nonEmpty).getOrElse("Unable to schedule")
-      val nodeName =
-        Option(event.nodeName).filter(_.nonEmpty).map(n => s" on node $n").getOrElse("")
-      val podName = Option(event.podName).filter(_.nonEmpty).map(p => s" (pod: $p)").getOrElse("")
-      val fullReason = s"$reason$nodeName$podName"
-      logWarning(s"Executor $executorId (job $jobId) unable to schedule: $fullReason")
-      backend.onExecutorUnableToSchedule(jobId, executorId, fullReason)
-    } else {
-      logInfo(s"Received unable to schedule event for unknown job $jobId")
     }
   }
 

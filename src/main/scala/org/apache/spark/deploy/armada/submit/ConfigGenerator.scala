@@ -49,11 +49,12 @@ private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
   // Store the config files as annotations in the armada submit request
   def getAnnotations: Map[String, String] = {
     confFiles
-      .map(f => prefix + "/" + f.getName -> Source.fromFile(f.toString))
+      .map(f => prefix + "/" + f.getName -> f.toString)
       .toMap
       // needed by Scala 2.12, deprecated but available in Scala 2.13
       // for Scala 2.13 on, use .view.mapValues instead
-      .mapValues { source =>
+      .mapValues { s =>
+        val source = Source.fromFile(s)
         try { source.mkString }
         finally { source.close() }
       }

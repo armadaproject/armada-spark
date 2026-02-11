@@ -37,8 +37,11 @@ import scala.concurrent.{ExecutionContext, Future}
 /** Kubernetes client implementation using fabric8 Kubernetes client library. */
 class K8sClient(props: Properties) {
   val armadaMaster: String = props.getProperty("armada.master")
-  val pattern              = """armada://([^:]+):.*""".r
+  val pattern              = """local://armada://([^:]+):.*""".r
   val k8sApiURL: String    = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
+
+  println(s"-------- K8sClient(): armadaMaster = ${armadaMaster}")
+  println(s"-------- K8sClient(): k8sApiURL= ${k8sApiURL}")
 
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")
@@ -134,7 +137,7 @@ class K8sClient(props: Properties) {
       podName: String,
       namespace: String
   )(implicit ec: ExecutionContext): Future[Option[Ingress]] = Future {
-    val ingressName = s"$podName-ingress-1"
+    val ingressName = s"$podName-ingress-0"
     Option(
       client
         .network()

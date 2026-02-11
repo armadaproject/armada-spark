@@ -170,7 +170,9 @@ Each option consists of a `String` unless otherwise noted.
 
 They can be set in the [conf](../conf/spark-defaults.conf) file.
 
-- `spark.armada.auth.token` - Armada auth token, (specific to the OIDC server being used.)
+- `ARMADA_AUTH_TOKEN` - Environment variable for Armada auth token (for initial submission). For further authentication between driver and executors, configure `spark.armada.auth.script.path` to point to an authentication script.
+- `spark.armada.auth.script.path` - Path to an executable script for obtaining authentication tokens in cluster mode. The script should output the token to stdout. If not specified, no script-based authentication will be attempted.
+
 - `spark.armada.container.image` - Container image to use for Spark containers.
 - `spark.armada.driver.limit.cores` - Specify the hard cpu limit for the driver pod
 - `spark.armada.driver.request.cores` - Specify the cpu request for the driver pod
@@ -235,6 +237,50 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
     Annotations should be in the format key=value, e.g. `nginx.ingress.kubernetes.io/rewrite-target=/`.
 - `spark.armada.driver.ingress.certName` - The name of the TLS certificate to use for the Ingress resource.
     This is used when `spark.armada.driver.ingress.tls.enabled` is set to true.
+- `spark.armada.driver.ingress.port` - The port to expose via Ingress. If not set, defaults to OAuth proxy port (if enabled) or Spark UI port.
+
+### OAuth2 Authentication Configuration
+
+`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI using OAuth2-Proxy as a native sidecar.
+For detailed setup instructions and examples, see [UI Access Documentation](./ui.md).
+
+- `spark.armada.oauth.enabled` - Enable OAuth2 authentication for Spark UI.
+- `spark.armada.oauth.clientId` - OAuth2 client ID.
+- `spark.armada.oauth.clientSecret` - OAuth2 client secret.
+- `spark.armada.oauth.clientSecretK8s` - Name of Kubernetes secret containing client secret.
+- `spark.armada.oauth.issuerUrl` - OIDC issuer URL.
+- `spark.armada.oauth.redirectUrl` - OAuth redirect URL.
+- `spark.armada.oauth.proxy.image` - OAuth2-proxy Docker image.
+- `spark.armada.oauth.proxy.port` - Port for OAuth2-proxy to listen on.
+- `spark.armada.oauth.providerDisplayName` - Provider name shown in OAuth UI.
+- `spark.armada.oauth.skipProviderDiscovery` - Skip OIDC discovery and use explicit endpoints.
+- `spark.armada.oauth.loginUrl` - OIDC authorization endpoint.
+- `spark.armada.oauth.redeemUrl` - OIDC token endpoint.
+- `spark.armada.oauth.validateUrl` - OIDC userinfo endpoint.
+- `spark.armada.oauth.jwksUrl` - OIDC JWKS endpoint.
+- `spark.armada.oauth.extraAudiences` - Comma-separated list of additional OIDC audiences.
+- `spark.armada.oauth.emailDomain` - Allowed email domains.
+- `spark.armada.oauth.skipJwtBearerTokens` - Skip JWT bearer token validation.
+- `spark.armada.oauth.skipProviderButton` - Skip provider selection button.
+- `spark.armada.oauth.skipAuthPreflight` - Skip authentication for OPTIONS requests.
+- `spark.armada.oauth.passHostHeader` - Pass Host header to upstream.
+- `spark.armada.oauth.whitelistDomain` - Whitelist redirect domains.
+- `spark.armada.oauth.cookieName` - OAuth session cookie name.
+- `spark.armada.oauth.cookiePath` - Cookie path.
+- `spark.armada.oauth.cookieSecure` - Require HTTPS for cookies.
+- `spark.armada.oauth.cookieSamesite` - SameSite cookie attribute.
+- `spark.armada.oauth.cookieCsrfPerRequest` - Enable CSRF per request.
+- `spark.armada.oauth.cookieCsrfExpire` - CSRF cookie expiration duration.
+- `spark.armada.oauth.tls.caCertPath` - Path to CA certificate for custom TLS validation.
+- `spark.armada.oauth.tls.caBundlePath` - Path to CA bundle for custom TLS validation.
+- `spark.armada.oauth.skipVerify` - Skip TLS certificate verification.
+- `spark.armada.oauth.insecureSkipIssuerVerification` - Skip OIDC issuer verification.
+- `spark.armada.oauth.insecureAllowUnverifiedEmail` - Allow unverified email addresses.
+- `spark.armada.oauth.codeChallengeMethod` - PKCE code challenge method.
+- `spark.armada.oauth.resources.cpu` - CPU resource limit/request for OAuth proxy.
+- `spark.armada.oauth.resources.memory` - Memory resource limit/request for OAuth proxy.
+
+See [UI Access Documentation](./ui.md) for examples and troubleshooting.
 
 # Building `armada-spark`
 
