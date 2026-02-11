@@ -303,6 +303,52 @@ class DynamicExecutorAnnotationAssertion(
   }
 }
 
+/** Tracks all executor pods seen across polls and verifies each passes a predicate. Use for dynamic
+  * allocation where pods come and go.
+  */
+class DynamicExecutorPodAssertion(
+    predicate: Pod => Boolean,
+    predicateDescription: String,
+    expectedMinPods: Int
+) extends TestAssertion {
+  override val name =
+    s"At least $expectedMinPods executor pods should satisfy: $predicateDescription"
+
+  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
+
+  override def assert(
+      context: AssertionContext
+  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
+    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
+    context.getPodsByLabel(labelSelector).map { pods =>
+      pods.foreach { pod =>
+        val name = pod.getMetadata.getName
+        if (!seenPods.contains(name)) {
+          seenPods(name) = predicate(pod)
+        }
+      }
+
+      val validCount = seenPods.count(_._2)
+      val failed     = seenPods.filter(!_._2).keys.toSeq
+
+      if (failed.nonEmpty) {
+        AssertionResult.Failure(
+          s"${failed.size} executor pod(s) failed $predicateDescription: ${failed.mkString(", ")}"
+        )
+      } else if (validCount >= expectedMinPods) {
+        println(
+          s"Seen $validCount valid executor pod(s) satisfying: $predicateDescription"
+        )
+        AssertionResult.Success
+      } else {
+        AssertionResult.Failure(
+          s"Only seen $validCount valid executor pod(s) so far, need at least $expectedMinPods"
+        )
+      }
+    }
+  }
+}
+
 /** Pod label assertion - verifies pods have expected labels */
 class PodLabelAssertion(
     podSelector: String,

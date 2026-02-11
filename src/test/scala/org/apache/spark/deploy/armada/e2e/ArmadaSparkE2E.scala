@@ -493,25 +493,50 @@ class ArmadaSparkE2E
           "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
       )
     }
-    val builder = baseSparkPiTest(
+    val featureStepLabels = Map(
+      "feature-step"      -> "executor-applied",
+      "feature-step-role" -> "executor"
+    )
+
+    val base = baseSparkPiTest(
       "spark-pi-feature-steps" + deployMode,
       deployMode,
       allocation,
       Map("test-type" -> "feature-step")
     )
       .withSparkConf(featureSteps)
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
-      .assertExecutorsHaveLabels(
-        Map(
-          "feature-step"      -> "executor-applied",
-          "feature-step-role" -> "executor"
+
+    val builder = if (allocation == "static") {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+        .assertExecutorsHaveLabels(featureStepLabels)
+        .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
+        .withExecutorPodAssertion { pod =>
+          Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+        }
+    } else {
+      base
+        .withDynamicAllocation(
+          minExecutors = executorCount,
+          maxExecutors = 4,
+          schedulerBacklogTimeoutSeconds = 3,
+          executorIdleTimeoutSeconds = 90
         )
-      )
-      .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
-      .withExecutorPodAssertion { pod =>
-        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
-      }
+        .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(
+          Map("executor-feature-step" -> "configured"),
+          executorCount + 1
+        )
+        .assertDynamicExecutorPod(
+          pod =>
+            Option(pod.getSpec.getActiveDeadlineSeconds)
+              .map(_.longValue)
+              .contains(1800L),
+          "activeDeadlineSeconds=1800",
+          executorCount + 1
+        )
+    }
 
     if (deployMode == "cluster") {
       builder
@@ -537,6 +562,11 @@ class ArmadaSparkE2E
 
   test("SparkPi job with custom feature steps - staticClient", E2ETest) {
     baseFeatureStepTest("client", "static", 2)
+      .run()
+  }
+
+  test("SparkPi job with custom feature steps - dynamicCluster", E2ETest) {
+    baseFeatureStepTest("cluster", "dynamic", 2)
       .run()
   }
 
