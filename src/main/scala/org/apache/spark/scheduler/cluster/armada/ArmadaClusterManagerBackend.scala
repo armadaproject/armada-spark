@@ -40,7 +40,6 @@ import org.apache.spark.scheduler.{
   ExecutorDecommission,
   ExecutorDecommissionInfo,
   ExecutorExited,
-  ExecutorKilled,
   TaskSchedulerImpl
 }
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
@@ -359,7 +358,10 @@ private[spark] class ArmadaClusterManagerBackend(
     // Send RPC kill signal to executors
     executorIds.foreach { id =>
       markTerminal(id)
-      removeExecutor(id, ExecutorKilled)
+      safeRemoveExecutor(
+        id,
+        ExecutorExited(-1, exitCausedByApp = false, "Executor killed by Spark")
+      )
     }
 
     // Cancel Armada jobs after grace period
