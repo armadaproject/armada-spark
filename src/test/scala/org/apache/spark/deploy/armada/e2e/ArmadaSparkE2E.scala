@@ -23,6 +23,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 
+import java.io.File
 import java.util.Properties
 import scala.concurrent.ExecutionContext.Implicits.global
 import TestConstants._
@@ -47,8 +48,14 @@ class ArmadaSparkE2E
 
   private var baseConfig: TestConfig = _
 
+  private val templateServer =
+    new TemplateFileServer(new File("src/test/resources/e2e/templates"))
+
   override def beforeAll(): Unit = {
     super.beforeAll()
+
+    val port = templateServer.start()
+    println(s"[TEMPLATE-SERVER] Started on port $port")
 
     val props = loadProperties()
 
@@ -135,6 +142,12 @@ class ArmadaSparkE2E
     )
   }
 
+  override def afterAll(): Unit = {
+    templateServer.stop()
+    println("[TEMPLATE-SERVER] Stopped")
+    super.afterAll()
+  }
+
   implicit val orch: TestOrchestrator = orchestrator
 
   private def loadProperties(): Properties = {
@@ -166,9 +179,6 @@ class ArmadaSparkE2E
 
     props
   }
-
-  private def templatePath(name: String): String =
-    s"src/test/resources/e2e/templates/$name"
 
   // ========================================================================
   // Base helper method
@@ -373,42 +383,58 @@ class ArmadaSparkE2E
   // Template Tests
   // ========================================================================
 
+  private val templateLabels = Map(
+    "app"             -> "spark-pi",
+    "component"       -> "executor",
+    "template-source" -> "e2e-test"
+  )
+
+  private val templateAnnotations = Map(
+    "armada/component" -> "spark-executor",
+    "armada/template"  -> "spark-pi-executor"
+  )
+
   private def baseTemplateTest(
       deployMode: String,
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    val builder =
+    val base =
       baseSparkPiTest(
         "spark-pi-templates" + deployMode,
         deployMode,
         allocation,
         Map("test-type" -> "template")
       )
-        .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+        .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
         .withSparkConf(
           Map(
-            "spark.armada.driver.jobItemTemplate" -> templatePath("spark-pi-driver-template.yaml"),
-            "spark.armada.executor.jobItemTemplate" -> templatePath(
+            "spark.armada.driver.jobItemTemplate" -> templateServer.url(
+              "spark-pi-driver-template.yaml"
+            ),
+            "spark.armada.executor.jobItemTemplate" -> templateServer.url(
               "spark-pi-executor-template.yaml"
             )
           )
         )
+
+    val builder = if (allocation == "dynamic") {
+      base
+        .withDynamicAllocation(
+          minExecutors = executorCount,
+          maxExecutors = 4,
+          schedulerBacklogTimeoutSeconds = 3,
+          executorIdleTimeoutSeconds = 90
+        )
+        .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
+    } else {
+      base
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
-        .assertExecutorsHaveLabels(
-          Map(
-            "app"             -> "spark-pi",
-            "component"       -> "executor",
-            "template-source" -> "e2e-test"
-          )
-        )
-        .assertExecutorsHaveAnnotations(
-          Map(
-            "armada/component" -> "spark-executor",
-            "armada/template"  -> "spark-pi-executor"
-          )
-        )
+        .assertExecutorsHaveLabels(templateLabels)
+        .assertExecutorsHaveAnnotations(templateAnnotations)
+    }
 
     if (deployMode == "cluster") {
       builder
@@ -535,14 +561,14 @@ class ArmadaSparkE2E
       "static",
       Map("test-type" -> "ingress-template")
     )
-      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+      .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
           "spark.armada.driver.ingress.enabled" -> "true",
-          "spark.armada.driver.jobItemTemplate" -> templatePath(
+          "spark.armada.driver.jobItemTemplate" -> templateServer.url(
             "spark-pi-driver-ingress-template.yaml"
           ),
-          "spark.armada.executor.jobItemTemplate" -> templatePath(
+          "spark.armada.executor.jobItemTemplate" -> templateServer.url(
             "spark-pi-executor-template.yaml"
           )
         )
