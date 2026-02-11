@@ -116,8 +116,8 @@ class E2ETestBuilder(testName: String) {
   def withDynamicAllocation(
       minExecutors: Int,
       maxExecutors: Int,
-      schedulerBacklogTimeoutSeconds: Int = 5,
-      executorIdleTimeoutSeconds: Int = 60
+      schedulerBacklogTimeoutSeconds: Int = 3,
+      executorIdleTimeoutSeconds: Int = 90
   ): E2ETestBuilder = {
     withSparkConf("spark.dynamicAllocation.enabled", "true")
     // Required for Spark < 3.4.0 (shuffle tracking is enabled by default from 3.4.0+)
