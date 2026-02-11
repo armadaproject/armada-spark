@@ -79,9 +79,6 @@
     ]
   },
   "enabledPlugins": {
-    "code-simplifier@claude-plugins-official": true,
-    "comprehensive-review@claude-code-workflows": true,
-    "unit-testing@claude-code-workflows": true,
-    "error-debugging@claude-code-workflows": true
+    "code-simplifier@claude-plugins-official": true
   }
 }

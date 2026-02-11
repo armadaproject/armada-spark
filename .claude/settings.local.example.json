@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Optional third-party plugins for Claude Code.",
+    "These are community plugins (not Anthropic-maintained) — review before enabling.",
+    "Source: https://github.com/wshobson/agents",
+    "",
+    "Setup steps:",
+    "  1. Add the marketplace:  /plugin marketplace add wshobson/agents",
+    "  2. Copy this file:       cp .claude/settings.local.example.json .claude/settings.local.json",
+    "  3. Restart Claude Code to load the plugins."
+  ],
+  "enabledPlugins": {
+    "comprehensive-review@claude-code-workflows": true,
+    "unit-testing@claude-code-workflows": true,
+    "error-debugging@claude-code-workflows": true
+  }
+}
