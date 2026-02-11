@@ -466,8 +466,10 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Mark an executor as having reached a terminal state and clean it from pending set.
     */
   private def markTerminal(executorId: String): Unit = {
-    terminalExecutors.add(executorId)
-    pendingExecutors.synchronized { pendingExecutors -= executorId }
+    pendingExecutors.synchronized {
+      pendingExecutors -= executorId
+      terminalExecutors.add(executorId)
+    }
   }
 
   private[armada] def onExecutorSubmitted(jobId: String): Unit = {

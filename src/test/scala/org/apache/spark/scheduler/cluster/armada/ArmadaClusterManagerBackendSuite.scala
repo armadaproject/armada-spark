@@ -223,6 +223,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     backend.getPendingExecutorCount shouldBe 1
   }
 
+  // Use multiple threads to terminate half the jobs, then confirm the number
+  // of remaining active ones.
   test("thread safety of terminal executor tracking") {
     val numJobs = 100
     val jobIds  = (1 to numJobs).map(i => s"job-$i")
