@@ -227,9 +227,7 @@ class ArmadaSparkE2E
   ): E2ETestBuilder = {
     builder.withDynamicAllocation(
       minExecutors = executorCount,
-      maxExecutors = 4,
-      schedulerBacklogTimeoutSeconds = 3,
-      executorIdleTimeoutSeconds = 90
+      maxExecutors = 4
     )
   }
 
