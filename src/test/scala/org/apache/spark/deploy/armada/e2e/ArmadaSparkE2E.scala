@@ -466,6 +466,11 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("SparkPi job using job templates - dynamicCluster", E2ETest) {
+    baseTemplateTest("cluster", "dynamic", 2)
+      .run()
+  }
+
   // ========================================================================
   // Feature Step Tests
   // ========================================================================
