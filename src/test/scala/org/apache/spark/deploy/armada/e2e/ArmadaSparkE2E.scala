@@ -221,6 +221,18 @@ class ArmadaSparkE2E
     }
   }
 
+  private def withStandardDynamicAllocation(
+      builder: E2ETestBuilder,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    builder.withDynamicAllocation(
+      minExecutors = executorCount,
+      maxExecutors = 4,
+      schedulerBacklogTimeoutSeconds = 3,
+      executorIdleTimeoutSeconds = 90
+    )
+  }
+
   // ========================================================================
   // Gang Scheduling Tests
   // ========================================================================
@@ -244,13 +256,7 @@ class ArmadaSparkE2E
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
     } else {
-      base
-        .withDynamicAllocation(
-          minExecutors = executorCount,
-          maxExecutors = 4,
-          schedulerBacklogTimeoutSeconds = 3,
-          executorIdleTimeoutSeconds = 90
-        )
+      withStandardDynamicAllocation(base, executorCount)
     }
   }
 
@@ -299,13 +305,7 @@ class ArmadaSparkE2E
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
     } else {
-      base
-        .withDynamicAllocation(
-          minExecutors = executorCount,
-          maxExecutors = 4,
-          schedulerBacklogTimeoutSeconds = 3,
-          executorIdleTimeoutSeconds = 90
-        )
+      withStandardDynamicAllocation(base, executorCount)
         .assertExecutorCountMaxReachedAtLeast(executorCount + 1)
     }
   }
@@ -334,8 +334,9 @@ class ArmadaSparkE2E
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
+    val suffix = s"$allocation-$deployMode"
     val base = baseSparkPiTest(
-      "python-spark-pi" + deployMode,
+      s"python-spark-pi-$suffix",
       deployMode,
       allocation,
       Map("test-type" -> "python")
@@ -353,13 +354,7 @@ class ArmadaSparkE2E
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
     } else {
-      base
-        .withDynamicAllocation(
-          minExecutors = executorCount,
-          maxExecutors = 4,
-          schedulerBacklogTimeoutSeconds = 3,
-          executorIdleTimeoutSeconds = 90
-        )
+      withStandardDynamicAllocation(base, executorCount)
         .assertExecutorCountMaxReachedAtLeast(executorCount + 1)
     }
   }
@@ -399,9 +394,10 @@ class ArmadaSparkE2E
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
+    val suffix = s"$allocation-$deployMode"
     val base =
       baseSparkPiTest(
-        "spark-pi-templates" + deployMode,
+        s"spark-pi-templates-$suffix",
         deployMode,
         allocation,
         Map("test-type" -> "template")
@@ -419,13 +415,7 @@ class ArmadaSparkE2E
         )
 
     val builder = if (allocation == "dynamic") {
-      base
-        .withDynamicAllocation(
-          minExecutors = executorCount,
-          maxExecutors = 4,
-          schedulerBacklogTimeoutSeconds = 3,
-          executorIdleTimeoutSeconds = 90
-        )
+      withStandardDynamicAllocation(base, executorCount)
         .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
         .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
     } else {
@@ -498,8 +488,9 @@ class ArmadaSparkE2E
       "feature-step-role" -> "executor"
     )
 
+    val suffix = s"$allocation-$deployMode"
     val base = baseSparkPiTest(
-      "spark-pi-feature-steps" + deployMode,
+      s"spark-pi-feature-steps-$suffix",
       deployMode,
       allocation,
       Map("test-type" -> "feature-step")
@@ -516,13 +507,7 @@ class ArmadaSparkE2E
           Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
         }
     } else {
-      base
-        .withDynamicAllocation(
-          minExecutors = executorCount,
-          maxExecutors = 4,
-          schedulerBacklogTimeoutSeconds = 3,
-          executorIdleTimeoutSeconds = 90
-        )
+      withStandardDynamicAllocation(base, executorCount)
         .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
         .assertDynamicExecutorsHaveAnnotations(
           Map("executor-feature-step" -> "configured"),
