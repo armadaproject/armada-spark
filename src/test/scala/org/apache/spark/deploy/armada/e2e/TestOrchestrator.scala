@@ -349,7 +349,7 @@ class TestOrchestrator(
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
       // In client mode, spark-submit runs until application completes, so use longer timeout
       val timeout = if (!modeHelper.isDriverInCluster) jobWatchTimeout else jobSubmitTimeout
-      val result = ProcessExecutor.executeWithResult(runTestCommand, timeout)
+      val result  = ProcessExecutor.executeWithResult(runTestCommand, timeout)
 
       if (result.exitCode != 0) {
         val allOutput            = result.stdout + "\n" + result.stderr
@@ -530,8 +530,8 @@ class TestOrchestrator(
       modeHelper: DeploymentModeHelper
   ): Seq[String] = {
     val sparkRepoCopy = ".spark-3.5.5"
-    val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
-    val isClientMode = !modeHelper.isDriverInCluster
+    val deployMode    = if (modeHelper.isDriverInCluster) "cluster" else "client"
+    val isClientMode  = !modeHelper.isDriverInCluster
 
     val classPathEntries: Seq[String] = Seq(
       ".",
