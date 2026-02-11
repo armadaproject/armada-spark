@@ -262,6 +262,20 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Assert dynamic executor pods match a predicate, tracking across polls */
+  def assertDynamicExecutorPod(
+      predicate: Pod => Boolean,
+      predicateDescription: String,
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorPodAssertion(
+      predicate,
+      predicateDescription,
+      expectedMinPods
+    )
+    this
+  }
+
   /** Assert driver pod matches a predicate */
   def withDriverPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
     assertions :+= new DriverPodAssertion(predicate)
