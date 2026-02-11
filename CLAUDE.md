@@ -70,6 +70,7 @@ Cluster-mode submission (separate path):
 ```
 
 **Key classes:**
+- **ArmadaClientApplication** — Cluster-mode submission via SparkApplication SPI; builds driver/executor pods, converts to Protobuf, and submits to Armada
 - **ArmadaClusterManager** — SPI entry point; creates TaskSchedulerImpl + Backend
 - **ArmadaClusterManagerBackend** — Tracks executors via ConcurrentHashMaps (executorToJobId, jobIdToExecutor, pendingExecutors, terminalExecutors)
 - **ArmadaExecutorAllocator** — Runs on ScheduledExecutorService; respects `ARMADA_ALLOCATION_BATCH_SIZE`, `ARMADA_MAX_PENDING_JOBS`, `ARMADA_ALLOCATION_CHECK_INTERVAL`
@@ -89,7 +90,7 @@ Cluster-mode submission (separate path):
 
 ## Code Style
 
-- **Formatter:** Scalafmt 3.9.5 (enforced by Spotless Maven plugin)
+- **Formatter:** Scalafmt (enforced by Spotless Maven plugin; see `pom.xml` for version)
 - **Max line length:** 100 columns
 - **Alignment:** `align.preset = more`
 - **Dialect:** scala213
@@ -127,8 +128,8 @@ All source files must include the Apache 2.0 license header (see any existing fi
 
 ## Testing Standards
 
-- **Framework:** ScalaTest 3.2.16 (`AnyFunSuite` style exclusively)
-- **Mocking:** Mockito 5.12 (`mock(classOf[...])`, `when(...).thenReturn(...)`)
+- **Framework:** ScalaTest (`AnyFunSuite` style exclusively; see `pom.xml` for version)
+- **Mocking:** Mockito (`mock(classOf[...])`, `when(...).thenReturn(...)`; see `pom.xml` for version)
 - **Assertions:** ScalaTest matchers (`shouldBe`, `shouldEqual`, `should contain`)
 
 ### Test Patterns
