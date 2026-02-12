@@ -15,21 +15,62 @@
  * limitations under the License.
  */
 
-package org.apache.spark.deploy.armada.e2e
+package org.apache.spark.deploy.armada
 
 import org.apache.spark.deploy.armada.Config
-import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient}
+import org.apache.spark.deploy.armada.submit
+import io.fabric8.kubernetes.client.{
+  ConfigBuilder,
+  DefaultKubernetesClient,
+  KubernetesClient,
+  KubernetesClientBuilder
+}
 import io.fabric8.kubernetes.api.model.{NamespaceBuilder, Pod}
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 
 import java.util.concurrent.TimeoutException
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 /** Kubernetes client implementation using fabric8 Kubernetes client library. */
-class K8sClient {
-  private val client: KubernetesClient = new DefaultKubernetesClient()
+class K8sClient(props: Properties) {
+  val armadaMaster: String = props.getProperty("armada.master")
+  val pattern              = """local://armada://([^:]+):.*""".r
+  val k8sApiURL: String    = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
+
+  println(s"-------- K8sClient(): armadaMaster = ${armadaMaster}")
+  println(s"-------- K8sClient(): k8sApiURL= ${k8sApiURL}")
+
+  val clientCertFile: String = props.getProperty("client_cert_file", "")
+  val clientKeyFile: String  = props.getProperty("client_key_file", "")
+  val clusterCaFile: String  = props.getProperty("cluster_ca_file", "")
+
+  var cb: ConfigBuilder = new ConfigBuilder()
+    .withMasterUrl(k8sApiURL)
+    // .withOauthToken("sha256~secret")
+    .withNamespace("default")
+
+  if (clusterCaFile.nonEmpty) {
+    cb = cb.withCaCertFile(clusterCaFile)
+  }
+
+  if (clientCertFile.nonEmpty) {
+    cb = cb.withClientCertFile(clientCertFile)
+  }
+
+  if (clientKeyFile.nonEmpty) {
+    cb = cb.withClientKeyFile(clientKeyFile)
+  }
+
+  val cfg = cb
+    .withClientKeyAlgo("RSA")
+    .build()
+
+  private val client: KubernetesClient = new KubernetesClientBuilder()
+    .withConfig(cfg)
+    .build()
 
   def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = Future {
     val namespace = new NamespaceBuilder()

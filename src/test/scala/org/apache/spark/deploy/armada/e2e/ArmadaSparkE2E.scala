@@ -17,6 +17,8 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import org.apache.spark.deploy.armada.K8sClient
+
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -41,9 +43,9 @@ class ArmadaSparkE2E
 
   private val baseQueueName = "e2e-template"
 
-  private lazy val armadaClient = new ArmadaClient()
-  private lazy val k8sClient    = new K8sClient()
-  private lazy val orchestrator = new TestOrchestrator(armadaClient, k8sClient)
+  private var armadaClient: ArmadaClient      = _
+  private var k8sClient: K8sClient            = _
+  implicit private var orch: TestOrchestrator = _
 
   private var baseConfig: TestConfig = _
 
@@ -51,6 +53,11 @@ class ArmadaSparkE2E
     super.beforeAll()
 
     val props = loadProperties()
+
+    val armadaApiUrl = props.getProperty("armada.master", "localhost:30002")
+    armadaClient = new ArmadaClient(armadaApiUrl)
+    k8sClient = new K8sClient(props)
+    orch = new TestOrchestrator(armadaClient, k8sClient)
 
     // Get Scala binary version - either from system property or derive from full version
     // This should be "2.12" or "2.13", not the full version like "2.12.15"
@@ -134,8 +141,6 @@ class ArmadaSparkE2E
       s"[CLUSTER-CHECK] Cluster verified ready after $totalTime seconds ($attempts attempts)"
     )
   }
-
-  implicit val orch: TestOrchestrator = orchestrator
 
   private def loadProperties(): Properties = {
     val props = new Properties()

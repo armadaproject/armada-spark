@@ -18,6 +18,7 @@
 package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
+import org.apache.spark.deploy.armada.K8sClient
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
