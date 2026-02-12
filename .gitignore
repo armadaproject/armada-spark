@@ -89,5 +89,4 @@ example/jupyter/workspace/
 
 # Claude Code
 plans/
-.claude/
-CLAUDE.md
+.claude/settings.local.json
