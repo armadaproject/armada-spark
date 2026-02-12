@@ -83,3 +83,6 @@ scripts/.tmp/
 
 # Jupyter
 example/jupyter/workspace/
+
+# Claude Code local settings (personal per-user config)
+.claude/settings.local.json

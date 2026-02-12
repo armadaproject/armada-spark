@@ -96,8 +96,12 @@ class TestOrchestrator(
           10.seconds
         )
         pods.headOption.foreach { pod =>
-          if (pod.getStatus != null && pod.getStatus.getPhase == "Running") {
-            podRunning = true
+          if (pod.getStatus != null) {
+            val phase = pod.getStatus.getPhase
+            // Accept Running or Succeeded - a Succeeded pod still ran successfully
+            if (phase == "Running" || phase == "Succeeded") {
+              podRunning = true
+            }
           }
         }
       } catch {
@@ -242,8 +246,35 @@ class TestOrchestrator(
       _ <- armadaClient.ensureQueueExists(queueName).recoverWith { case ex =>
         throw new RuntimeException(s"Failed to ensure queue $queueName", ex)
       }
-      _      <- submitJob(testJobSetId, queueName, name, config, context, modeHelper)
-      result <- watchJob(queueName, testJobSetId, config, context, isClientMode)
+      result <-
+        if (isClientMode) {
+          // In client mode, spark-submit blocks until the job completes.
+          // armadactl watch --exit-if-inactive would exit immediately because
+          // the job set doesn't exist yet, so we use submitFuture.isCompleted
+          // as the job-completion signal instead.
+          val submitFuture =
+            submitJob(testJobSetId, queueName, name, config, context, modeHelper)
+          val watchFuture =
+            watchJob(
+              queueName,
+              testJobSetId,
+              config,
+              context,
+              isClientMode,
+              clientSubmitFuture = Some(submitFuture)
+            )
+          for {
+            _      <- submitFuture
+            result <- watchFuture
+          } yield result
+        } else {
+          // In cluster mode, spark-submit returns immediately after submission,
+          // so sequential order is fine.
+          for {
+            _      <- submitJob(testJobSetId, queueName, name, config, context, modeHelper)
+            result <- watchJob(queueName, testJobSetId, config, context, isClientMode)
+          } yield result
+        }
     } yield result
 
     resultFuture
@@ -398,21 +429,38 @@ class TestOrchestrator(
       jobSetId: String,
       config: TestConfig,
       context: TestContext,
-      isClientMode: Boolean = false
+      isClientMode: Boolean = false,
+      clientSubmitFuture: Option[Future[Unit]] = None
   ): Future[TestResult] = Future {
     val podMonitor = new SimplePodMonitor(context.namespace)
 
-    println(s"[WATCH] Starting job watch for jobSetId: $jobSetId")
-    val jobFuture = armadaClient.watchJobSet(queueName, jobSetId, jobWatchTimeout)
+    // In client mode, spark-submit blocks until the job finishes, so we use
+    // the submit future's completion as the job-done signal.  armadactl watch
+    // would exit immediately because the job set doesn't exist yet.
+    val useArmadaWatch = clientSubmitFuture.isEmpty
+    val jobFuture =
+      if (useArmadaWatch) {
+        println(s"[WATCH] Starting job watch for jobSetId: $jobSetId")
+        Some(armadaClient.watchJobSet(queueName, jobSetId, jobWatchTimeout))
+      } else {
+        println(s"[WATCH] Client mode: using submit completion as job signal")
+        None
+      }
 
     var jobCompleted               = false
     var podFailure: Option[String] = None
     var assertionResults           = Map.empty[String, AssertionResult]
 
+    // For client mode, derive jobCompleted from the submit future
+    val isJobCompleted: () => Boolean = clientSubmitFuture match {
+      case Some(sf) => () => sf.isCompleted || jobCompleted
+      case None     => () => jobCompleted
+    }
+
     if (config.failFastOnPodFailure) {
       println(s"[MONITOR] Starting pod monitoring for namespace: ${context.namespace}")
       val monitorThread = new Thread(() => {
-        while (!jobCompleted && podFailure.isEmpty) {
+        while (!isJobCompleted() && podFailure.isEmpty) {
           podFailure = podMonitor.checkForFailures()
           if (podFailure.isEmpty) {
             Thread.sleep(5000) // Check every 5 seconds
@@ -431,7 +479,7 @@ class TestOrchestrator(
           config.assertions,
           context,
           queueName,
-          jobCompleted = () => jobCompleted,
+          jobCompleted = isJobCompleted,
           isClientMode = isClientMode
         )
       })
@@ -446,7 +494,14 @@ class TestOrchestrator(
     val jobStatus =
       try {
         import scala.concurrent.Await
-        Await.result(jobFuture, jobWatchTimeout + 10.seconds)
+        jobFuture match {
+          case Some(f) =>
+            Await.result(f, jobWatchTimeout + 10.seconds)
+          case None =>
+            // Client mode: wait for submit future instead
+            Await.result(clientSubmitFuture.get, jobWatchTimeout + 10.seconds)
+            JobSetStatus.Success
+        }
       } catch {
         case _: TimeoutException =>
           println(s"[TIMEOUT] Job watch timed out after ${jobWatchTimeout.toSeconds}s")

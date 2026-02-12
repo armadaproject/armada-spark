@@ -169,3 +169,17 @@ The example notebooks from `example/jupyter/notebooks` are mounted in the contai
 - **Required:** `SPARK_DRIVER_HOST`
 - Override the Jupyter port if required by setting `JUPYTER_PORT` in `scripts/config.sh`
 - The script uses the same configuration (`ARMADA_MASTER`, `ARMADA_QUEUE`, `SPARK_DRIVER_HOST`, etc.) as other scripts
+
+---
+
+## Working with Claude Code
+
+Project settings (`.claude/settings.json`) include permissions, hooks (auto-formatting via Spotless, build verification), and slash commands out of the box.
+
+**Optional third-party plugins:** Community plugins for code review, testing, and debugging are available but not enabled by default. To opt in:
+
+```bash
+/plugin marketplace add wshobson/agents
+cp .claude/settings.local.example.json .claude/settings.local.json
+# Restart Claude Code
+```

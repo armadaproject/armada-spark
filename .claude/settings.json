@@ -1,0 +1,84 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(mvn *)",
+      "Bash(mvn)",
+      "Bash(./scripts/*)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git log)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git branch)",
+      "Bash(git switch *)",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(git stash)",
+      "Bash(git tag *)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git pull *)",
+      "Bash(git pull)",
+      "Bash(git fetch *)",
+      "Bash(git fetch)",
+      "Bash(git remote *)",
+      "Bash(git config *)",
+      "Bash(gh *)",
+      "Bash(ls *)",
+      "Bash(ls)",
+      "Bash(mkdir *)",
+      "Bash(which *)",
+      "Bash(java *)",
+      "Bash(scala *)",
+      "Bash(docker *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git reset --hard *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git clean -f *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/spotless-apply.sh",
+            "timeout": 120,
+            "statusMessage": "Formatting with Spotless...",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/verify-build.sh",
+            "timeout": 300,
+            "statusMessage": "Verifying build compiles..."
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true
+  }
+}
