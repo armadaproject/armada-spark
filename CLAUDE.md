@@ -20,7 +20,7 @@ mvn spotless:check
 mvn spotless:apply
 
 # Set Spark/Scala versions (e.g., Spark 3.5.5, Scala 2.13.8)
-./scripts/set-version.sh 3 5 5 2 13 8
+./scripts/set-version.sh 3.5.5 2.13.8
 ```
 
 **Stack:** Scala 2.13 | Maven | Spark 3.5 | Java 17 | Fabric8 Kubernetes Client | gRPC/Protobuf (via armada-scala-client)
@@ -172,4 +172,4 @@ class BarSuite extends AnyFunSuite with TableDrivenPropertyChecks with Matchers 
 
 ## CI/CD
 
-GitHub Actions with matrix builds across Spark 3.3/3.5/4.1 and Scala 2.12/2.13. Pipeline: lint -> build -> e2e tests.
+GitHub Actions with matrix builds across Spark 3.3/3.5 and Scala 2.12/2.13. Pipeline: lint -> build -> e2e tests.

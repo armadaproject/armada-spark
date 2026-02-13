@@ -1,29 +1,51 @@
-Create a git commit for the current staged/unstaged changes.
+Create a git commit for the current staged/unstaged changes using Conventional Commits.
 
 Rules:
 1. Run `git status` and `git diff` to understand what changed
 2. Stage relevant files (prefer specific files over `git add -A`)
-3. Write a SHORT commit message (max 50 chars for subject line, imperative mood)
+3. Write a commit message following Conventional Commits format
 4. Use `--signoff` to sign off using the committer's git config (do NOT hardcode any name/email)
-5. Do NOT add Co-Authored-By or any other trailers
+5. Do NOT add Co-Authored-By or any other trailers beyond Signed-off-by
 6. If there are no changes, say so and stop
 
 Commit format:
 ```
-git commit --signoff -m "short imperative message"
+<type>[optional scope]: <description>
 ```
 
-The `--signoff` flag automatically uses the name and email from `git config user.name` and `git config user.email`, so each collaborator's own identity is used.
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+
+Scope (optional): a noun describing the affected area in parentheses.
+Common scopes: config, submit, allocator, event-watcher, e2e, docker, ci.
+
+Subject line rules:
+- Imperative mood ("add", not "added" or "adds")
+- Do NOT capitalize the first letter after the type prefix
+- Do NOT end with a period
+- Keep under 72 characters total
+
+For breaking changes, add `!` after the type/scope:
+```
+feat(config)!: rename queue config key
+```
 
 Examples of good messages:
-- "add user and permission models"
-- "implement executor allocation logic"
-- "fix gang scheduling annotation prefix"
-- "add table-driven tests for config parsing"
+- "feat(allocator): support configurable batch size"
+- "fix(event-watcher): handle reconnection on stream error"
+- "refactor(submit): extract TLS channel builder"
+- "test(backend): add table-driven tests for state transitions"
+- "docs: update architecture diagram in README"
+- "build: bump armada-scala-client to 0.5.0"
+- "chore: remove unused import in Config.scala"
+
+Commit command:
+```
+git commit --signoff -m "<type>[scope]: <description>"
+```
 
 Do NOT:
-- Use long descriptive messages
+- Use long multi-line messages for simple changes
 - Add Co-Authored-By trailers
 - Use past tense ("added", "fixed")
-- Prefix with type tags ("feat:", "fix:") unless asked
 - Hardcode any author name or email
+- Omit the type prefix
