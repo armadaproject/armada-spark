@@ -17,8 +17,6 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-import java.util.concurrent.ConcurrentHashMap
-
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -26,16 +24,13 @@ import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskSchedulerImpl
 
-/** Integration tests for Armada dynamic allocation.
+/** Single-threaded functional tests for backend component interactions.
   *
-  * These tests verify the interaction between components:
-  *   - ArmadaClusterManagerBackend
-  *   - ArmadaExecutorAllocator
-  *   - ArmadaEventWatcher
-  *
-  * Note: These are integration tests that test component interactions.
+  * Verifies correctness of executor lifecycle state transitions (submit, run, register, pending
+  * pruning) and API contracts (idempotency, bidirectional mappings) without concurrency. For
+  * multi-threaded contention and race condition tests, see [[BackendContentionSuite]].
   */
-class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAndAfter {
+class ArmadaDynamicAllocationSuite extends AnyFunSuite with BeforeAndAfter {
 
   var backend: ArmadaClusterManagerBackend = _
   var sc: SparkContext                     = _
@@ -120,48 +115,6 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
       backend.getPendingExecutorCount === 0,
       "Executor should be removed from pending after registering with Spark"
     )
-  }
-
-  test("concurrent executor submissions are thread-safe") {
-    sc = createMockSparkContext(conf)
-    val taskScheduler = createMockTaskScheduler(sc)
-
-    backend = new ArmadaClusterManagerBackend(
-      taskScheduler,
-      sc,
-      java.util.concurrent.Executors.newScheduledThreadPool(1),
-      "armada://localhost:50051"
-    )
-
-    val numThreads    = 10
-    val jobsPerThread = 50
-    val executorIds   = new ConcurrentHashMap[String, String]()
-
-    val threads = (0 until numThreads).map { i =>
-      new Thread {
-        override def run(): Unit = {
-          (0 until jobsPerThread).foreach { j =>
-            val jobId = s"job-$i-$j"
-            backend.onExecutorSubmitted(jobId)
-            val execId = backend.recordExecutor(jobId)
-            executorIds.put(jobId, execId)
-          }
-        }
-      }
-    }
-
-    threads.foreach(_.start())
-    threads.foreach(_.join())
-
-    // Verify all jobs got executor IDs
-    assert(executorIds.size() === numThreads * jobsPerThread)
-
-    // Verify all executor IDs are unique
-    val uniqueExecIds = executorIds.values().toArray.toSet
-    assert(uniqueExecIds.size === numThreads * jobsPerThread)
-
-    // Verify pending count matches
-    assert(backend.getPendingExecutorCount === numThreads * jobsPerThread)
   }
 
   test("recordAndPendExecutor and getPendingExecutorCount integration") {

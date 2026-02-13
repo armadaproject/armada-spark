@@ -32,13 +32,11 @@ import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskSchedulerImpl
 
-/** Stress tests for race condition fixes in ArmadaClusterManagerBackend.
+/** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * Exercises all four production thread roles (event watcher, allocator, Spark scheduler, RPC) and
-  * verifies the three fixes:
-  *   1. mapLock — atomic bidirectional map updates
-  *   2. recordAndPendExecutor — atomic record + pending with terminal guard
-  *   3. getExecutorSnapshot — consistent (registered, pending) pair
+  * Exercises all four production thread roles (event watcher, allocator, Spark scheduler, RPC)
+  * concurrently to verify lock ordering, atomicity, and absence of deadlocks. For single-threaded
+  * functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
   */
 class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -76,7 +74,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 1: recordAndPendExecutor atomic guard
+  // recordAndPendExecutor atomic guard
   // ==================================================================
 
   test(
@@ -167,7 +165,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 3: getExecutorSnapshot consistency
+  // getExecutorSnapshot consistency
   // ==================================================================
 
   test(
@@ -246,7 +244,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 4: four-role soak test
+  // four-role soak test
   // ==================================================================
 
   test(
@@ -374,7 +372,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 5: rapid submit-then-terminate
+  // rapid submit-then-terminate
   // ==================================================================
 
   test(
@@ -431,7 +429,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 6: deadlock detection
+  // deadlock detection
   // ==================================================================
 
   test(
@@ -539,7 +537,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // Test 7: recordExecutor idempotency across callers
+  // recordExecutor idempotency across callers
   // ==================================================================
 
   test(

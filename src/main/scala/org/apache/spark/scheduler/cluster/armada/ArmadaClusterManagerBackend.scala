@@ -77,10 +77,8 @@ private[spark] class ArmadaClusterManagerBackend(
     ConcurrentHashMap.newKeySet[String]()
 
   // Lock ordering (acquire in this order to prevent deadlocks):
-  //   1. mapLock          — guards executorToJobId + jobIdToExecutor
-  //   2. this (backend)   — guards getExecutorIds() via parent class
-  //   3. pendingExecutors — guards the pendingExecutors HashSet
-  private val mapLock = new Object()
+  //   1. this (backend)   — guards getExecutorIds() via parent class
+  //   2. pendingExecutors — guards the pendingExecutors HashSet
 
   /** Initial executor count */
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
@@ -222,37 +220,31 @@ private[spark] class ArmadaClusterManagerBackend(
     logInfo(s"Armada Event Watcher started for queue=$q jobSetId=$jsId at $host:$port")
   }
 
-  // Update the executor data structs with the new executor
+  // Update the executor data structs with the new executor.
+  // Idempotent: returns the existing executor ID if the job is already recorded.
+  // Thread-safety is provided by ConcurrentHashMap.computeIfAbsent.
   private[spark] def recordExecutor(jobId: String): String = {
-    mapLock.synchronized {
-      if (!jobIdToExecutor.containsKey(jobId)) {
+    jobIdToExecutor.computeIfAbsent(
+      jobId,
+      _ => {
         val newId = execIdCounter.incrementAndGet().toString
-        // Register mapping
-        jobIdToExecutor.put(jobId, newId)
         executorToJobId.put(newId, jobId)
         newId
-
-      } else {
-        jobIdToExecutor.get(jobId)
       }
-    }
+    )
   }
 
   /** Atomically record an executor mapping and add to pending set. Skips adding to pending if the
-    * executor is already terminal. This prevents the race where markTerminal runs between a
-    * separate recordExecutor + addPendingExecutor, leaving an executor permanently stuck in
-    * pendingExecutors.
+    * executor is already terminal.
     */
   private[spark] def recordAndPendExecutor(jobId: String): String = {
-    mapLock.synchronized {
-      val execId = recordExecutor(jobId)
-      pendingExecutors.synchronized {
-        if (!terminalExecutors.contains(execId)) {
-          pendingExecutors += execId
-        }
+    val execId = recordExecutor(jobId)
+    pendingExecutors.synchronized {
+      if (!terminalExecutors.contains(execId)) {
+        pendingExecutors += execId
       }
-      execId
     }
+    execId
   }
 
   override def stop(): Unit = {
@@ -473,9 +465,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Returns executor IDs that are NOT in a terminal state.
     */
   private[armada] def getActiveExecutorIds(): Seq[String] = {
-    mapLock.synchronized {
-      executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
-    }
+    executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
   }
 
   /** Best-effort removeExecutor that tolerates RPC endpoint being gone during shutdown. During the
