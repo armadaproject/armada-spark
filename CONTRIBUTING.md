@@ -62,7 +62,6 @@ This project includes a [Claude Code](https://docs.anthropic.com/en/docs/claude-
 | `/commit`    | Create a conventional commit                    |
 | `/ci-local`  | Run the full CI pipeline locally                |
 | `/summary`   | Generate a PR description from your branch      |
-| `/issue`     | Draft a GitHub issue from bug details/logs      |
 
 **Optional plugins:** Copy `.claude/settings.local.example.json` to `.claude/settings.local.json` and restart. Source: https://github.com/wshobson/agents
 
