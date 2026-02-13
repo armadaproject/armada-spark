@@ -104,18 +104,18 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     id3 shouldBe id2 + 1
   }
 
-  test("addPendingExecutor and getPendingExecutorCount work correctly") {
+  test("recordAndPendExecutor and getPendingExecutorCount work correctly") {
     backend.getPendingExecutorCount shouldBe 0
 
-    backend.addPendingExecutor("1")
+    backend.recordAndPendExecutor("job-1")
     backend.getPendingExecutorCount shouldBe 1
 
-    backend.addPendingExecutor("2")
-    backend.addPendingExecutor("3")
+    backend.recordAndPendExecutor("job-2")
+    backend.recordAndPendExecutor("job-3")
     backend.getPendingExecutorCount shouldBe 3
   }
 
-  test("addPendingExecutor is thread-safe") {
+  test("recordAndPendExecutor is thread-safe") {
     val numThreads         = 10
     val executorsPerThread = 100
 
@@ -123,7 +123,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       new Thread {
         override def run(): Unit = {
           (0 until executorsPerThread).foreach { j =>
-            backend.addPendingExecutor(s"exec-$i-$j")
+            backend.recordAndPendExecutor(s"job-$i-$j")
           }
         }
       }

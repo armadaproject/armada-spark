@@ -107,9 +107,8 @@ private[spark] class ArmadaExecutorAllocator(
 
         rp match {
           case Some(resourceProfile) =>
-            val currentCount = backend.getExecutorIds().size
-            val pending      = backend.getPendingExecutorCount
-            val gap          = target - (currentCount + pending)
+            val (currentCount, pending) = backend.getExecutorSnapshot
+            val gap                     = target - (currentCount + pending)
             if (gap > 0 && pending < maxPendingJobs) {
               val toAllocate = math.min(gap, batchSize)
               submitExecutorJobs(toAllocate, rpId)
@@ -144,8 +143,7 @@ private[spark] class ArmadaExecutorAllocator(
 
       // Track pending executors and map executor IDs to Armada job IDs
       submittedJobIds.foreach { jobId =>
-        val execId = backend.recordExecutor(jobId)
-        backend.addPendingExecutor(execId)
+        val execId = backend.recordAndPendExecutor(jobId)
         logInfo(s"Submitted executor (execId=$execId) as Armada jobId=$jobId for RP=$rpId")
       }
     } catch {

@@ -76,6 +76,12 @@ private[spark] class ArmadaClusterManagerBackend(
   private val terminalExecutors: java.util.Set[String] =
     ConcurrentHashMap.newKeySet[String]()
 
+  // Lock ordering (acquire in this order to prevent deadlocks):
+  //   1. mapLock          — guards executorToJobId + jobIdToExecutor
+  //   2. this (backend)   — guards getExecutorIds() via parent class
+  //   3. pendingExecutors — guards the pendingExecutors HashSet
+  private val mapLock = new Object()
+
   /** Initial executor count */
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
@@ -216,9 +222,9 @@ private[spark] class ArmadaClusterManagerBackend(
     logInfo(s"Armada Event Watcher started for queue=$q jobSetId=$jsId at $host:$port")
   }
 
-  // Update the executor data strucs with the new executor
+  // Update the executor data structs with the new executor
   private[spark] def recordExecutor(jobId: String): String = {
-    jobIdToExecutor.synchronized {
+    mapLock.synchronized {
       if (!jobIdToExecutor.containsKey(jobId)) {
         val newId = execIdCounter.incrementAndGet().toString
         // Register mapping
@@ -229,6 +235,23 @@ private[spark] class ArmadaClusterManagerBackend(
       } else {
         jobIdToExecutor.get(jobId)
       }
+    }
+  }
+
+  /** Atomically record an executor mapping and add to pending set. Skips adding to pending if the
+    * executor is already terminal. This prevents the race where markTerminal runs between a
+    * separate recordExecutor + addPendingExecutor, leaving an executor permanently stuck in
+    * pendingExecutors.
+    */
+  private[spark] def recordAndPendExecutor(jobId: String): String = {
+    mapLock.synchronized {
+      val execId = recordExecutor(jobId)
+      pendingExecutors.synchronized {
+        if (!terminalExecutors.contains(execId)) {
+          pendingExecutors += execId
+        }
+      }
+      execId
     }
   }
 
@@ -450,7 +473,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Returns executor IDs that are NOT in a terminal state.
     */
   private[armada] def getActiveExecutorIds(): Seq[String] = {
-    executorToJobId.synchronized {
+    mapLock.synchronized {
       executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
     }
   }
@@ -481,30 +504,33 @@ private[spark] class ArmadaClusterManagerBackend(
       return
     }
 
-    val execId = recordExecutor(jobId)
-    pendingExecutors.synchronized { pendingExecutors += execId }
+    recordAndPendExecutor(jobId)
   }
 
   // ========================================================================
   // PENDING EXECUTORS MANAGEMENT
   // ========================================================================
 
-  /** Add an executor to the pending set.
+  /** Get the count of pending executors. Excludes executors that have already registered with
+    * Spark. As a side effect, prunes registered executors from the pending set.
     */
-  private[armada] def addPendingExecutor(executorId: String): Unit = {
+  private[armada] def getPendingExecutorCount: Int = {
+    val registeredIds = getExecutorIds().toSet
     pendingExecutors.synchronized {
-      pendingExecutors += executorId
+      pendingExecutors --= registeredIds
+      pendingExecutors.size
     }
   }
 
-  /** Get the count of pending executors. Excludes executors that have already registered with
-    * Spark.
+  /** Returns a consistent snapshot of (activeExecutorCount, pendingExecutorCount). Both values are
+    * derived from the same getExecutorIds() call to prevent the allocator's gap computation from
+    * seeing inconsistent state.
     */
-  private[armada] def getPendingExecutorCount: Int = {
+  private[armada] def getExecutorSnapshot: (Int, Int) = {
+    val registeredIds = getExecutorIds().toSet
     pendingExecutors.synchronized {
-      val registeredIds = getExecutorIds().toSet
       pendingExecutors --= registeredIds
-      pendingExecutors.size
+      (registeredIds.size, pendingExecutors.size)
     }
   }
 

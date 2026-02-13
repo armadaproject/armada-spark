@@ -164,7 +164,7 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
     assert(backend.getPendingExecutorCount === numThreads * jobsPerThread)
   }
 
-  test("addPendingExecutor and getPendingExecutorCount integration") {
+  test("recordAndPendExecutor and getPendingExecutorCount integration") {
     sc = createMockSparkContext(conf)
     val taskScheduler = createMockTaskScheduler(sc)
 
@@ -177,7 +177,7 @@ class ArmadaDynamicAllocationIntegrationSuite extends AnyFunSuite with BeforeAnd
 
     // Add some pending executors
     (1 to 10).foreach { i =>
-      backend.addPendingExecutor(s"exec-$i")
+      backend.recordAndPendExecutor(s"job-$i")
     }
 
     assert(backend.getPendingExecutorCount === 10)
