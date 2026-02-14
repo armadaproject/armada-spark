@@ -34,12 +34,6 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * Exercises concurrent access patterns that mirror production threading to verify atomicity and
-  * idempotency:
-  *   - Event watcher: terminating executors via markTerminal (ArmadaEventWatcher daemon)
-  *   - Allocator: adding pending executors via recordAndPendExecutor (ArmadaExecutorAllocator)
-  *   - RPC: recording executor mappings via recordExecutor (ArmadaDriverEndpoint GenerateExecID)
-  *
   * For single-threaded functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
   */
 class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
@@ -167,10 +161,6 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
         active should contain(execId)
     }
 
-    // Exactly the 100 odd-indexed (non-terminated) executors should remain pending.
-    // Without the terminal guard in recordAndPendExecutor, terminated executors would
-    // be re-added to pending whenever the re-submitter runs after the terminator,
-    // making this count > 100.
     backend.getPendingExecutorCount shouldBe total / 2
   }
 
@@ -180,53 +170,37 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
 
   test(
     "recordExecutor idempotency under contention" +
-      " from multiple callers"
+      " from multiple callers, (simulates watcher thread and executor RPC thread)"
   ) {
-    val total = 200
-    val error = new AtomicReference[Throwable](null)
-    val results1 =
-      new ConcurrentHashMap[String, String]()
-    val results2 =
-      new ConcurrentHashMap[String, String]()
+    val total    = 200
+    val error    = new AtomicReference[Throwable](null)
+    val results1 = new ConcurrentHashMap[String, String]()
+    val results2 = new ConcurrentHashMap[String, String]()
     // Latch ensures both threads race over the same 200 job IDs simultaneously.
     val latch = new CountDownLatch(1)
 
-    // RPC thread
-    val rpcThread = new Thread {
+    def recordAll(results: ConcurrentHashMap[String, String]): Thread = new Thread {
       override def run(): Unit =
         try {
           latch.await()
           (1 to total).foreach { i =>
             val jobId  = s"idem-job-$i"
             val execId = backend.recordExecutor(jobId)
-            results1.put(jobId, execId)
+            results.put(jobId, execId)
           }
         } catch {
           case t: Throwable => error.compareAndSet(null, t)
         }
     }
 
-    // Event watcher thread
-    val watcherThread = new Thread {
-      override def run(): Unit =
-        try {
-          latch.await()
-          (1 to total).foreach { i =>
-            val jobId  = s"idem-job-$i"
-            val execId = backend.recordExecutor(jobId)
-            results2.put(jobId, execId)
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    rpcThread.start()
-    watcherThread.start()
+    val thread1 = recordAll(results1)
+    val thread2 = recordAll(results2)
+    thread1.start()
+    thread2.start()
     latch.countDown()
 
-    rpcThread.join(10000)
-    watcherThread.join(10000)
+    thread1.join(10000)
+    thread2.join(10000)
 
     error.get() shouldBe null
 
