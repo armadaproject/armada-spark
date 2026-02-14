@@ -56,7 +56,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   *     count.
   *
   * '''Submission'''
-  *   - ArmadaExecutorAllocator calls getExecutorSnapshot(), computes the gap between expected and
+  *   - ArmadaExecutorAllocator calls getExecutorCounts(), computes the gap between expected and
   *     actual and submits the requested batch jobs to Armada.
   *   - recordAndPendExecutor() creates the jobId-to-execId mapping and adds the executor to
   *     pendingExecutors, (based the the jobId's returned by the submissions).
@@ -68,7 +68,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   *     RegisterExecutor RPC to the driver.
   *   - org.apache.spark.CoarseGrainedSchedulerBackend.DriverEndpoint handles registration under the
   *     `this` lock, adding the executor to executorDataMap. getExecutorIds() now includes it.
-  *   - On the next getExecutorSnapshot or getPendingExecutorCount call, the registered executor is
+  *   - On the next getExecutorCounts or getPendingExecutorCount call, the registered executor is
   *     pruned from pendingExecutors.
   *
   * '''Running'''
@@ -550,7 +550,7 @@ private[spark] class ArmadaClusterManagerBackend(
     * derived from the same getExecutorIds() call to prevent the allocator's gap computation from
     * seeing inconsistent state.
     */
-  private[armada] def getExecutorSnapshot: (Int, Int) = {
+  private[armada] def getExecutorCounts: (Int, Int) = {
     // Call getExecutorIds() outside the lock. getExecutorIds() acquires DriverEndpoint's `this`
     // lock, so calling it inside pendingExecutors.synchronized would nest locks and risk deadlock.
     // A slightly stale snapshot is harmless — newly registered executors are pruned on the next call.
@@ -564,7 +564,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Get the count of pending executors. Excludes executors that have already registered with
     * Spark. As a side effect, prunes registered executors from the pending set.
     */
-  private[armada] def getPendingExecutorCount: Int = getExecutorSnapshot._2
+  private[armada] def getPendingExecutorCount: Int = getExecutorCounts._2
 
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */

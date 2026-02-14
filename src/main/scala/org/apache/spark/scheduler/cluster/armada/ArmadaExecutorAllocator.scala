@@ -107,7 +107,7 @@ private[spark] class ArmadaExecutorAllocator(
 
         rp match {
           case Some(resourceProfile) =>
-            val (currentCount, pending) = backend.getExecutorSnapshot
+            val (currentCount, pending) = backend.getExecutorCounts
             val gap                     = target - (currentCount + pending)
             if (gap > 0 && pending < maxPendingJobs) {
               val toAllocate = math.min(gap, batchSize)
