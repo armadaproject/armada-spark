@@ -546,26 +546,32 @@ private[spark] class ArmadaClusterManagerBackend(
   // PENDING EXECUTORS MANAGEMENT
   // ========================================================================
 
-  /** Get the count of pending executors. Excludes executors that have already registered with
-    * Spark. As a side effect, prunes registered executors from the pending set.
-    */
-  private[armada] def getPendingExecutorCount: Int = {
-    val registeredIds = getExecutorIds().toSet
-    pendingExecutors.synchronized {
-      pendingExecutors --= registeredIds
-      pendingExecutors.size
-    }
-  }
-
   /** Returns a consistent snapshot of (activeExecutorCount, pendingExecutorCount). Both values are
     * derived from the same getExecutorIds() call to prevent the allocator's gap computation from
     * seeing inconsistent state.
     */
   private[armada] def getExecutorSnapshot: (Int, Int) = {
+    // Call getExecutorIds() outside the lock. getExecutorIds() acquires DriverEndpoint's `this`
+    // lock, so calling it inside pendingExecutors.synchronized would nest locks and risk deadlock.
+    // A slightly stale snapshot is harmless — newly registered executors are pruned on the next call.
     val registeredIds = getExecutorIds().toSet
     pendingExecutors.synchronized {
       pendingExecutors --= registeredIds
       (registeredIds.size, pendingExecutors.size)
+    }
+  }
+
+  /** Get the count of pending executors. Excludes executors that have already registered with
+    * Spark. As a side effect, prunes registered executors from the pending set.
+    */
+  private[armada] def getPendingExecutorCount: Int = {
+    // Call getExecutorIds() outside the lock. getExecutorIds() acquires DriverEndpoint's `this`
+    // lock, so calling it inside pendingExecutors.synchronized would nest locks and risk deadlock.
+    // A slightly stale snapshot is harmless — newly registered executors are pruned on the next call.
+    val registeredIds = getExecutorIds().toSet
+    pendingExecutors.synchronized {
+      pendingExecutors --= registeredIds
+      pendingExecutors.size
     }
   }
 
