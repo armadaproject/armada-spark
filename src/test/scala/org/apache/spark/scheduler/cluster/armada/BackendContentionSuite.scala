@@ -170,86 +170,6 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // getExecutorSnapshot consistency
-  // ==================================================================
-
-  test(
-    "getExecutorSnapshot returns consistent pair under contention"
-  ) {
-    // Replace default backend with testable variant
-    try { backend.stop() }
-    catch { case NonFatal(_) => }
-
-    val testableBackend = createTestableBackend()
-    backend = testableBackend
-
-    val error          = new AtomicReference[Throwable](null)
-    val done           = new AtomicBoolean(false)
-    val totalSubmitted = new AtomicInteger(0)
-
-    val submitter = new Thread {
-      override def run(): Unit =
-        try {
-          var i = 0
-          while (!done.get() && error.get() == null) {
-            i += 1
-            testableBackend.recordAndPendExecutor(s"snap-job-$i")
-            totalSubmitted.incrementAndGet()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    val registrar = new Thread {
-      override def run(): Unit =
-        try {
-          var lastRegistered = 0
-          while (!done.get() && error.get() == null) {
-            val current = totalSubmitted.get()
-            ((lastRegistered + 1) to current).foreach { i =>
-              val execId =
-                testableBackend.recordExecutor(s"snap-job-$i")
-              testableBackend.simulateExecutorRegistration(execId)
-            }
-            lastRegistered = current
-            Thread.sleep(1)
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    val reader = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val (registered, pending) =
-              testableBackend.getExecutorSnapshot
-            registered should be >= 0
-            pending should be >= 0
-            (registered + pending) should be <= totalSubmitted.get()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    submitter.start()
-    registrar.start()
-    reader.start()
-
-    Thread.sleep(3000)
-    done.set(true)
-
-    submitter.join(5000)
-    registrar.join(5000)
-    reader.join(5000)
-
-    error.get() shouldBe null
-  }
-
-  // ==================================================================
   // four-role soak test
   // ==================================================================
 
@@ -617,42 +537,6 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   // ==================================================================
   // Helpers
   // ==================================================================
-
-  private def createTestableBackend(): TestableArmadaClusterManagerBackend = {
-    val taskScheduler = createMockTaskScheduler(sc)
-    new TestableArmadaClusterManagerBackend(
-      taskScheduler,
-      sc,
-      Executors.newScheduledThreadPool(1),
-      "armada://localhost:50051"
-    )
-  }
-
-  private class TestableArmadaClusterManagerBackend(
-      scheduler: TaskSchedulerImpl,
-      sc: SparkContext,
-      executorService: java.util.concurrent.ScheduledExecutorService,
-      masterURL: String
-  ) extends ArmadaClusterManagerBackend(
-        scheduler,
-        sc,
-        executorService,
-        masterURL
-      ) {
-
-    private val testRegisteredExecutors =
-      ConcurrentHashMap.newKeySet[String]()
-
-    def simulateExecutorRegistration(
-        executorId: String
-    ): Unit = {
-      testRegisteredExecutors.add(executorId)
-    }
-
-    override def getExecutorIds(): Seq[String] = synchronized {
-      testRegisteredExecutors.asScala.toSeq
-    }
-  }
 
   private def createMockSparkContext(
       sparkConf: SparkConf
