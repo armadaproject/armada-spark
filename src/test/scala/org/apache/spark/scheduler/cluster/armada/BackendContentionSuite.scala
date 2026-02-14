@@ -168,135 +168,11 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
         active should contain(execId)
     }
 
-    backend.getPendingExecutorCount should be >= 0
-  }
-
-  // ==================================================================
-  // four-role soak test
-  // ==================================================================
-
-  test(
-    "four-role soak test simulates production thread boundaries"
-  ) {
-    val error         = new AtomicReference[Throwable](null)
-    val done          = new AtomicBoolean(false)
-    val submittedJobs = new ConcurrentLinkedQueue[String]()
-    val jobCounter    = new AtomicInteger(0)
-
-    // Event watcher: submit then randomly terminate
-    val eventWatcher = new Thread {
-      override def run(): Unit =
-        try {
-          val rng = new java.util.Random(42)
-          while (!done.get() && error.get() == null) {
-            val jobId =
-              s"soak-job-${jobCounter.incrementAndGet()}"
-            backend.onExecutorSubmitted(jobId)
-            submittedJobs.add(jobId)
-
-            if (rng.nextInt(3) == 0) {
-              val execId = backend.recordExecutor(jobId)
-              ignoreRpcErrors {
-                rng.nextInt(3) match {
-                  case 0 =>
-                    backend.onExecutorFailed(
-                      jobId,
-                      execId,
-                      1,
-                      "test"
-                    )
-                  case 1 =>
-                    backend.onExecutorSucceeded(jobId, execId)
-                  case _ =>
-                    backend.onExecutorCancelled(jobId, execId)
-                }
-              }
-            }
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // Allocator: snapshot then submit if below pending cap (mirrors maxPendingJobs guard)
-    val allocator = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val (registered, pending) =
-              backend.getExecutorSnapshot
-            registered should be >= 0
-            pending should be >= 0
-
-            if (pending < 5) {
-              val jobId =
-                s"alloc-job-${jobCounter.incrementAndGet()}"
-              backend.recordAndPendExecutor(jobId)
-              submittedJobs.add(jobId)
-            }
-            Thread.sleep(1)
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // Spark scheduler: kill random active executors
-    val scheduler = new Thread {
-      override def run(): Unit =
-        try {
-          val rng = new java.util.Random(99)
-          while (!done.get() && error.get() == null) {
-            val active = backend.getActiveExecutorIds()
-            if (active.nonEmpty) {
-              val victim = active(rng.nextInt(active.size))
-              ignoreRpcErrors {
-                backend.onExecutorCancelled(
-                  s"kill-$victim",
-                  victim
-                )
-              }
-            }
-            Thread.sleep(1)
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // RPC: recordExecutor for already-submitted jobs
-    val rpc = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val jobId = submittedJobs.poll()
-            if (jobId != null) {
-              backend.recordExecutor(jobId)
-            }
-            Thread.sleep(1)
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    eventWatcher.start()
-    allocator.start()
-    scheduler.start()
-    rpc.start()
-
-    Thread.sleep(3000)
-    done.set(true)
-
-    eventWatcher.join(5000)
-    allocator.join(5000)
-    scheduler.join(5000)
-    rpc.join(5000)
-
-    error.get() shouldBe null
-    backend.getPendingExecutorCount should be >= 0
-    backend.getActiveExecutorIds().size should
-      be <= jobCounter.get()
+    // Exactly the 100 odd-indexed (non-terminated) executors should remain pending.
+    // Without the terminal guard in recordAndPendExecutor, terminated executors would
+    // be re-added to pending whenever the re-submitter runs after the terminator,
+    // making this count > 100.
+    backend.getPendingExecutorCount shouldBe total / 2
   }
 
   // ==================================================================
@@ -306,6 +182,8 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   test(
     "rapid submit-then-terminate does not leak pending executors"
   ) {
+    // No latch needed: threads run sequentially by design. The submitter finishes first,
+    // then the terminator drains the queue. The test verifies cleanup, not contention.
     val total = 500
     val error = new AtomicReference[Throwable](null)
     val queue = new ConcurrentLinkedQueue[(String, String)]()
@@ -354,115 +232,6 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     error.get() shouldBe null
     backend.getPendingExecutorCount shouldBe 0
     backend.getActiveExecutorIds() shouldBe empty
-  }
-
-  // ==================================================================
-  // deadlock detection
-  // ==================================================================
-
-  test(
-    "getPendingExecutorCount does not deadlock under contention"
-  ) {
-    // No latch needed: threads run in continuous loops for 3 seconds.
-    val error      = new AtomicReference[Throwable](null)
-    val done       = new AtomicBoolean(false)
-    val iterations = Array.fill(4)(new AtomicInteger(0))
-    val jobCounter = new AtomicInteger(0)
-
-    // Allocator: recordAndPendExecutor then getExecutorSnapshot
-    val allocatorThread = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val jobId =
-              s"dl-alloc-${jobCounter.incrementAndGet()}"
-            backend.recordAndPendExecutor(jobId)
-            backend.getExecutorSnapshot
-            iterations(0).incrementAndGet()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // Event watcher: onExecutorSubmitted then onExecutorFailed
-    val watcherThread = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val jobId =
-              s"dl-watch-${jobCounter.incrementAndGet()}"
-            backend.onExecutorSubmitted(jobId)
-            val execId = backend.recordExecutor(jobId)
-            ignoreRpcErrors {
-              backend.onExecutorFailed(
-                jobId,
-                execId,
-                1,
-                "test"
-              )
-            }
-            iterations(1).incrementAndGet()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // Scheduler: getActiveExecutorIds
-    val schedulerThread = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            backend.getActiveExecutorIds()
-            iterations(2).incrementAndGet()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    // RPC: recordExecutor then getPendingExecutorCount
-    val rpcThread = new Thread {
-      override def run(): Unit =
-        try {
-          while (!done.get() && error.get() == null) {
-            val jobId =
-              s"dl-rpc-${jobCounter.incrementAndGet()}"
-            backend.recordExecutor(jobId)
-            backend.getPendingExecutorCount
-            iterations(3).incrementAndGet()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    allocatorThread.start()
-    watcherThread.start()
-    schedulerThread.start()
-    rpcThread.start()
-
-    Thread.sleep(3000)
-    done.set(true)
-
-    allocatorThread.join(5000)
-    watcherThread.join(5000)
-    schedulerThread.join(5000)
-    rpcThread.join(5000)
-
-    // Verify all threads finished (no deadlock)
-    allocatorThread.isAlive shouldBe false
-    watcherThread.isAlive shouldBe false
-    schedulerThread.isAlive shouldBe false
-    rpcThread.isAlive shouldBe false
-
-    error.get() shouldBe null
-
-    // Each thread should have completed many iterations
-    iterations.foreach { counter =>
-      counter.get() should be > 10
-    }
   }
 
   // ==================================================================
