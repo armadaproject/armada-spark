@@ -152,9 +152,8 @@ class ArmadaDynamicAllocationSuite extends AnyFunSuite with BeforeAndAfter {
       testRegisteredExecutors += executorId
     }
 
-    /** Include our test executors */
     override def getExecutorIds(): Seq[String] = synchronized {
-      super.getExecutorIds() ++ testRegisteredExecutors.toSeq
+      testRegisteredExecutors.toSeq
     }
   }
 

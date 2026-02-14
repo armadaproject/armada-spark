@@ -34,9 +34,14 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * Exercises all four production thread roles (event watcher, allocator, Spark scheduler, RPC)
-  * concurrently to verify lock ordering, atomicity, and absence of deadlocks. For single-threaded
-  * functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
+  * Exercises all four production thread roles concurrently to verify lock ordering, atomicity, and
+  * absence of deadlocks:
+  *   - Event watcher: ArmadaEventWatcher daemon processing gRPC job events
+  *   - Allocator: ArmadaExecutorAllocator on ScheduledExecutorService polling demand vs supply
+  *   - Spark scheduler: Spark core calling doKillExecutors to scale down
+  *   - RPC: ArmadaDriverEndpoint handling GenerateExecID messages from executors
+  *
+  * For single-threaded functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
   */
 class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -74,7 +79,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   }
 
   // ==================================================================
-  // recordAndPendExecutor atomic guard
+  // Terminal executor cannot be re-added to pending
   // ==================================================================
 
   test(
@@ -645,8 +650,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     }
 
     override def getExecutorIds(): Seq[String] = synchronized {
-      super.getExecutorIds() ++
-        testRegisteredExecutors.asScala.toSeq
+      testRegisteredExecutors.asScala.toSeq
     }
   }
 
