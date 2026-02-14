@@ -117,6 +117,33 @@ class ArmadaDynamicAllocationSuite extends AnyFunSuite with BeforeAndAfter {
     )
   }
 
+  test("submit then terminate does not leak pending executors") {
+    sc = createMockSparkContext(conf)
+    val taskScheduler = createMockTaskScheduler(sc)
+
+    backend = new ArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      java.util.concurrent.Executors.newScheduledThreadPool(1),
+      "armada://localhost:50051"
+    )
+
+    val total = 500
+    val pairs = (1 to total).map { i =>
+      val jobId  = s"leak-job-$i"
+      val execId = backend.recordAndPendExecutor(jobId)
+      (jobId, execId)
+    }
+
+    pairs.foreach { case (jobId, execId) =>
+      try { backend.onExecutorFailed(jobId, execId, 1, "immediate fail") }
+      catch { case _: NullPointerException => }
+    }
+
+    assert(backend.getPendingExecutorCount === 0)
+    assert(backend.getActiveExecutorIds().isEmpty)
+  }
+
   test("recordAndPendExecutor and getPendingExecutorCount integration") {
     sc = createMockSparkContext(conf)
     val taskScheduler = createMockTaskScheduler(sc)

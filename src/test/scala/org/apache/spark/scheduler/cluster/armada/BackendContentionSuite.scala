@@ -17,8 +17,8 @@
 
 package org.apache.spark.scheduler.cluster.armada
 
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, CountDownLatch, Executors}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Executors}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -34,12 +34,11 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * Exercises concurrent access patterns that mirror production threading to verify lock ordering,
-  * atomicity, and absence of deadlocks:
-  *   - Event watcher: submitting, terminating, and recording executors (ArmadaEventWatcher daemon)
-  *   - Allocator: snapshotting state and adding pending executors (ArmadaExecutorAllocator)
-  *   - RPC: recording executor mappings (ArmadaDriverEndpoint handling GenerateExecID)
-  *   - Reader: polling active/pending counts to detect corruption and deadlocks
+  * Exercises concurrent access patterns that mirror production threading to verify atomicity and
+  * idempotency:
+  *   - Event watcher: terminating executors via markTerminal (ArmadaEventWatcher daemon)
+  *   - Allocator: adding pending executors via recordAndPendExecutor (ArmadaExecutorAllocator)
+  *   - RPC: recording executor mappings via recordExecutor (ArmadaDriverEndpoint GenerateExecID)
   *
   * For single-threaded functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
   */
@@ -173,65 +172,6 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     // be re-added to pending whenever the re-submitter runs after the terminator,
     // making this count > 100.
     backend.getPendingExecutorCount shouldBe total / 2
-  }
-
-  // ==================================================================
-  // rapid submit-then-terminate
-  // ==================================================================
-
-  test(
-    "rapid submit-then-terminate does not leak pending executors"
-  ) {
-    // No latch needed: threads run sequentially by design. The submitter finishes first,
-    // then the terminator drains the queue. The test verifies cleanup, not contention.
-    val total = 500
-    val error = new AtomicReference[Throwable](null)
-    val queue = new ConcurrentLinkedQueue[(String, String)]()
-
-    // Submitter pushes all jobs first
-    val submitter = new Thread {
-      override def run(): Unit =
-        try {
-          (1 to total).foreach { i =>
-            val jobId  = s"leak-job-$i"
-            val execId = backend.recordAndPendExecutor(jobId)
-            queue.add((jobId, execId))
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    submitter.start()
-    submitter.join(10000)
-
-    // Terminator drains and terminates
-    val terminator = new Thread {
-      override def run(): Unit =
-        try {
-          var pair = queue.poll()
-          while (pair != null) {
-            ignoreRpcErrors {
-              backend.onExecutorFailed(
-                pair._1,
-                pair._2,
-                1,
-                "immediate fail"
-              )
-            }
-            pair = queue.poll()
-          }
-        } catch {
-          case t: Throwable => error.compareAndSet(null, t)
-        }
-    }
-
-    terminator.start()
-    terminator.join(10000)
-
-    error.get() shouldBe null
-    backend.getPendingExecutorCount shouldBe 0
-    backend.getActiveExecutorIds() shouldBe empty
   }
 
   // ==================================================================
