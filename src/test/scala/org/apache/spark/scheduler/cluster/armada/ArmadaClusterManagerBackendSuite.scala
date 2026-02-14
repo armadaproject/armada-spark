@@ -223,6 +223,33 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     backend.getPendingExecutorCount shouldBe 1
   }
 
+  test("pending executor lifecycle - submit to running") {
+    val testableBackend = new TestableArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      Executors.newScheduledThreadPool(1),
+      "armada://localhost:50051"
+    )
+
+    val jobId = "job-lifecycle-test"
+
+    testableBackend.getPendingExecutorCount shouldBe 0
+
+    // Submit executor - should be added to pending
+    testableBackend.onExecutorSubmitted(jobId)
+    testableBackend.getPendingExecutorCount shouldBe 1
+
+    val execId = testableBackend.recordExecutor(jobId)
+
+    // Mark as running - executor stays in pending until it registers with Spark
+    testableBackend.onExecutorRunning(jobId, execId)
+    testableBackend.getPendingExecutorCount shouldBe 1
+
+    testableBackend.simulateExecutorRegistration(execId)
+
+    testableBackend.getPendingExecutorCount shouldBe 0
+  }
+
   // Use multiple threads to terminate half the jobs, then confirm the number
   // of remaining active ones.
   test("thread safety of terminal executor tracking") {
@@ -245,5 +272,23 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     threads.foreach(_.join())
 
     backend.getActiveExecutorIds().size shouldBe numJobs / 2
+  }
+
+  private class TestableArmadaClusterManagerBackend(
+      scheduler: TaskSchedulerImpl,
+      sc: SparkContext,
+      executorService: java.util.concurrent.ScheduledExecutorService,
+      masterURL: String
+  ) extends ArmadaClusterManagerBackend(scheduler, sc, executorService, masterURL) {
+
+    private val testRegisteredExecutors = scala.collection.mutable.Set.empty[String]
+
+    def simulateExecutorRegistration(executorId: String): Unit = {
+      testRegisteredExecutors += executorId
+    }
+
+    override def getExecutorIds(): Seq[String] = synchronized {
+      testRegisteredExecutors.toSeq
+    }
   }
 }

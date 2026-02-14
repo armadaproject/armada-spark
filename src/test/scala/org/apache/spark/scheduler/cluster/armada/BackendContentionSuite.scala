@@ -34,7 +34,7 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * For single-threaded functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
+  * For single-threaded functional correctness tests, see [[ArmadaClusterManagerBackendSuite]].
   */
 class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
