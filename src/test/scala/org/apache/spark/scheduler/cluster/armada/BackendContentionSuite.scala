@@ -94,6 +94,8 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
       backend.recordAndPendExecutor(s"job-$i")
     }
 
+    // Latch ensures all threads start simultaneously. Without it one thread could finish
+    // iterating the fixed 200-element dataset before the other starts, producing no contention.
     val latch = new CountDownLatch(1)
 
     // Terminator: marks even-indexed executors terminal
@@ -216,7 +218,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
         }
     }
 
-    // Allocator: snapshot then submit if gap
+    // Allocator: snapshot then submit if below pending cap (mirrors maxPendingJobs guard)
     val allocator = new Thread {
       override def run(): Unit =
         try {
@@ -361,6 +363,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
   test(
     "getPendingExecutorCount does not deadlock under contention"
   ) {
+    // No latch needed: threads run in continuous loops for 3 seconds.
     val error      = new AtomicReference[Throwable](null)
     val done       = new AtomicBoolean(false)
     val iterations = Array.fill(4)(new AtomicInteger(0))
@@ -476,6 +479,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
       new ConcurrentHashMap[String, String]()
     val results2 =
       new ConcurrentHashMap[String, String]()
+    // Latch ensures both threads race over the same 200 job IDs simultaneously.
     val latch = new CountDownLatch(1)
 
     // RPC thread
