@@ -223,6 +223,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
               testableBackend.getExecutorSnapshot
             registered should be >= 0
             pending should be >= 0
+            (registered + pending) should be <= totalSubmitted.get()
           }
         } catch {
           case t: Throwable => error.compareAndSet(null, t)
