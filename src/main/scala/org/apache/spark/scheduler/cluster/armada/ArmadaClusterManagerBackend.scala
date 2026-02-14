@@ -564,16 +564,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Get the count of pending executors. Excludes executors that have already registered with
     * Spark. As a side effect, prunes registered executors from the pending set.
     */
-  private[armada] def getPendingExecutorCount: Int = {
-    // Call getExecutorIds() outside the lock. getExecutorIds() acquires DriverEndpoint's `this`
-    // lock, so calling it inside pendingExecutors.synchronized would nest locks and risk deadlock.
-    // A slightly stale snapshot is harmless — newly registered executors are pruned on the next call.
-    val registeredIds = getExecutorIds().toSet
-    pendingExecutors.synchronized {
-      pendingExecutors --= registeredIds
-      pendingExecutors.size
-    }
-  }
+  private[armada] def getPendingExecutorCount: Int = getExecutorSnapshot._2
 
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
