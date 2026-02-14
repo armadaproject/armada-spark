@@ -34,12 +34,12 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /** Multi-threaded contention tests for ArmadaClusterManagerBackend.
   *
-  * Exercises all four production thread roles concurrently to verify lock ordering, atomicity, and
-  * absence of deadlocks:
-  *   - Event watcher: ArmadaEventWatcher daemon processing gRPC job events
-  *   - Allocator: ArmadaExecutorAllocator on ScheduledExecutorService polling demand vs supply
-  *   - Spark scheduler: Spark core calling doKillExecutors to scale down
-  *   - RPC: ArmadaDriverEndpoint handling GenerateExecID messages from executors
+  * Exercises concurrent access patterns that mirror production threading to verify lock ordering,
+  * atomicity, and absence of deadlocks:
+  *   - Event watcher: submitting, terminating, and recording executors (ArmadaEventWatcher daemon)
+  *   - Allocator: snapshotting state and adding pending executors (ArmadaExecutorAllocator)
+  *   - RPC: recording executor mappings (ArmadaDriverEndpoint handling GenerateExecID)
+  *   - Reader: polling active/pending counts to detect corruption and deadlocks
   *
   * For single-threaded functional correctness tests, see [[ArmadaDynamicAllocationSuite]].
   */
