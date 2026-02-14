@@ -52,21 +52,22 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   * executor goes through the following stages:
   *
   * '''Request'''
-  *   - org.apache.spark.ExecutorAllocationManager calls doRequestTotalExecutors to set a target count.
+  *   - org.apache.spark.ExecutorAllocationManager calls doRequestTotalExecutors to set a target
+  *     count.
   *
   * '''Submission'''
-  *   - ArmadaExecutorAllocator calls getExecutorSnapshot(), computes
-  *     the gap between expected and actual and submits the requested batch jobs to Armada.
+  *   - ArmadaExecutorAllocator calls getExecutorSnapshot(), computes the gap between expected and
+  *     actual and submits the requested batch jobs to Armada.
   *   - recordAndPendExecutor() creates the jobId-to-execId mapping and adds the executor to
   *     pendingExecutors, (based the the jobId's returned by the submissions).
   *
   * '''Startup'''
-  *   - ArmadaEventWatcher (daemon thread) receives Submitted/Queued/Running events from the Armada server.
-  *     onExecutorSubmitted() calls recordAndPendExecutor (idempotent).
+  *   - ArmadaEventWatcher (daemon thread) receives Submitted/Queued/Running events from the Armada
+  *     server. onExecutorSubmitted() calls recordAndPendExecutor (idempotent).
   *   - Armada schedules the pod on a Kubernetes cluster. The executor process starts and sends a
   *     RegisterExecutor RPC to the driver.
-  *   - org.apache.spark.CoarseGrainedSchedulerBackend.DriverEndpoint handles registration under the `this` lock,
-  *     adding the executor to executorDataMap. getExecutorIds() now includes it.
+  *   - org.apache.spark.CoarseGrainedSchedulerBackend.DriverEndpoint handles registration under the
+  *     `this` lock, adding the executor to executorDataMap. getExecutorIds() now includes it.
   *   - On the next getExecutorSnapshot or getPendingExecutorCount call, the registered executor is
   *     pruned from pendingExecutors.
   *
@@ -74,8 +75,18 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   *   - Spark schedules tasks on the executor. The executor is visible in getExecutorIds() and
   *     excluded from pendingExecutors.
   *
+  * '''Decommission (optional)'''
+  *   - If spark.decommission.enabled is true, ExecutorAllocationManager calls decommissionExecutors
+  *     before killing idle executors. Armada preemption also triggers this path via
+  *     onArmadaPreempting when the cluster reclaims resources.
+  *   - decommissionExecutors delegates to the parent class, which starts BlockManagerDecommissioner
+  *     to migrate shuffle/cache data off the executor.
+  *   - Once decommissioning completes, the executor disconnects. onDisconnected sees it in
+  *     executorsPendingDecommission and removes it cleanly.
+  *
   * '''Kill'''
-  *   - org.apache.spark.ExecutorAllocationManager decides the executor is idle and calls doKillExecutors.
+  *   - ExecutorAllocationManager calls doKillExecutors (directly if decommission is disabled, or
+  *     after decommission completes/times out).
   *   - markTerminal adds the executor to terminalExecutors and removes it from pendingExecutors.
   *   - safeRemoveExecutor tells the parent class to send a StopExecutor RPC to the executor.
   *   - After a grace period, cancelArmadaJobs sends a cancel request to Armada. If the executor
