@@ -31,9 +31,17 @@
       "Bash(git pull)",
       "Bash(git fetch *)",
       "Bash(git fetch)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr checkout *)",
+      "Bash(gh pr comment *)",
+      "Bash(gh pr create *)",
+      "Bash(gh api repos/*/pulls/*/comments *)",
+      "Bash(gh issue view *)",
+      "Bash(gh repo view *)",
       "Bash(git remote *)",
-      "Bash(git config *)",
-      "Bash(gh *)",
+      "Bash(gh api repos/*/pulls/*/comments/*/replies *)",
       "Bash(ls *)",
       "Bash(ls)",
       "Bash(mkdir *)",
@@ -79,6 +87,8 @@
     ]
   },
   "enabledPlugins": {
-    "code-simplifier@claude-plugins-official": true
+    "code-simplifier@claude-plugins-official": true,
+    "comprehensive-review@claude-plugins-official": true,
+    "jdtls-lsp@claude-plugins-official": true
   }
 }
