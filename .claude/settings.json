@@ -40,6 +40,7 @@
       "Bash(gh api repos/*/pulls/*/comments *)",
       "Bash(gh issue view *)",
       "Bash(gh repo view *)",
+      "Bash(git remote *)",
       "Bash(gh api repos/*/pulls/*/comments/*/replies *)",
       "Bash(ls *)",
       "Bash(ls)",

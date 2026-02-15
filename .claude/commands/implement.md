@@ -18,7 +18,27 @@ The argument is an issue number (e.g. `/implement 42`) or a full GitHub URL (e.g
    - Number of comments and any noteworthy discussion points
 4. Ask the programmer to confirm this is the right issue before proceeding. Use AskUserQuestion with options: "Proceed", "Show full issue body", "Cancel".
 
-## Phase 2: Plan
+## Phase 2: Branch setup
+
+1. List all configured remotes: `git remote -v`
+2. If there is more than one remote, ask the programmer which remote to use as upstream using AskUserQuestion (list the remote names as options).
+   If there is only one remote, use it automatically.
+3. Fetch and update master from the chosen remote:
+   ```
+   git fetch <remote>
+   git checkout master
+   git pull <remote> master
+   ```
+4. Create a new branch from master. The branch name must follow this convention:
+   - Format: `<type>/<short-slug>` where `<type>` is a Conventional Commits type (`feat`, `fix`, `refactor`, `docs`, `chore`, etc.) and `<short-slug>` is a kebab-case summary derived from the issue title (3-5 words max).
+   - Examples: `feat/dynamic-allocation-support`, `fix/event-watcher-reconnect`, `refactor/pod-spec-converter`
+   - Pick the type based on the issue labels and description (e.g. a bug report maps to `fix/`, a feature request to `feat/`).
+   ```
+   git checkout -b <type>/<short-slug>
+   ```
+5. Confirm to the programmer: "Created branch `<branch-name>` from `<remote>/master`."
+
+## Phase 3: Plan
 
 1. Based on the issue description, explore the codebase to understand the relevant code paths. Use subagents to search for files, classes, and patterns referenced in or implied by the issue.
 2. Create an implementation plan with numbered steps. Each step should be a logical, committable unit of work. The plan must include:
@@ -44,7 +64,7 @@ The argument is an issue number (e.g. `/implement 42`) or a full GitHub URL (e.g
 5. Ask the programmer using AskUserQuestion with options: "Approve plan", "Modify plan", "Cancel".
 6. If the programmer wants modifications, iterate on the plan until approved.
 
-## Phase 3: Execute step by step
+## Phase 4: Execute step by step
 
 For each step in the approved plan:
 
@@ -56,11 +76,11 @@ For each step in the approved plan:
 6. If the programmer picks "Commit this step", run the /commit skill to commit the changes
 7. If the programmer picks "Revise changes", iterate until they are satisfied
 8. If the programmer picks "Skip this step", move to the next step without committing
-9. If the programmer picks "Stop here", skip all remaining steps and jump to Phase 4
+9. If the programmer picks "Stop here", skip all remaining steps and jump to Phase 5
 
 After each commit, briefly confirm the commit was made and move to the next step.
 
-## Phase 4: Summary
+## Phase 5: Summary
 
 1. After all steps are complete (or the programmer stops early):
    - Run the /summary skill to generate a PR description based on all commits made during this session
