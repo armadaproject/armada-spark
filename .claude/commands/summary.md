@@ -1,11 +1,12 @@
 Generate a concise implementation summary for a PR description.
 
 Steps:
-1. Run `git diff master...HEAD --stat` and `git log master..HEAD --oneline` to understand all changes on this branch
-2. Read the changed files to understand what was implemented and why
-3. Get the current branch name: `git rev-parse --abbrev-ref HEAD`
-4. Write a summary suitable for a GitHub PR description
-5. Save the raw markdown summary (without the wrapping code fence) to `plans/<branch-name>-summary.md`, replacing any `/` in the branch name with `-`
+1. First, run the `/docs` command to ensure documentation is up to date with the branch changes
+2. Run `git diff master...HEAD --stat` and `git log master..HEAD --oneline` to understand all changes on this branch
+3. Read the changed files to understand what was implemented and why
+4. Get the current branch name: `git rev-parse --abbrev-ref HEAD`
+5. Write a summary suitable for a GitHub PR description
+6. Save the raw markdown summary (without the wrapping code fence) to `plans/<branch-name>-summary.md`, replacing any `/` in the branch name with `-`
 
 Summary format rules:
 - The summary must be GitHub-flavored markdown that renders nicely in a PR description

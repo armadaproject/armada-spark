@@ -63,7 +63,8 @@ This project includes a [Claude Code](https://docs.anthropic.com/en/docs/claude-
 | `/lint`           | Check and auto-fix formatting                        |
 | `/commit`         | Create a conventional commit                         |
 | `/ci-local`       | Run the full CI pipeline locally                     |
-| `/summary`        | Generate a PR description and save to `plans/`       |
+| `/docs`           | Update project docs to reflect branch changes        |
+| `/summary`        | Generate a PR description (runs `/docs` first)       |
 | `/issue`          | Draft a GitHub issue from bug details/logs           |
 | `/implement`      | End-to-end: fetch a GitHub issue, plan, code, commit |
 | `/address-review` | Address review comments on a GitHub PR               |
