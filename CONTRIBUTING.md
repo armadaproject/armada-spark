@@ -53,18 +53,28 @@ CI runs lint, build (Spark 3.3/3.5 x Scala 2.12/2.13), snapshots, and E2E tests 
 
 ## Working with Claude Code (Optional)
 
-This project includes a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) setup. Shared config (`.claude/settings.json`, `.claude/commands/`, `CLAUDE.md`) is checked into git. Hooks auto-format code and verify builds.
+This project includes a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) setup — shared config lives in `.claude/` and `CLAUDE.md`.
 
-| Command      | What it does                                    |
-|--------------|-------------------------------------------------|
-| `/build`     | Build the project (`/build fast` to skip tests) |
-| `/lint`      | Check and auto-fix formatting                   |
-| `/commit`    | Create a conventional commit                    |
-| `/ci-local`  | Run the full CI pipeline locally                |
-| `/summary`   | Generate a PR description from your branch      |
-| `/issue`     | Draft a GitHub issue from bug details/logs      |
+**Slash commands:**
 
-**Optional plugins:** Copy `.claude/settings.local.example.json` to `.claude/settings.local.json` and restart. Source: https://github.com/wshobson/agents
+| Command           | What it does                                         |
+|-------------------|------------------------------------------------------|
+| `/build`          | Build the project (`/build fast` to skip tests)      |
+| `/lint`           | Check and auto-fix formatting                        |
+| `/commit`         | Create a conventional commit                         |
+| `/ci-local`       | Run the full CI pipeline locally                     |
+| `/summary`        | Generate a PR description and save to `plans/`       |
+| `/issue`          | Draft a GitHub issue from bug details/logs           |
+| `/implement`      | End-to-end: fetch a GitHub issue, plan, code, commit |
+| `/address-review` | Address review comments on a GitHub PR               |
+
+**Hooks** (run automatically): Spotless auto-format after every file edit; build verification (`mvn compile`) on task completion.
+
+**Path-scoped rules** (`.claude/rules/`): context-specific guidance loaded automatically — `testing.md` for test files, `config-entries.md` for Config.scala, `version-specific.md` for version-specific source dirs.
+
+**Plugins** ([official](https://docs.anthropic.com/en/docs/claude-code/plugins), enabled in `.claude/settings.json`): code-simplifier, comprehensive-review (architecture/security/performance), jdtls-lsp (Java language server).
+
+**Optional community plugins:** Copy `.claude/settings.local.example.json` to `.claude/settings.local.json` and restart. Adds unit-testing and error-debugging agents. Source: https://github.com/wshobson/agents
 
 ## Getting Help
 
