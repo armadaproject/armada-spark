@@ -1,10 +1,6 @@
-# armada-spark
+# Armada-spark
 
-**Run Apache Spark workloads seamlessly on [Armada](https://github.com/armadaproject/armada), a multi-cluster Kubernetes batch scheduler**
-
----
-
-## Overview
+**Run Apache Spark workloads on [Armada](https://github.com/armadaproject/armada), a multi-cluster Kubernetes batch scheduler.**
 
 **armada-spark** is an open-source integration designed to streamline deployment and management of Apache Spark workloads on Armada.
 It provides preconfigured Docker images, tooling for efficient image management, and example workflows to simplify local and production deployments.
@@ -13,42 +9,40 @@ It provides preconfigured Docker images, tooling for efficient image management,
 
 ### Prerequisites
 
-- **Java** 8/11/17
-- **Scala** 2.12/2.13
+- **Java** 11 or 17
 - **Apache Maven** 3.9.6+
 - _(Optional)_ [kind](https://kind.sigs.k8s.io/) for local clusters
-- An accessible Armada Server and Lookout endpoint (check [Armada Operator](https://github.com/armadaproject/armada-operator) for the Quickstart guide)
+- An accessible Armada server and Lookout endpoint — see the [Armada Operator Quickstart](https://github.com/armadaproject/armada-operator) to set one up
 
-### Versions
+### Build
 
-By default, the project targets `Spark 3.5.3` and `Scala 2.13.15`. To change versions:
-
-```bash
-./scripts/set-version.sh <spark-version> <scala-version>
-```
-
-Example:
-```bash
-./scripts/set-version.sh 3.5.3 2.13.15
-```
-
-### Building Armada Spark
-
-After setting your desired Spark and Scala versions, build the Armada Spark project with Maven by running the following command:
+The default build targets **Spark 3.5.5** and **Scala 2.13.8**:
 
 ```bash
 mvn clean package
 ```
 
-### Building Docker Images
+To target a different Spark/Scala version:
 
-Once your project is built, create the Docker image using:
+```bash
+./scripts/set-version.sh 3.3.4 2.12.15   # Spark 3.3.4, Scala 2.12.15
+mvn clean package
+```
+
+### Supported Version Matrix
+
+| Spark   | Scala  | Java |
+|---------|--------|------|
+| 3.3.4   | 2.12.15 | 11  |
+| 3.3.4   | 2.13.8  | 11  |
+| 3.5.5   | 2.12.18 | 17  |
+| 3.5.5   | 2.13.8  | 17  |
+
+### Build Docker Images
 
 ```bash
 ./scripts/createImage.sh [-i image-name] [-m armada-master-url] [-q armada-queue] [-l armada-lookout-url]
 ```
-
-**Options:**
 
 | Flag | Description        | Example                    |
 |------|--------------------|----------------------------|
@@ -56,11 +50,10 @@ Once your project is built, create the Docker image using:
 | `-m` | Armada master URL  | `armada://localhost:30002` |
 | `-q` | Armada queue       | `default`                  |
 | `-l` | Armada Lookout URL | `http://localhost:30000`   |
-| `-p` | Include python     |                            |
+| `-p` | Include Python     |                            |
 | `-h` | Display help       |                            |
 
-
-To simplify, you may store these values in `scripts/config.sh`:
+You can store defaults in `scripts/config.sh`:
 
 ```bash
 export IMAGE_NAME="spark:armada"
@@ -71,115 +64,93 @@ export INCLUDE_PYTHON=true
 export USE_KIND=true
 ```
 
-**Note:** For client mode, you need to set additional configuration:
+For **client mode**, set additional values:
 
 ```bash
-export ARMADA_MASTER="local://armada://localhost:30002"  # Add "local://" prefix
 export SPARK_DRIVER_HOST="172.18.0.1"                    # Required for client mode
 export SPARK_DRIVER_PORT="7078"                          # Required for client mode
 ```
 
-### Deployment
+### Deploy to a Local Cluster
 
-We recommend using [kind](https://kind.sigs.k8s.io/) for local testing.
-If you are using the [Armada Operator](https://github.com/armadaproject/armada-operator) Quickstart, it is already based on `kind`.
+We recommend [kind](https://kind.sigs.k8s.io/) for local testing. If you are using the [Armada Operator Quickstart](https://github.com/armadaproject/armada-operator), it is already based on kind.
 
-Run the following command to load the Armada Spark image into your local kind cluster:
-```
+```bash
 kind load docker-image $IMAGE_NAME --name armada
 ```
 
----
-
-## Development
-
-Before submitting a pull request, please ensure that your code adheres to the project's coding standards and passes all tests.
-
-### Testing
-
-To run the unit tests, use the following command:
-
-```bash
-mvn test
-```
-
-To run the E2E tests, run Armada using the [Operator Quickstart](https://github.com/armadaproject/armada-operator?tab=readme-ov-file#quickstart) guide, then execute:
-
-```bash
-scripts/test-e2e.sh
-```
-### Linting
-
-To check the code for linting issues, use the following command:
-
-```bash
-mvn spotless:check
-```
-
-To automatically apply linting fixes, use:
-
-```bash
-mvn spotless:apply
-```
-
-### E2E
-
-Make sure that the [SparkPi](#sparkpi-example) job successfully runs on your Armada cluster before submitting a pull request.
-
----
-
 ## Running Example Workloads
 
-### SparkPi Example
-
-The project includes a ready-to-use Spark job to test your setup:
+### SparkPi
 
 ```bash
-# Cluster mode + Dynamic allocation
+# Cluster mode + dynamic allocation
 ./scripts/submitArmadaSpark.sh -M cluster -A dynamic 100
 
-# Cluster mode + Static allocation
+# Cluster mode + static allocation
 ./scripts/submitArmadaSpark.sh -M cluster -A static 100
 
-# Client mode + Dynamic allocation
+# Client mode + dynamic allocation
 ./scripts/submitArmadaSpark.sh -M client -A dynamic 100
 
-# Client mode + Static allocation
+# Client mode + static allocation
 ./scripts/submitArmadaSpark.sh -M client -A static 100
 ```
 
-This job leverages the same configuration parameters (`ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_LOOKOUT_URL`) as the `scripts/config.sh` script.
-
-Use the -h option to see what other options are available.
+Run `./scripts/submitArmadaSpark.sh -h` for all available options. The script reads `ARMADA_MASTER`, `ARMADA_QUEUE`, and `ARMADA_LOOKOUT_URL` from `scripts/config.sh`.
 
 ### Jupyter Notebook
 
-The Docker image includes Jupyter support. Run Jupyter with the example notebooks:
+The Docker image includes Jupyter support (requires `INCLUDE_PYTHON=true`):
 
 ```bash
 ./scripts/runJupyter.sh
 ```
 
-**Note:** The Docker image must be built with `INCLUDE_PYTHON=true` for Jupyter to work.
+Opens at `http://localhost:8888`. Override the port with `JUPYTER_PORT` in `scripts/config.sh`. Example notebooks from `example/jupyter/notebooks` are mounted at `/home/spark/workspace/notebooks`.
 
-This will start a Jupyter notebook server at `http://localhost:8888` (or the port specified by `JUPYTER_PORT` in `scripts/config.sh`). 
-The example notebooks from `example/jupyter/notebooks` are mounted in the container at `/home/spark/workspace/notebooks`.
+## Architecture
 
-**Configuration:**
-- **Required:** `SPARK_DRIVER_HOST`
-- Override the Jupyter port if required by setting `JUPYTER_PORT` in `scripts/config.sh`
-- The script uses the same configuration (`ARMADA_MASTER`, `ARMADA_QUEUE`, `SPARK_DRIVER_HOST`, etc.) as other scripts
+```
+User submits Spark job
+  └─> ArmadaClusterManager (SPI entry: registers "armada://" master scheme)
+        ├─> TaskSchedulerImpl (Spark core task scheduling)
+        └─> ArmadaClusterManagerBackend (executor lifecycle, state tracking)
+              ├─> ArmadaExecutorAllocator (demand vs supply, batch job submission)
+              └─> ArmadaEventWatcher (daemon thread, gRPC event stream)
 
----
+Cluster-mode submission:
+  └─> ArmadaClientApplication (SparkApplication SPI)
+        ├─> KubernetesDriverBuilder → PodSpecConverter → PodMerger
+        └─> ArmadaClient.submitJobs()
+```
 
-## Working with Claude Code
+Key source directories:
 
-Project settings (`.claude/settings.json`) include permissions, hooks (auto-formatting via Spotless, build verification), and slash commands out of the box.
+```
+src/main/scala/org/apache/spark/
+├── deploy/armada/              # Configuration & job submission
+│   ├── Config.scala            # spark.armada.* config entries
+│   ├── submit/                 # Job submission pipeline
+│   └── validators/             # Kubernetes validation
+└── scheduler/cluster/armada/   # Cluster manager & scheduling
+    ├── ArmadaClusterManager.scala
+    ├── ArmadaClusterManagerBackend.scala
+    ├── ArmadaEventWatcher.scala
+    └── ArmadaExecutorAllocator.scala
+```
 
-**Optional third-party plugins:** Community plugins for code review, testing, and debugging are available but not enabled by default. To opt in:
+Version-specific sources live in `src/main/scala-spark-{3.3,3.5,4.1}/`.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide, including commit conventions, coding standards, and how to use Claude Code with this project.
+
+Quick reference:
 
 ```bash
-/plugin marketplace add wshobson/agents
-cp .claude/settings.local.example.json .claude/settings.local.json
-# Restart Claude Code
+mvn test                 # Run unit tests
+mvn spotless:check       # Check formatting
+mvn spotless:apply       # Auto-fix formatting
+scripts/dev-e2e.sh       # Run E2E tests (requires a running Armada cluster)
 ```
