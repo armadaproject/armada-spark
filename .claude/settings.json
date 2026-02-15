@@ -31,8 +31,6 @@
       "Bash(git pull)",
       "Bash(git fetch *)",
       "Bash(git fetch)",
-      "Bash(git remote *)",
-      "Bash(git config *)",
       "Bash(gh pr view *)",
       "Bash(gh pr diff *)",
       "Bash(gh pr checks *)",
