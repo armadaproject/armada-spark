@@ -38,6 +38,8 @@
       "Bash(gh pr comment *)",
       "Bash(gh pr create *)",
       "Bash(gh api repos/*/pulls/*/comments *)",
+      "Bash(gh issue view *)",
+      "Bash(gh repo view *)",
       "Bash(gh api repos/*/pulls/*/comments/*/replies *)",
       "Bash(ls *)",
       "Bash(ls)",
