@@ -45,6 +45,9 @@
 # vscode
 /.vscode
 
+# cursor
+.cursor/
+
 # Standard symbolic link to build/quick/bin
 /qbin
 
@@ -84,6 +87,7 @@ scripts/.tmp/
 # Jupyter
 example/jupyter/workspace/
 
-# Claude Code local settings (personal per-user config)
+# Claude Code
+plans/
 .claude/settings.local.json
 plans/
