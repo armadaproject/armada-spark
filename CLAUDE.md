@@ -80,7 +80,7 @@ Cluster-mode submission (separate path):
 
 ## Common Pitfalls
 
-- **Version-specific SparkSubmit:** `src/main/scala-spark-{3.3,3.5,4.1}/` each override `prepareSubmitEnvironment()`. Spark 3.3 uses `args.master = ...`; Spark 3.5+ uses `args.maybeMaster = Option(...)`. Changes to submission logic likely need updates in all versions.
+- **Version-specific SparkSubmit:** Changes to submission logic must be applied to all 3 versions (3.3, 3.5, 4.1). See `.claude/rules/version-specific.md` for the full diff table.
 - **Shade relocations:** All Armada transitive deps (gRPC, Netty, Protobuf, Jackson, ScalaPB) are relocated to `io.armadaproject.shaded.*`. At runtime, import paths are rewritten — never rely on unshaded `io.grpc.*` or `com.google.protobuf.*` classes from the plugin JAR.
 - **Provided scope:** `spark-core` and `spark-kubernetes` are `provided` — they exist at runtime but are NOT in the fat JAR. Do not add their transitive deps as compile-scope dependencies. Spark 4.x additionally needs `spark-common-utils` (activated by profile).
 - **Netty conflict:** Spark's `spark-core` bundles its own Netty. The plugin explicitly excludes `io.netty:*` from spark-core and ships its own shaded Netty. Never add unshaded Netty deps.
@@ -134,31 +134,13 @@ All source files must include the Apache 2.0 license header (see any existing fi
 
 ### Test Patterns
 
-```scala
-// Standard test class structure
-class FooSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
-  before { /* setup */ }
-  after  { /* cleanup */ }
-  test("description of behavior") { /* assertions */ }
-}
-
-// Table-driven property tests (preferred for parameterized cases)
-class BarSuite extends AnyFunSuite with TableDrivenPropertyChecks with Matchers {
-  test("validates multiple inputs") {
-    val testCases = Table(("input", "expected"), ("a", true), ("", false))
-    forAll(testCases) { (input, expected) =>
-      validate(input) shouldBe expected
-    }
-  }
-}
-```
-
 - Use `BeforeAndAfter` or `BeforeAndAfterEach` for fixtures (temp files, mocks)
 - Use `TableDrivenPropertyChecks` for parameterized/data-driven tests
 - Mock SparkContext/SparkConf rather than creating real Spark sessions
 - Clean up temp files in `after` blocks
 - No shared base test class; use trait composition
 - E2E tests tagged with custom `E2ETest` ScalaTest tag (excluded from `mvn test`)
+- Detailed mock setup and NPE wrapping patterns: see `.claude/rules/testing.md`
 
 ## Agent Workflow
 
