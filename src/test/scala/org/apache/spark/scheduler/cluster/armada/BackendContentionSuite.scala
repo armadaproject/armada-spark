@@ -153,7 +153,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
 
     error.get() shouldBe null
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     execIds.zipWithIndex.foreach {
       case (execId, i) if i % 2 == 0 =>
         active should not contain execId

@@ -26,7 +26,7 @@ import io.armadaproject.armada.ArmadaClient
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
-import org.apache.spark.deploy.armada.DeploymentModeHelper
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.util.ThreadUtils
@@ -106,7 +106,7 @@ private[spark] class ArmadaExecutorAllocator(
         }
 
         rp match {
-          case Some(resourceProfile) =>
+          case Some(_) =>
             val (currentCount, pending) = backend.getExecutorCounts
             val gap                     = target - (currentCount + pending)
             if (gap > 0 && pending < maxPendingJobs) {

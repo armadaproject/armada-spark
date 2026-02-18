@@ -172,7 +172,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorFailed("job-1", execId1, 1, "OOM") }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -183,7 +183,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorSucceeded("job-1", execId1) }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -194,7 +194,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorCancelled("job-1", execId1) }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -207,7 +207,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       backend.onExecutorUnableToSchedule("job-1", execId1, "No resources")
     }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -271,7 +271,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     threads.foreach(_.start())
     threads.foreach(_.join())
 
-    backend.getActiveExecutorIds().size shouldBe numJobs / 2
+    backend.getActiveExecutorIds.size shouldBe numJobs / 2
   }
 
   private class TestableArmadaClusterManagerBackend(

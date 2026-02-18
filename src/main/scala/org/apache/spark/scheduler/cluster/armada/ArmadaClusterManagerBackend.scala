@@ -59,7 +59,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
   *   - ArmadaExecutorAllocator calls getExecutorCounts(), computes the gap between expected and
   *     actual and submits the requested batch jobs to Armada.
   *   - recordAndPendExecutor() creates the jobId-to-execId mapping and adds the executor to
-  *     pendingExecutors, (based the the jobId's returned by the submissions).
+  *     pendingExecutors, (based on the jobId's returned by the submissions).
   *
   * '''Startup'''
   *   - ArmadaEventWatcher (daemon thread) receives Submitted/Queued/Running events from the Armada
@@ -372,7 +372,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Cancel all non-terminal executor jobs (driver is already filtered out at submission time).
     */
   private def cancelExecutorJobs(): Unit = {
-    val executorIds = getActiveExecutorIds()
+    val executorIds = getActiveExecutorIds
 
     if (executorIds.nonEmpty) {
       cancelArmadaJobs(executorIds, "Spark application stopping - cancelling executors")
@@ -509,7 +509,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
   /** Returns executor IDs that are NOT in a terminal state.
     */
-  private[armada] def getActiveExecutorIds(): Seq[String] = {
+  private[armada] def getActiveExecutorIds: Seq[String] = {
     executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
   }
 
