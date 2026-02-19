@@ -231,6 +231,21 @@ class ArmadaSparkE2E
     )
   }
 
+  /** Apply static or dynamic allocation config to a builder. */
+  private def withAllocationMode(
+      builder: E2ETestBuilder,
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    if (allocation == "static") {
+      builder
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+    } else {
+      withStandardDynamicAllocation(builder, executorCount)
+    }
+  }
+
   // ========================================================================
   // Gang Scheduling Tests
   // ========================================================================
@@ -249,13 +264,7 @@ class ArmadaSparkE2E
     )
       .withGangJob("armada-spark")
 
-    if (allocation == "static") {
-      base
-        .withExecutors(executorCount)
-        .assertExecutorCount(executorCount)
-    } else {
-      withStandardDynamicAllocation(base, executorCount)
-    }
+    withAllocationMode(base, allocation, executorCount)
   }
 
   test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
@@ -293,19 +302,15 @@ class ArmadaSparkE2E
       s"spark-pi-node-selectors-$suffix",
       deployMode,
       allocation,
-      Map("test-type" -> s"node-selector")
+      Map("test-type" -> "node-selector")
     )
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
 
-    if (allocation == "static") {
-      base
-        .withExecutors(executorCount)
-        .assertExecutorCount(executorCount)
-    } else {
-      withStandardDynamicAllocation(base, executorCount)
-        .assertExecutorCountMaxReachedAtLeast(executorCount + 1)
-    }
+    val configured = withAllocationMode(base, allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
   }
 
   test("SparkPi job with node selectors - staticCluster", E2ETest) {
@@ -347,14 +352,10 @@ class ArmadaSparkE2E
         )
       )
 
-    if (allocation == "static") {
-      base
-        .withExecutors(executorCount)
-        .assertExecutorCount(executorCount)
-    } else {
-      withStandardDynamicAllocation(base, executorCount)
-        .assertExecutorCountMaxReachedAtLeast(executorCount + 1)
-    }
+    val configured = withAllocationMode(base, allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
   }
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {

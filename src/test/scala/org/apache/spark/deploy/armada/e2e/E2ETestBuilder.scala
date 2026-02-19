@@ -19,6 +19,7 @@ package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import org.scalatest.Assertions._
@@ -249,7 +250,16 @@ class E2ETestBuilder(testName: String) {
       labels: Map[String, String],
       expectedMinPods: Int
   ): E2ETestBuilder = {
-    assertions :+= new DynamicExecutorLabelAssertion(labels, expectedMinPods)
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"has labels $labels",
+      pod => {
+        val podLabels = Option(pod.getMetadata.getLabels)
+          .map(_.asScala.toMap)
+          .getOrElse(Map.empty)
+        labels.forall { case (k, v) => podLabels.get(k).contains(v) }
+      },
+      expectedMinPods
+    )
     this
   }
 
@@ -258,7 +268,16 @@ class E2ETestBuilder(testName: String) {
       annotations: Map[String, String],
       expectedMinPods: Int
   ): E2ETestBuilder = {
-    assertions :+= new DynamicExecutorAnnotationAssertion(annotations, expectedMinPods)
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"has annotations $annotations",
+      pod => {
+        val podAnnotations = Option(pod.getMetadata.getAnnotations)
+          .map(_.asScala.toMap)
+          .getOrElse(Map.empty)
+        annotations.forall { case (k, v) => podAnnotations.get(k).contains(v) }
+      },
+      expectedMinPods
+    )
     this
   }
 
@@ -268,9 +287,9 @@ class E2ETestBuilder(testName: String) {
       predicateDescription: String,
       expectedMinPods: Int
   ): E2ETestBuilder = {
-    assertions :+= new DynamicExecutorPodAssertion(
-      predicate,
+    assertions :+= new DynamicExecutorTrackingAssertion(
       predicateDescription,
+      predicate,
       expectedMinPods
     )
     this
@@ -316,10 +335,16 @@ class E2ETestBuilder(testName: String) {
       nodeUniformityLabel: String,
       expectedMinExecutors: Int
   ): E2ETestBuilder = {
-    assertions :+= new DynamicGangAnnotationAssertion(
-      nodeUniformityLabel,
-      expectedMinExecutors,
-      "executor"
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"gang annotations ($nodeUniformityLabel)",
+      pod => {
+        val annotations = pod.getMetadata.getAnnotations
+        annotations != null &&
+        Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+        Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+          .contains(nodeUniformityLabel)
+      },
+      expectedMinExecutors
     )
     this
   }

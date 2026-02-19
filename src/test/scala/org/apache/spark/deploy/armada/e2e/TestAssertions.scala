@@ -19,7 +19,6 @@ package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -155,16 +154,18 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
   }
 }
 
-/** Tracks all pods seen across polls and verifies each has gang annotations (GANG_ID and
-  * GANG_NODE_UNIFORMITY_LABEL). Use for dynamic allocation where pods come and go.
+/** Tracks all pods seen across polling cycles and verifies each passes a predicate. Use for dynamic
+  * allocation where pods come and go. Consolidates label, annotation, gang, and custom predicate
+  * assertions into one generic class.
   */
-class DynamicGangAnnotationAssertion(
-    nodeUniformityLabel: String,
+class DynamicExecutorTrackingAssertion(
+    description: String,
+    predicate: Pod => Boolean,
     expectedMinPods: Int,
     podRole: String = "executor"
 ) extends TestAssertion {
   override val name =
-    s"At least $expectedMinPods $podRole pods should have gang annotations ($nodeUniformityLabel)"
+    s"At least $expectedMinPods $podRole pods should satisfy: $description"
 
   // pod name -> whether it passed validation
   private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
@@ -173,153 +174,6 @@ class DynamicGangAnnotationAssertion(
       context: AssertionContext
   )(implicit ec: ExecutionContext): Future[AssertionResult] = {
     val labelSelector = s"spark-role=$podRole,test-id=${context.testId}"
-    context.getPodsByLabel(labelSelector).map { pods =>
-      pods.foreach { pod =>
-        val name = pod.getMetadata.getName
-        if (!seenPods.contains(name)) {
-          val annotations = pod.getMetadata.getAnnotations
-          val valid = annotations != null &&
-            Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
-            Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-              .contains(nodeUniformityLabel)
-          seenPods(name) = valid
-        }
-      }
-
-      val validCount = seenPods.count(_._2)
-      val failed     = seenPods.filter(!_._2).keys.toSeq
-
-      if (failed.nonEmpty) {
-        AssertionResult.Failure(
-          s"${failed.size} $podRole pod(s) missing gang annotations: ${failed.mkString(", ")}"
-        )
-      } else if (validCount >= expectedMinPods) {
-        println(s"Seen $validCount valid $podRole pod(s)")
-        AssertionResult.Success
-      } else {
-        AssertionResult.Failure(
-          s"Only seen $validCount valid $podRole pod(s) so far, need at least $expectedMinPods"
-        )
-      }
-    }
-  }
-}
-
-/** Tracks all executor pods seen across polls and verifies each has expected labels. Use for
-  * dynamic allocation where pods come and go.
-  */
-class DynamicExecutorLabelAssertion(
-    expectedLabels: Map[String, String],
-    expectedMinPods: Int
-) extends TestAssertion {
-  override val name =
-    s"At least $expectedMinPods executor pods should have labels $expectedLabels"
-
-  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
-
-  override def assert(
-      context: AssertionContext
-  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
-    context.getPodsByLabel(labelSelector).map { pods =>
-      pods.foreach { pod =>
-        val name = pod.getMetadata.getName
-        if (!seenPods.contains(name)) {
-          val podLabels = Option(pod.getMetadata.getLabels)
-            .map(_.asScala.toMap)
-            .getOrElse(Map.empty)
-          val valid = expectedLabels.forall { case (k, v) =>
-            podLabels.get(k).contains(v)
-          }
-          seenPods(name) = valid
-        }
-      }
-
-      val validCount = seenPods.count(_._2)
-      val failed     = seenPods.filter(!_._2).keys.toSeq
-
-      if (failed.nonEmpty) {
-        AssertionResult.Failure(
-          s"${failed.size} executor pod(s) missing labels: ${failed.mkString(", ")}"
-        )
-      } else if (validCount >= expectedMinPods) {
-        println(s"Seen $validCount valid executor pod(s) with expected labels")
-        AssertionResult.Success
-      } else {
-        AssertionResult.Failure(
-          s"Only seen $validCount valid executor pod(s) so far, need at least $expectedMinPods"
-        )
-      }
-    }
-  }
-}
-
-/** Tracks all executor pods seen across polls and verifies each has expected annotations. Use for
-  * dynamic allocation where pods come and go.
-  */
-class DynamicExecutorAnnotationAssertion(
-    expectedAnnotations: Map[String, String],
-    expectedMinPods: Int
-) extends TestAssertion {
-  override val name =
-    s"At least $expectedMinPods executor pods should have annotations $expectedAnnotations"
-
-  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
-
-  override def assert(
-      context: AssertionContext
-  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
-    context.getPodsByLabel(labelSelector).map { pods =>
-      pods.foreach { pod =>
-        val name = pod.getMetadata.getName
-        if (!seenPods.contains(name)) {
-          val podAnnotations = Option(pod.getMetadata.getAnnotations)
-            .map(_.asScala.toMap)
-            .getOrElse(Map.empty)
-          val valid = expectedAnnotations.forall { case (k, v) =>
-            podAnnotations.get(k).contains(v)
-          }
-          seenPods(name) = valid
-        }
-      }
-
-      val validCount = seenPods.count(_._2)
-      val failed     = seenPods.filter(!_._2).keys.toSeq
-
-      if (failed.nonEmpty) {
-        AssertionResult.Failure(
-          s"${failed.size} executor pod(s) missing annotations: ${failed.mkString(", ")}"
-        )
-      } else if (validCount >= expectedMinPods) {
-        println(s"Seen $validCount valid executor pod(s) with expected annotations")
-        AssertionResult.Success
-      } else {
-        AssertionResult.Failure(
-          s"Only seen $validCount valid executor pod(s) so far, need at least $expectedMinPods"
-        )
-      }
-    }
-  }
-}
-
-/** Tracks all executor pods seen across polls and verifies each passes a predicate. Use for dynamic
-  * allocation where pods come and go.
-  */
-class DynamicExecutorPodAssertion(
-    predicate: Pod => Boolean,
-    predicateDescription: String,
-    expectedMinPods: Int
-) extends TestAssertion {
-  override val name =
-    s"At least $expectedMinPods executor pods should satisfy: $predicateDescription"
-
-  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
-
-  override def assert(
-      context: AssertionContext
-  )(implicit ec: ExecutionContext): Future[AssertionResult] = {
-    val labelSelector = s"spark-role=executor,test-id=${context.testId}"
     context.getPodsByLabel(labelSelector).map { pods =>
       pods.foreach { pod =>
         val name = pod.getMetadata.getName
@@ -333,16 +187,14 @@ class DynamicExecutorPodAssertion(
 
       if (failed.nonEmpty) {
         AssertionResult.Failure(
-          s"${failed.size} executor pod(s) failed $predicateDescription: ${failed.mkString(", ")}"
+          s"${failed.size} $podRole pod(s) failed '$description': ${failed.mkString(", ")}"
         )
       } else if (validCount >= expectedMinPods) {
-        println(
-          s"Seen $validCount valid executor pod(s) satisfying: $predicateDescription"
-        )
+        println(s"Seen $validCount valid $podRole pod(s) for '$description'")
         AssertionResult.Success
       } else {
         AssertionResult.Failure(
-          s"Only seen $validCount valid executor pod(s) so far, need at least $expectedMinPods"
+          s"Only seen $validCount valid $podRole pod(s) so far, need at least $expectedMinPods"
         )
       }
     }
