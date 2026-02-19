@@ -237,12 +237,10 @@ class ArmadaSparkE2E
       allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    if (allocation == "static") {
-      builder
-        .withExecutors(executorCount)
-        .assertExecutorCount(executorCount)
-    } else {
-      withStandardDynamicAllocation(builder, executorCount)
+    allocation match {
+      case "static"  => builder.withExecutors(executorCount).assertExecutorCount(executorCount)
+      case "dynamic" => withStandardDynamicAllocation(builder, executorCount)
+      case other     => throw new IllegalArgumentException(s"Unknown allocation mode: $other")
     }
   }
 
