@@ -17,6 +17,8 @@
 
 package org.apache.spark.deploy.armada.e2e
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import io.fabric8.kubernetes.api.model.Pod
 import org.apache.spark.deploy.armada.Config
 import scala.jdk.CollectionConverters._
@@ -133,7 +135,7 @@ class ExecutorCountAssertion(expectedCount: Int) extends TestAssertion {
 class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertion {
   override val name = s"Executor count max should have reached at least $expectedMinMax"
 
-  private var maxSeen: Int = 0
+  private val maxSeen = new AtomicInteger(0)
 
   override def assert(
       context: AssertionContext
@@ -141,13 +143,15 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
     val labelSelector = s"spark-role=executor,test-id=${context.testId}"
     context.getPodsByLabel(labelSelector).map { pods =>
       val count = pods.size
-      maxSeen = math.max(maxSeen, count)
-      if (maxSeen >= expectedMinMax) {
-        println(s"Executor count max reached $expectedMinMax (max seen: $maxSeen, current: $count)")
+      maxSeen.updateAndGet(math.max(_, count))
+      if (maxSeen.get() >= expectedMinMax) {
+        println(
+          s"Executor count max reached $expectedMinMax (max seen: ${maxSeen.get()}, current: $count)"
+        )
         AssertionResult.Success
       } else {
         AssertionResult.Failure(
-          s"Executor count max never reached $expectedMinMax (max seen: $maxSeen, current: $count)"
+          s"Executor count max never reached $expectedMinMax (max seen: ${maxSeen.get()}, current: $count)"
         )
       }
     }
@@ -168,7 +172,7 @@ class DynamicExecutorTrackingAssertion(
     s"At least $expectedMinPods $podRole pods should satisfy: $description"
 
   // pod name -> whether it passed validation
-  private val seenPods = scala.collection.mutable.Map.empty[String, Boolean]
+  private val seenPods = scala.collection.concurrent.TrieMap.empty[String, Boolean]
 
   override def assert(
       context: AssertionContext
