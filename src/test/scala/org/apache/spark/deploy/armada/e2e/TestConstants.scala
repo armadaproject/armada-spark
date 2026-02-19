@@ -23,7 +23,7 @@ import scala.concurrent.duration._
 object TestConstants {
 
   val JobSubmitTimeout: FiniteDuration  = 30.seconds  // Time to submit job via Docker
-  val JobWatchTimeout: FiniteDuration   = 900.seconds // Max time for job to complete (7 minutes)
+  val JobWatchTimeout: FiniteDuration   = 900.seconds // Max time for job to complete (15 minutes)
   val RunTimeout: FiniteDuration        = 480.seconds // E2ETestBuilder.run()
   val PodRunningTimeout: FiniteDuration = 120.seconds // Max time for pod to reach Running state
   val DefaultProcessTimeout: FiniteDuration = 10.seconds // Default timeout for CLI commands

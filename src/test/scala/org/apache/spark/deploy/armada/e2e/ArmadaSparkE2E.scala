@@ -284,7 +284,7 @@ class ArmadaSparkE2E
       .assertGangJobForDynamic(
         "armada-spark",
         3
-      ) // at least 2 min executors + 1 scaled up executor seen
+      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
       .run()
   }
 

@@ -75,5 +75,5 @@ class TemplateFileServer(baseDir: File) {
   def port: Int = server.getAddress.getPort
 
   def url(filename: String): String =
-    s"http://$host:${server.getAddress.getPort}/$filename"
+    s"http://$host:${server.getAddress.getPort}/${java.net.URLEncoder.encode(filename, "UTF-8")}"
 }

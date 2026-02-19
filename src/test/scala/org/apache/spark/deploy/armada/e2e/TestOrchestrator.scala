@@ -205,7 +205,9 @@ class TestOrchestrator(
             )
             Some(PodSnapshot(pods, context.namespace))
           } catch {
-            case _: Exception => None
+            case ex: Exception =>
+              println(s"[WARN] Failed to fetch pods: ${ex.getMessage}")
+              None
           }
 
         val snapshotCtx = snapshot match {
