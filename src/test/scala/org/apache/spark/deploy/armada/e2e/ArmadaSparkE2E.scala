@@ -221,29 +221,6 @@ class ArmadaSparkE2E
     }
   }
 
-  private def withStandardDynamicAllocation(
-      builder: E2ETestBuilder,
-      executorCount: Int
-  ): E2ETestBuilder = {
-    builder.withDynamicAllocation(
-      minExecutors = executorCount,
-      maxExecutors = 4
-    )
-  }
-
-  /** Apply static or dynamic allocation config to a builder. */
-  private def withAllocationMode(
-      builder: E2ETestBuilder,
-      allocation: String,
-      executorCount: Int
-  ): E2ETestBuilder = {
-    allocation match {
-      case "static"  => builder.withExecutors(executorCount).assertExecutorCount(executorCount)
-      case "dynamic" => withStandardDynamicAllocation(builder, executorCount)
-      case other     => throw new IllegalArgumentException(s"Unknown allocation mode: $other")
-    }
-  }
-
   // ========================================================================
   // Gang Scheduling Tests
   // ========================================================================
@@ -262,7 +239,7 @@ class ArmadaSparkE2E
     )
       .withGangJob("armada-spark")
 
-    withAllocationMode(base, allocation, executorCount)
+    base.withAllocationMode(allocation, executorCount)
   }
 
   test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
@@ -305,7 +282,7 @@ class ArmadaSparkE2E
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
       .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
 
-    val configured = withAllocationMode(base, allocation, executorCount)
+    val configured = base.withAllocationMode(allocation, executorCount)
     if (allocation == "dynamic")
       configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
     else configured
@@ -350,7 +327,7 @@ class ArmadaSparkE2E
         )
       )
 
-    val configured = withAllocationMode(base, allocation, executorCount)
+    val configured = base.withAllocationMode(allocation, executorCount)
     if (allocation == "dynamic")
       configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
     else configured
@@ -412,7 +389,8 @@ class ArmadaSparkE2E
         )
 
     val builder = if (allocation == "dynamic") {
-      withStandardDynamicAllocation(base, executorCount)
+      base
+        .withStandardDynamicAllocation(executorCount)
         .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
         .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
     } else {
@@ -504,7 +482,8 @@ class ArmadaSparkE2E
           Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
         }
     } else {
-      withStandardDynamicAllocation(base, executorCount)
+      base
+        .withStandardDynamicAllocation(executorCount)
         .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
         .assertDynamicExecutorsHaveAnnotations(
           Map("executor-feature-step" -> "configured"),

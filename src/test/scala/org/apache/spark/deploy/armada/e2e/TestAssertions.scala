@@ -132,8 +132,8 @@ class ExecutorCountAssertion(expectedCount: Int) extends TestAssertion {
   }
 }
 
-class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertion {
-  override val name = s"Executor count max should have reached at least $expectedMinMax"
+class ExecutorCountMaxReachedAssertion(expectedMin: Int) extends TestAssertion {
+  override val name = s"Executor count max should have reached at least $expectedMin"
 
   private val maxSeen = new AtomicInteger(0)
 
@@ -144,14 +144,14 @@ class ExecutorCountMaxReachedAssertion(expectedMinMax: Int) extends TestAssertio
     context.getPodsByLabel(labelSelector).map { pods =>
       val count = pods.size
       maxSeen.updateAndGet(math.max(_, count))
-      if (maxSeen.get() >= expectedMinMax) {
+      if (maxSeen.get() >= expectedMin) {
         println(
-          s"Executor count max reached $expectedMinMax (max seen: ${maxSeen.get()}, current: $count)"
+          s"Executor count max reached $expectedMin (max seen: ${maxSeen.get()}, current: $count)"
         )
         AssertionResult.Success
       } else {
         AssertionResult.Failure(
-          s"Executor count max never reached $expectedMinMax (max seen: ${maxSeen.get()}, current: $count)"
+          s"Executor count max never reached $expectedMin (max seen: ${maxSeen.get()}, current: $count)"
         )
       }
     }

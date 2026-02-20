@@ -140,14 +140,31 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Enable dynamic allocation with standard defaults (maxExecutors = 4). */
+  def withStandardDynamicAllocation(executorCount: Int): E2ETestBuilder = {
+    withDynamicAllocation(minExecutors = executorCount, maxExecutors = 4)
+  }
+
+  /** Apply static or dynamic allocation config. */
+  def withAllocationMode(
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    allocation match {
+      case "static"  => withExecutors(executorCount).assertExecutorCount(executorCount)
+      case "dynamic" => withStandardDynamicAllocation(executorCount)
+      case other     => throw new IllegalArgumentException(s"Unknown allocation mode: $other")
+    }
+  }
+
   /** Assert exact executor count */
   def assertExecutorCount(expected: Int): E2ETestBuilder = {
     assertions :+= new ExecutorCountAssertion(expected)
     this
   }
 
-  def assertExecutorCountMaxReachedAtLeast(expectedMinMax: Int): E2ETestBuilder = {
-    assertions :+= new ExecutorCountMaxReachedAssertion(expectedMinMax)
+  def assertExecutorCountMaxReachedAtLeast(expectedMin: Int): E2ETestBuilder = {
+    assertions :+= new ExecutorCountMaxReachedAssertion(expectedMin)
     this
   }
 
