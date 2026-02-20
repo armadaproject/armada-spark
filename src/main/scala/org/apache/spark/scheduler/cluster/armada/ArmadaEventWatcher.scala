@@ -239,9 +239,8 @@ private[spark] class ArmadaEventWatcher(
     val jobId      = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
-      // Executors should not succeed normally (they're long-running)
-      logWarning(s"Executor $executorId (job $jobId) succeeded unexpectedly")
-      backend.onExecutorFailed(jobId, executorId, 0, "Unexpected success")
+      logInfo(s"Executor $executorId (job $jobId) succeeded")
+      backend.onExecutorSucceeded(jobId, executorId)
     }
   }
 
