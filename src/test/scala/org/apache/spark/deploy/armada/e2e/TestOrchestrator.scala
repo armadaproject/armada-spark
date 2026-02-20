@@ -73,6 +73,7 @@ class TestOrchestrator(
     armadaClient: ArmadaClient,
     k8sClient: K8sClient
 )(implicit ec: ExecutionContext) {
+  val sparkRepoCopy = ".spark-3.5.5"
 
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
@@ -292,19 +293,28 @@ class TestOrchestrator(
       context: TestContext,
       modeHelper: DeploymentModeHelper
   ): Future[Unit] = Future {
+    val deployMode = if (modeHelper.isDriverInCluster) "cluster" else "client"
+
     // Use spark-examples JAR with the correct path based on Scala binary version and Spark version
     // Following the same pattern as scripts/init.sh
-    val appResource = config.pythonScript.getOrElse(
-      s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
-    )
+    val appResource = {
+      if (config.pythonScript.isDefined) {
+        config.pythonScript.get
+      } else if (deployMode == "cluster") {
+        // s"local:///opt/spark/examples/target/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+        s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+      } else {
+        // broken s"${sparkRepoCopy}/examples/target/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+        s"${sparkRepoCopy}/examples/target/scala-${config.scalaVersion}/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+        // .spark-3.5.5/examples/target/scala-2.13/jars/spark-examples_2.13-3.5.5.jar
+      }
+    }
 
     val contextLabelString = context.labels.iterator.map { case (k, v) => s"$k=$v" }.mkString(",")
     val mergedLabels = config.sparkConfs
       .get("spark.armada.pod.labels")
       .map(existing => s"$existing,$contextLabelString")
       .getOrElse(contextLabelString)
-
-    val deployMode = if (modeHelper.isDriverInCluster) "cluster" else "client"
 
     val enhancedSparkConfs = config.sparkConfs ++ Map(
       "spark.armada.pod.labels"           -> mergedLabels,
@@ -529,21 +539,19 @@ class TestOrchestrator(
       pythonScript: Option[String],
       modeHelper: DeploymentModeHelper
   ): Seq[String] = {
-    val sparkRepoCopy = ".spark-3.5.5"
-    val deployMode    = if (modeHelper.isDriverInCluster) "cluster" else "client"
-    val isClientMode  = !modeHelper.isDriverInCluster
+    val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
+    val isClientMode = !modeHelper.isDriverInCluster
 
-    val classPathEntries: Seq[String] = Seq(
+    val driverClassPath = Seq(
       ".",
-      s"${sparkRepoCopy}/assembly/target/scala-2.13/jars/*",
       "./target/armada-cluster-manager_2.13-1.0.0-SNAPSHOT-all.jar"
-    )
+    ).mkString(":")
 
     val baseCommand = Seq(
       s"${sparkRepoCopy}/bin/spark-class",
-      "-cp",
-      classPathEntries.mkString(":"),
       "org.apache.spark.deploy.SparkSubmit",
+      "--driver-class-path",
+      driverClassPath,
       "--master",
       masterUrl,
       "--deploy-mode",
@@ -589,7 +597,8 @@ class TestOrchestrator(
     } else {
       // In cluster mode, driver runs in a pod, so use internal URL
       Map(
-        "spark.armada.internalUrl" -> "armada://armada-server.armada:50051"
+        // "spark.armada.internalUrl" -> "armada://armada-server.armada:50051"
+        "spark.armada.internalUrl" -> "armada://armada-server.armada:30002"
       )
     }
 

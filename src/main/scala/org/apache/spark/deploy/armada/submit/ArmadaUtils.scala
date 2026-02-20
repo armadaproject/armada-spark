@@ -28,11 +28,7 @@ object ArmadaUtils {
   import ArmadaUtilsExceptions._
 
   def parseMasterUrl(masterUrl: String): (String, Int) = {
-    val startString = if (masterUrl.startsWith("local")) {
-      "local://armada://"
-    } else {
-      "armada://"
-    }
+    val startString = "armada://"
     Some(masterUrl)
       .map(_.substring(startString.length).split(":").toSeq)
       .filter(_.length == 2)

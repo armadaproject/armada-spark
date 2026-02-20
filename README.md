@@ -74,7 +74,6 @@ export USE_KIND=true
 **Note:** For client mode, you need to set additional configuration:
 
 ```bash
-export ARMADA_MASTER="local://armada://localhost:30002"  # Add "local://" prefix
 export SPARK_DRIVER_HOST="172.18.0.1"                    # Required for client mode
 export SPARK_DRIVER_PORT="7078"                          # Required for client mode
 ```
