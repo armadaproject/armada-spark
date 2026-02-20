@@ -324,6 +324,16 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  private def hasGangEnvVars(
+      nodeUniformityLabel: String
+  ): Pod => Boolean = { pod =>
+    val envVars = pod.getSpec.getContainers.asScala
+      .flatMap(c => Option(c.getEnv).map(_.asScala).getOrElse(Seq.empty))
+      .map(e => e.getName -> e.getValue)
+      .toMap
+    envVars.get("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME").contains(nodeUniformityLabel)
+  }
+
   /** Helper method to create a predicate that validates gang scheduling annotations */
   private def hasValidGangAnnotations(
       nodeUniformityLabel: String,
@@ -353,13 +363,14 @@ class E2ETestBuilder(testName: String) {
       expectedMinExecutors: Int
   ): E2ETestBuilder = {
     assertions :+= new DynamicExecutorTrackingAssertion(
-      s"gang annotations ($nodeUniformityLabel)",
+      s"gang annotations and env vars ($nodeUniformityLabel)",
       pod => {
         val annotations = pod.getMetadata.getAnnotations
         annotations != null &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-          .contains(nodeUniformityLabel)
+          .contains(nodeUniformityLabel) &&
+        hasGangEnvVars(nodeUniformityLabel)(pod)
       },
       expectedMinExecutors
     )
