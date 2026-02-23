@@ -206,6 +206,11 @@ class ArmadaSparkE2E
     }
 
     if (allocation == "dynamic") {
+      // Dynamic allocation uses 500 slices (vs 100 for static) to generate enough
+      // work to trigger executor scale-up. The higher workload causes OOMKilled with
+      // the default 510Mi memory, so we increase the container memory to 1Gi.
+      // spark.executor.memory (JVM heap) is set to 768m because Spark adds
+      // memoryOverhead (default min 384MiB) on top, and 768m + overhead fits in 1Gi.
       testWithModeSpecificAsserts
         .withAppArgs("500")
         .withSparkConf(
