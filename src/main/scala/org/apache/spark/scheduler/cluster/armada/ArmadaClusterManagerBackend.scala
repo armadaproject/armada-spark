@@ -48,7 +48,52 @@ import org.apache.spark.util.{ThreadUtils, Utils}
 
 /** Spark scheduler backend implementation for Armada.
   *
-  * This backend manages executor lifecycle by submitting jobs to Armada queues.
+  * Manages executor lifecycle by submitting jobs to Armada queues. In dynamic allocation mode, an
+  * executor goes through the following stages:
+  *
+  * '''Request'''
+  *   - org.apache.spark.ExecutorAllocationManager calls doRequestTotalExecutors to set a target
+  *     count.
+  *
+  * '''Submission'''
+  *   - ArmadaExecutorAllocator calls getExecutorCounts(), computes the gap between expected and
+  *     actual and submits the requested batch jobs to Armada.
+  *   - recordAndPendExecutor() creates the jobId-to-execId mapping and adds the executor to
+  *     pendingExecutors, (based on the jobId's returned by the submissions).
+  *
+  * '''Startup'''
+  *   - ArmadaEventWatcher (daemon thread) receives Submitted/Queued/Running events from the Armada
+  *     server. onExecutorSubmitted() calls recordAndPendExecutor (idempotent).
+  *   - Armada schedules the pod on a Kubernetes cluster. The executor process starts and sends a
+  *     RegisterExecutor RPC to the driver.
+  *   - org.apache.spark.CoarseGrainedSchedulerBackend.DriverEndpoint handles registration under the
+  *     `this` lock, adding the executor to executorDataMap. getExecutorIds() now includes it.
+  *   - On the next getExecutorCounts or getPendingExecutorCount call, the registered executor is
+  *     pruned from pendingExecutors.
+  *
+  * '''Running'''
+  *   - Spark schedules tasks on the executor. The executor is visible in getExecutorIds() and
+  *     excluded from pendingExecutors.
+  *
+  * '''Decommission (optional)'''
+  *   - If spark.decommission.enabled is true, ExecutorAllocationManager calls decommissionExecutors
+  *     before killing idle executors. Armada preemption also triggers this path via
+  *     onArmadaPreempting when the cluster reclaims resources.
+  *   - decommissionExecutors delegates to the parent class, which starts BlockManagerDecommissioner
+  *     to migrate shuffle/cache data off the executor.
+  *   - Once decommissioning completes, the executor disconnects. onDisconnected sees it in
+  *     executorsPendingDecommission and removes it cleanly.
+  *
+  * '''Kill'''
+  *   - ExecutorAllocationManager calls doKillExecutors (directly if decommission is disabled, or
+  *     after decommission completes/times out).
+  *   - markTerminal adds the executor to terminalExecutors and removes it from pendingExecutors.
+  *   - safeRemoveExecutor tells the parent class to send a StopExecutor RPC to the executor.
+  *   - After a grace period, cancelArmadaJobs sends a cancel request to Armada. If the executor
+  *     already exited gracefully, the event watcher will have received a Succeeded event instead
+  *     and the cancel is a no-op (the job is already terminal in Armada).
+  *   - The event watcher receives the terminal event (Succeeded, Failed, or Cancelled) and calls
+  *     markTerminal again (idempotent).
   */
 private[spark] class ArmadaClusterManagerBackend(
     scheduler: TaskSchedulerImpl,
@@ -216,20 +261,31 @@ private[spark] class ArmadaClusterManagerBackend(
     logInfo(s"Armada Event Watcher started for queue=$q jobSetId=$jsId at $host:$port")
   }
 
-  // Update the executor data strucs with the new executor
+  // Update the executor data structs with the new executor.
+  // Idempotent: returns the existing executor ID if the job is already recorded.
+  // Thread-safety is provided by ConcurrentHashMap.computeIfAbsent.
   private[spark] def recordExecutor(jobId: String): String = {
-    jobIdToExecutor.synchronized {
-      if (!jobIdToExecutor.containsKey(jobId)) {
+    jobIdToExecutor.computeIfAbsent(
+      jobId,
+      _ => {
         val newId = execIdCounter.incrementAndGet().toString
-        // Register mapping
-        jobIdToExecutor.put(jobId, newId)
         executorToJobId.put(newId, jobId)
         newId
+      }
+    )
+  }
 
-      } else {
-        jobIdToExecutor.get(jobId)
+  /** Atomically record an executor mapping and add to pending set. Skips adding to pending if the
+    * executor is already terminal.
+    */
+  private[spark] def recordAndPendExecutor(jobId: String): String = {
+    val execId = recordExecutor(jobId)
+    pendingExecutors.synchronized {
+      if (!terminalExecutors.contains(execId)) {
+        pendingExecutors += execId
       }
     }
+    execId
   }
 
   override def stop(): Unit = {
@@ -312,7 +368,7 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Cancel all non-terminal executor jobs (driver is already filtered out at submission time).
     */
   private def cancelExecutorJobs(): Unit = {
-    val executorIds = getActiveExecutorIds()
+    val executorIds = getActiveExecutorIds
 
     if (executorIds.nonEmpty) {
       cancelArmadaJobs(executorIds, "Spark application stopping - cancelling executors")
@@ -449,10 +505,8 @@ private[spark] class ArmadaClusterManagerBackend(
 
   /** Returns executor IDs that are NOT in a terminal state.
     */
-  private[armada] def getActiveExecutorIds(): Seq[String] = {
-    executorToJobId.synchronized {
-      executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
-    }
+  private[armada] def getActiveExecutorIds: Seq[String] = {
+    executorToJobId.asScala.keys.filterNot(terminalExecutors.contains).toSeq
   }
 
   /** Best-effort removeExecutor that tolerates RPC endpoint being gone during shutdown. During the
@@ -481,32 +535,36 @@ private[spark] class ArmadaClusterManagerBackend(
       return
     }
 
-    val execId = recordExecutor(jobId)
-    pendingExecutors.synchronized { pendingExecutors += execId }
+    recordAndPendExecutor(jobId)
   }
 
   // ========================================================================
   // PENDING EXECUTORS MANAGEMENT
+  //
+  // Lock ordering (acquire in this order to prevent deadlocks):
+  //   1. this (backend)   — guards getExecutorIds() via parent class
+  //   2. pendingExecutors — guards the pendingExecutors HashSet
   // ========================================================================
 
-  /** Add an executor to the pending set.
+  /** Returns a consistent snapshot of (activeExecutorCount, pendingExecutorCount). Both values are
+    * derived from the same getExecutorIds() call to prevent the allocator's gap computation from
+    * seeing inconsistent state.
     */
-  private[armada] def addPendingExecutor(executorId: String): Unit = {
+  private[armada] def getExecutorCounts: (Int, Int) = {
+    // Call getExecutorIds() outside the lock. getExecutorIds() acquires DriverEndpoint's `this`
+    // lock, so calling it inside pendingExecutors.synchronized would nest locks and risk deadlock.
+    // A slightly stale snapshot is harmless — newly registered executors are pruned on the next call.
+    val registeredIds = getExecutorIds().toSet
     pendingExecutors.synchronized {
-      pendingExecutors += executorId
+      pendingExecutors --= registeredIds
+      (registeredIds.size, pendingExecutors.size)
     }
   }
 
   /** Get the count of pending executors. Excludes executors that have already registered with
-    * Spark.
+    * Spark. As a side effect, prunes registered executors from the pending set.
     */
-  private[armada] def getPendingExecutorCount: Int = {
-    pendingExecutors.synchronized {
-      val registeredIds = getExecutorIds().toSet
-      pendingExecutors --= registeredIds
-      pendingExecutors.size
-    }
-  }
+  private[armada] def getPendingExecutorCount: Int = getExecutorCounts._2
 
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */

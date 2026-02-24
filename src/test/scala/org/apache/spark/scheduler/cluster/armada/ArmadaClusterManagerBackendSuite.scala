@@ -75,11 +75,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
-  /** Ignores NullPointerException from removeExecutor when driverEndpoint is null in tests */
-  private def ignoreRpcErrors(block: => Unit): Unit = {
-    try { block }
-    catch { case _: NullPointerException => }
-  }
+  private def ignoreRpcErrors(block: => Unit): Unit =
+    ArmadaBackendTestUtils.ignoreRpcErrors(block)
 
   test("recordExecutor returns same ID for duplicate job") {
     val id1 = backend.recordExecutor("job-123")
@@ -104,18 +101,18 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     id3 shouldBe id2 + 1
   }
 
-  test("addPendingExecutor and getPendingExecutorCount work correctly") {
+  test("recordAndPendExecutor and getPendingExecutorCount work correctly") {
     backend.getPendingExecutorCount shouldBe 0
 
-    backend.addPendingExecutor("1")
+    backend.recordAndPendExecutor("job-1")
     backend.getPendingExecutorCount shouldBe 1
 
-    backend.addPendingExecutor("2")
-    backend.addPendingExecutor("3")
+    backend.recordAndPendExecutor("job-2")
+    backend.recordAndPendExecutor("job-3")
     backend.getPendingExecutorCount shouldBe 3
   }
 
-  test("addPendingExecutor is thread-safe") {
+  test("recordAndPendExecutor is thread-safe") {
     val numThreads         = 10
     val executorsPerThread = 100
 
@@ -123,7 +120,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       new Thread {
         override def run(): Unit = {
           (0 until executorsPerThread).foreach { j =>
-            backend.addPendingExecutor(s"exec-$i-$j")
+            backend.recordAndPendExecutor(s"job-$i-$j")
           }
         }
       }
@@ -172,7 +169,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorFailed("job-1", execId1, 1, "OOM") }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -183,7 +180,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorSucceeded("job-1", execId1) }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -194,7 +191,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     ignoreRpcErrors { backend.onExecutorCancelled("job-1", execId1) }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -207,7 +204,7 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       backend.onExecutorUnableToSchedule("job-1", execId1, "No resources")
     }
 
-    val active = backend.getActiveExecutorIds()
+    val active = backend.getActiveExecutorIds
     active should not contain execId1
     active should contain(execId2)
   }
@@ -221,6 +218,40 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     ignoreRpcErrors { backend.onExecutorFailed("job-1", execId1, 1, "failed") }
 
     backend.getPendingExecutorCount shouldBe 1
+  }
+
+  test("pending executor lifecycle - submit to running") {
+    val executorService = Executors.newScheduledThreadPool(1)
+    val testableBackend = new TestableArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      executorService,
+      "armada://localhost:50051"
+    )
+
+    try {
+      val jobId = "job-lifecycle-test"
+
+      testableBackend.getPendingExecutorCount shouldBe 0
+
+      // Submit executor - should be added to pending
+      testableBackend.onExecutorSubmitted(jobId)
+      testableBackend.getPendingExecutorCount shouldBe 1
+
+      val execId = testableBackend.recordExecutor(jobId)
+
+      // Mark as running - executor stays in pending until it registers with Spark
+      testableBackend.onExecutorRunning(jobId, execId)
+      testableBackend.getPendingExecutorCount shouldBe 1
+
+      testableBackend.simulateExecutorRegistration(execId)
+
+      testableBackend.getPendingExecutorCount shouldBe 0
+    } finally {
+      try { testableBackend.stop() }
+      catch { case NonFatal(_) => }
+      executorService.shutdownNow()
+    }
   }
 
   // Use multiple threads to terminate half the jobs, then confirm the number
@@ -244,6 +275,26 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     threads.foreach(_.start())
     threads.foreach(_.join())
 
-    backend.getActiveExecutorIds().size shouldBe numJobs / 2
+    backend.getActiveExecutorIds.size shouldBe numJobs / 2
+  }
+
+  private class TestableArmadaClusterManagerBackend(
+      scheduler: TaskSchedulerImpl,
+      sc: SparkContext,
+      executorService: java.util.concurrent.ScheduledExecutorService,
+      masterURL: String
+  ) extends ArmadaClusterManagerBackend(scheduler, sc, executorService, masterURL) {
+
+    private val testRegisteredExecutors = scala.collection.mutable.Set.empty[String]
+
+    def simulateExecutorRegistration(executorId: String): Unit = {
+      testRegisteredExecutors += executorId
+    }
+
+    // in real life, super.getExecutorIds() would be used here, but that
+    // isn't being used in this test
+    override def getExecutorIds(): Seq[String] = synchronized {
+      testRegisteredExecutors.toSeq
+    }
   }
 }
