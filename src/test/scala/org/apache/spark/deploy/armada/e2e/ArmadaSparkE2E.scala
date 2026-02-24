@@ -268,6 +268,15 @@ class ArmadaSparkE2E
       .run()
   }
 
+  test("Basic SparkPi job with gang scheduling - dynamicClient", E2ETest) {
+    baseSparkPiGangTest("client", "dynamic", 2)
+      .assertGangJobForDynamic(
+        "armada-spark",
+        3
+      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
+      .run()
+  }
+
   // ========================================================================
   // Node Selector Tests
   // ========================================================================
