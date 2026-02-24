@@ -329,6 +329,27 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
   }
 
+  test("seedGangAttributesFromEnv is a no-op when env vars are absent") {
+    backend.seedGangAttributesFromEnv()
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelValue") shouldBe None
+
+    // seedGangAttributesFromEnv delegates to captureGangAttributes, which uses an
+    // AtomicBoolean that only allows one capture. Verify the empty-env-var call didn't
+    // accidentally flip that flag, which would block the real executor attribute path.
+    val attributes = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
+    )
+    backend.captureGangAttributes(attributes)
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe
+      Some("topology.kubernetes.io/zone")
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelValue") shouldBe
+      Some("us-east-1a")
+  }
+
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,
       sc: SparkContext,

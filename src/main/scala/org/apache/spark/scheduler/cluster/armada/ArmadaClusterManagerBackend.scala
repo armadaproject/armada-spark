@@ -159,6 +159,9 @@ private[spark] class ArmadaClusterManagerBackend(
     // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
     ArmadaUtils.setDefaultAppId(conf)
 
+    // Seed gang env vars into SparkConf (cluster mode); no-op in client mode.
+    seedGangAttributesFromEnv()
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
     val modeHelper  = DeploymentModeHelper(conf)
@@ -603,6 +606,22 @@ private[spark] class ArmadaClusterManagerBackend(
 
     markTerminal(executorId)
     safeRemoveExecutor(executorId, exitReason)
+  }
+
+  /** Seed gang node selector from the driver's own environment variables.
+    *
+    * In dynamic cluster mode the driver pod receives ARMADA_GANG_* env vars directly from Armada.
+    * We write them into SparkConf at startup so that getGangNodeSelector picks them up for
+    * subsequent executor allocations. If the env vars are absent (client mode), this is a no-op.
+    */
+  private[armada] def seedGangAttributesFromEnv(): Unit = {
+    val envVars = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME" -> sys.env
+        .getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", ""),
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> sys.env
+        .getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    )
+    captureGangAttributes(envVars)
   }
 
   /** Capture gang node selector from the first executor's attributes.
