@@ -19,6 +19,7 @@ package org.apache.spark.deploy.armada.e2e
 
 import io.fabric8.kubernetes.api.model.Pod
 import org.apache.spark.deploy.armada.submit.GangSchedulingAnnotations
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import org.scalatest.Assertions._
@@ -37,16 +38,18 @@ import org.scalatest.Assertions._
   * }}}
   */
 class E2ETestBuilder(testName: String) {
-  private var sparkConfs                   = Map.empty[String, String]
-  private var assertions                   = Seq.empty[TestAssertion]
-  private var baseQueueName                = "e2e-template"
-  private var imageName                    = "spark:armada"
-  private var masterUrl                    = "armada://localhost:30002"
-  private var lookoutUrl                   = "http://localhost:30000"
-  private var scalaVersion                 = "2.13"
-  private var sparkVersion                 = "3.5.5"
-  private var failFastOnPodFailure         = true
-  private var pythonScript: Option[String] = None
+  private var sparkConfs                            = Map.empty[String, String]
+  private var assertions                            = Seq.empty[TestAssertion]
+  private var baseQueueName                         = "e2e-template"
+  private var imageName                             = "spark:armada"
+  private var masterUrl                             = "armada://localhost:30002"
+  private var lookoutUrl                            = "http://localhost:30000"
+  private var scalaVersion                          = "2.13"
+  private var sparkVersion                          = "3.5.5"
+  private var failFastOnPodFailure                  = true
+  private var pythonScript: Option[String]          = None
+  private var appArgs: Seq[String]                  = Seq("100")
+  private var assertionPollInterval: FiniteDuration = 5.seconds
 
   def withSparkConf(key: String, value: String): E2ETestBuilder = {
     sparkConfs += (key -> value)
@@ -69,6 +72,12 @@ class E2ETestBuilder(testName: String) {
   /** Use Python script instead of Scala class */
   def withPythonScript(script: String): E2ETestBuilder = {
     pythonScript = Some(script)
+    this
+  }
+
+  /** Application arguments. */
+  def withAppArgs(args: String*): E2ETestBuilder = {
+    appArgs = args.toSeq
     this
   }
 
@@ -104,9 +113,58 @@ class E2ETestBuilder(testName: String) {
     withSparkConf("spark.armada.scheduling.nodeUniformity", nodeUniformityLabel)
   }
 
+  /** Enable dynamic allocation. */
+  def withDynamicAllocation(
+      minExecutors: Int,
+      maxExecutors: Int,
+      schedulerBacklogTimeoutSeconds: Int = 3,
+      executorIdleTimeoutSeconds: Int = 90
+  ): E2ETestBuilder = {
+    withSparkConf("spark.dynamicAllocation.enabled", "true")
+    // Required for Spark < 3.4.0 (shuffle tracking is enabled by default from 3.4.0+)
+    // This allows dynamic allocation without an external shuffle service
+    // Ref: https://issues.apache.org/jira/browse/SPARK-39846
+    withSparkConf("spark.dynamicAllocation.shuffleTracking.enabled", "true")
+    withSparkConf("spark.dynamicAllocation.minExecutors", minExecutors.toString)
+    withSparkConf("spark.dynamicAllocation.maxExecutors", maxExecutors.toString)
+    withSparkConf(
+      "spark.dynamicAllocation.schedulerBacklogTimeout",
+      s"${schedulerBacklogTimeoutSeconds}s"
+    )
+    withSparkConf(
+      "spark.dynamicAllocation.executorIdleTimeout",
+      s"${executorIdleTimeoutSeconds}s"
+    )
+    withSparkConf("spark.armada.allocation.checkInterval", "1s")
+    assertionPollInterval = 10.seconds
+    this
+  }
+
+  /** Enable dynamic allocation with standard defaults (maxExecutors = 4). */
+  def withStandardDynamicAllocation(executorCount: Int): E2ETestBuilder = {
+    withDynamicAllocation(minExecutors = executorCount, maxExecutors = 4)
+  }
+
+  /** Apply static or dynamic allocation config. */
+  def withAllocationMode(
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    allocation match {
+      case "static"  => withExecutors(executorCount).assertExecutorCount(executorCount)
+      case "dynamic" => withStandardDynamicAllocation(executorCount)
+      case other     => throw new IllegalArgumentException(s"Unknown allocation mode: $other")
+    }
+  }
+
   /** Assert exact executor count */
   def assertExecutorCount(expected: Int): E2ETestBuilder = {
     assertions :+= new ExecutorCountAssertion(expected)
+    this
+  }
+
+  def assertExecutorCountMaxReachedAtLeast(expectedMin: Int): E2ETestBuilder = {
+    assertions :+= new ExecutorCountMaxReachedAssertion(expectedMin)
     this
   }
 
@@ -204,6 +262,56 @@ class E2ETestBuilder(testName: String) {
     this
   }
 
+  /** Assert dynamic executor pods have all specified labels (tracks across polls) */
+  def assertDynamicExecutorsHaveLabels(
+      labels: Map[String, String],
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"has labels $labels",
+      pod => {
+        val podLabels = Option(pod.getMetadata.getLabels)
+          .map(_.asScala.toMap)
+          .getOrElse(Map.empty)
+        labels.forall { case (k, v) => podLabels.get(k).contains(v) }
+      },
+      expectedMinPods
+    )
+    this
+  }
+
+  /** Assert dynamic executor pods have all specified annotations (tracks across polls) */
+  def assertDynamicExecutorsHaveAnnotations(
+      annotations: Map[String, String],
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"has annotations $annotations",
+      pod => {
+        val podAnnotations = Option(pod.getMetadata.getAnnotations)
+          .map(_.asScala.toMap)
+          .getOrElse(Map.empty)
+        annotations.forall { case (k, v) => podAnnotations.get(k).contains(v) }
+      },
+      expectedMinPods
+    )
+    this
+  }
+
+  /** Assert dynamic executor pods match a predicate, tracking across polls */
+  def assertDynamicExecutorPod(
+      predicate: Pod => Boolean,
+      predicateDescription: String,
+      expectedMinPods: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      predicateDescription,
+      predicate,
+      expectedMinPods
+    )
+    this
+  }
+
   /** Assert driver pod matches a predicate */
   def withDriverPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
     assertions :+= new DriverPodAssertion(predicate)
@@ -214,6 +322,16 @@ class E2ETestBuilder(testName: String) {
   def withExecutorPodAssertion(predicate: Pod => Boolean): E2ETestBuilder = {
     assertions :+= new ExecutorPodAssertion(predicate)
     this
+  }
+
+  private def hasGangEnvVars(
+      nodeUniformityLabel: String
+  ): Pod => Boolean = { pod =>
+    val envVars = pod.getSpec.getContainers.asScala
+      .flatMap(c => Option(c.getEnv).map(_.asScala).getOrElse(Seq.empty))
+      .map(e => e.getName -> e.getValue)
+      .toMap
+    envVars.get("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME").contains(nodeUniformityLabel)
   }
 
   /** Helper method to create a predicate that validates gang scheduling annotations */
@@ -234,6 +352,29 @@ class E2ETestBuilder(testName: String) {
     val validator = hasValidGangAnnotations(nodeUniformityLabel, expectedCardinality)
     withDriverPodAssertion(validator)
     withExecutorPodAssertion(validator)
+  }
+
+  /** Assert gang annotations on all pods seen across polls, without checking cardinality. Use for
+    * dynamic allocation where pods come and go with different cardinality values. Waits until at
+    * least expectedMinExecutors executor pods with valid annotations have been seen.
+    */
+  def assertGangJobForDynamic(
+      nodeUniformityLabel: String,
+      expectedMinExecutors: Int
+  ): E2ETestBuilder = {
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"gang annotations and env vars ($nodeUniformityLabel)",
+      pod => {
+        val annotations = pod.getMetadata.getAnnotations
+        annotations != null &&
+        Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
+        Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
+          .contains(nodeUniformityLabel) &&
+        hasGangEnvVars(nodeUniformityLabel)(pod)
+      },
+      expectedMinExecutors
+    )
+    this
   }
 
   /** Assert that executors have correct gang scheduling annotations (for client mode where driver
@@ -258,7 +399,9 @@ class E2ETestBuilder(testName: String) {
       sparkConfs = sparkConfs,
       assertions = assertions,
       failFastOnPodFailure = failFastOnPodFailure,
-      pythonScript = pythonScript
+      pythonScript = pythonScript,
+      appArgs = appArgs,
+      assertionPollInterval = assertionPollInterval
     )
   }
 
@@ -272,13 +415,15 @@ class E2ETestBuilder(testName: String) {
     this.sparkVersion = config.sparkVersion
     this.sparkConfs ++= config.sparkConfs
     this.failFastOnPodFailure = config.failFastOnPodFailure
+    this.appArgs = config.appArgs
     this
   }
 
   def run()(implicit orchestrator: TestOrchestrator): TestResult = {
     import scala.concurrent.Await
+    import TestConstants.RunTimeout
     val future = orchestrator.runTest(testName, build())
-    val result = Await.result(future, 5.minutes)
+    val result = Await.result(future, RunTimeout)
 
     assert(result.status == JobSetStatus.Success, s"Job failed with status: ${result.status}")
 

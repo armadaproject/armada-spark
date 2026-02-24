@@ -23,6 +23,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 
+import java.io.File
 import java.util.Properties
 import scala.concurrent.ExecutionContext.Implicits.global
 import TestConstants._
@@ -47,8 +48,14 @@ class ArmadaSparkE2E
 
   private var baseConfig: TestConfig = _
 
+  private val templateServer =
+    new TemplateFileServer(new File("src/test/resources/e2e/templates"))
+
   override def beforeAll(): Unit = {
     super.beforeAll()
+
+    val port = templateServer.start()
+    println(s"[TEMPLATE-SERVER] Started on port $port")
 
     val props = loadProperties()
 
@@ -135,6 +142,12 @@ class ArmadaSparkE2E
     )
   }
 
+  override def afterAll(): Unit = {
+    templateServer.stop()
+    println("[TEMPLATE-SERVER] Stopped")
+    super.afterAll()
+  }
+
   implicit val orch: TestOrchestrator = orchestrator
 
   private def loadProperties(): Properties = {
@@ -167,9 +180,6 @@ class ArmadaSparkE2E
     props
   }
 
-  private def templatePath(name: String): String =
-    s"src/test/resources/e2e/templates/$name"
-
   // ========================================================================
   // Base helper method
   // ========================================================================
@@ -178,6 +188,7 @@ class ArmadaSparkE2E
   private def baseSparkPiTest(
       testName: String,
       deployMode: String,
+      allocation: String,
       labels: Map[String, String] = Map.empty
   ): E2ETestBuilder = {
     val test = E2ETestBuilder(testName)
@@ -185,13 +196,33 @@ class ArmadaSparkE2E
       .withDeployMode(deployMode)
       .withPodLabels(labels)
 
-    if (deployMode == "cluster") {
+    val testWithModeSpecificAsserts = if (deployMode == "cluster") {
       test
         .assertDriverExists()
         .assertPodLabels(labels)
     } else {
       test
         .assertExecutorsHaveLabels(labels)
+    }
+
+    if (allocation == "dynamic") {
+      // Dynamic allocation uses 500 slices (vs 100 for static) to generate enough
+      // work to trigger executor scale-up. The higher workload causes OOMKilled with
+      // the default 510Mi memory, so we increase the container memory to 1Gi.
+      // spark.executor.memory (JVM heap) is set to 768m because Spark adds
+      // memoryOverhead (default min 384MiB) on top, and 768m + overhead fits in 1Gi.
+      testWithModeSpecificAsserts
+        .withAppArgs("500")
+        .withSparkConf(
+          Map(
+            "spark.executor.instances"             -> "1",
+            "spark.armada.executor.limit.memory"   -> "1Gi",
+            "spark.armada.executor.request.memory" -> "1Gi",
+            "spark.executor.memory"                -> "768m"
+          )
+        )
+    } else {
+      testWithModeSpecificAsserts
     }
   }
 
@@ -201,27 +232,39 @@ class ArmadaSparkE2E
 
   private def baseSparkPiGangTest(
       deployMode: String,
+      allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(
-      "basic-spark-pi-gang" + deployMode,
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"basic-spark-pi-gang-$suffix",
       deployMode,
+      allocation,
       Map("test-type" -> "basic-gang")
     )
       .withGangJob("armada-spark")
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
+
+    base.withAllocationMode(allocation, executorCount)
   }
 
   test("Basic SparkPi job with gang scheduling - staticCluster", E2ETest) {
-    baseSparkPiGangTest("cluster", 3)
+    baseSparkPiGangTest("cluster", "static", 3)
       .assertGangJob("armada-spark", 4) // 1 driver + 3 executors
       .run()
   }
 
   test("Basic SparkPi job with gang scheduling - staticClient", E2ETest) {
-    baseSparkPiGangTest("client", 3)
+    baseSparkPiGangTest("client", "static", 3)
       .assertExecutorGangJob("armada-spark", 3) // Only 3 executors, no driver
+      .run()
+  }
+
+  test("Basic SparkPi job with gang scheduling - dynamicCluster", E2ETest) {
+    baseSparkPiGangTest("cluster", "dynamic", 2)
+      .assertGangJobForDynamic(
+        "armada-spark",
+        3
+      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
       .run()
   }
 
@@ -231,26 +274,37 @@ class ArmadaSparkE2E
 
   private def baseNodeSelectorTest(
       deployMode: String,
+      allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest(
-      "spark-pi-node-selectors" + deployMode,
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"spark-pi-node-selectors-$suffix",
       deployMode,
+      allocation,
       Map("test-type" -> "node-selector")
     )
       .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
       .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+
+    val configured = base.withAllocationMode(allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
   }
 
   test("SparkPi job with node selectors - staticCluster", E2ETest) {
-    baseNodeSelectorTest("cluster", 2)
+    baseNodeSelectorTest("cluster", "static", 2)
       .run()
   }
 
   test("SparkPi job with node selectors - staticClient", E2ETest) {
-    baseNodeSelectorTest("client", 2)
+    baseNodeSelectorTest("client", "static", 2)
+      .run()
+  }
+
+  test("SparkPi job with node selectors - dynamicCluster", E2ETest) {
+    baseNodeSelectorTest("cluster", "dynamic", 2)
       .run()
   }
 
@@ -260,9 +314,16 @@ class ArmadaSparkE2E
 
   private def basePythonSparkPiTest(
       deployMode: String,
+      allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    baseSparkPiTest("python-spark-pi" + deployMode, deployMode, Map("test-type" -> "python"))
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"python-spark-pi-$suffix",
+      deployMode,
+      allocation,
+      Map("test-type" -> "python")
+    )
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
@@ -270,17 +331,25 @@ class ArmadaSparkE2E
           "spark.kubernetes.executor.disableConfigMap" -> "true"
         )
       )
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
+
+    val configured = base.withAllocationMode(allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
   }
 
   test("Basic python SparkPi job - staticCluster", E2ETest) {
-    basePythonSparkPiTest("cluster", 2)
+    basePythonSparkPiTest("cluster", "static", 2)
       .run()
   }
 
   test("Basic python SparkPi job - staticClient", E2ETest) {
-    basePythonSparkPiTest("client", 2)
+    basePythonSparkPiTest("client", "static", 2)
+      .run()
+  }
+
+  test("Basic python SparkPi job - dynamicCluster", E2ETest) {
+    basePythonSparkPiTest("cluster", "dynamic", 2)
       .run()
   }
 
@@ -288,36 +357,54 @@ class ArmadaSparkE2E
   // Template Tests
   // ========================================================================
 
+  private val templateLabels = Map(
+    "app"             -> "spark-pi",
+    "component"       -> "executor",
+    "template-source" -> "e2e-test"
+  )
+
+  private val templateAnnotations = Map(
+    "armada/component" -> "spark-executor",
+    "armada/template"  -> "spark-pi-executor"
+  )
+
   private def baseTemplateTest(
       deployMode: String,
+      allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
-    val builder =
-      baseSparkPiTest("spark-pi-templates" + deployMode, deployMode, Map("test-type" -> "template"))
-        .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+    val suffix = s"$allocation-$deployMode"
+    val base =
+      baseSparkPiTest(
+        s"spark-pi-templates-$suffix",
+        deployMode,
+        allocation,
+        Map("test-type" -> "template")
+      )
+        .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
         .withSparkConf(
           Map(
-            "spark.armada.driver.jobItemTemplate" -> templatePath("spark-pi-driver-template.yaml"),
-            "spark.armada.executor.jobItemTemplate" -> templatePath(
+            "spark.armada.driver.jobItemTemplate" -> templateServer.url(
+              "spark-pi-driver-template.yaml"
+            ),
+            "spark.armada.executor.jobItemTemplate" -> templateServer.url(
               "spark-pi-executor-template.yaml"
             )
           )
         )
+
+    val builder = if (allocation == "dynamic") {
+      base
+        .withStandardDynamicAllocation(executorCount)
+        .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
+    } else {
+      base
         .withExecutors(executorCount)
         .assertExecutorCount(executorCount)
-        .assertExecutorsHaveLabels(
-          Map(
-            "app"             -> "spark-pi",
-            "component"       -> "executor",
-            "template-source" -> "e2e-test"
-          )
-        )
-        .assertExecutorsHaveAnnotations(
-          Map(
-            "armada/component" -> "spark-executor",
-            "armada/template"  -> "spark-pi-executor"
-          )
-        )
+        .assertExecutorsHaveLabels(templateLabels)
+        .assertExecutorsHaveAnnotations(templateAnnotations)
+    }
 
     if (deployMode == "cluster") {
       builder
@@ -340,12 +427,17 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job using job templates - staticCluster", E2ETest) {
-    baseTemplateTest("cluster", 2)
+    baseTemplateTest("cluster", "static", 2)
       .run()
   }
 
   test("SparkPi job using job templates - staticClient", E2ETest) {
-    baseTemplateTest("client", 2)
+    baseTemplateTest("client", "static", 2)
+      .run()
+  }
+
+  test("SparkPi job using job templates - dynamicCluster", E2ETest) {
+    baseTemplateTest("cluster", "dynamic", 2)
       .run()
   }
 
@@ -355,6 +447,7 @@ class ArmadaSparkE2E
 
   private def baseFeatureStepTest(
       deployMode: String,
+      allocation: String,
       executorCount: Int
   ): E2ETestBuilder = {
     val featureSteps = if (deployMode == "cluster") {
@@ -370,24 +463,46 @@ class ArmadaSparkE2E
           "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
       )
     }
-    val builder = baseSparkPiTest(
-      "spark-pi-feature-steps" + deployMode,
+    val featureStepLabels = Map(
+      "feature-step"      -> "executor-applied",
+      "feature-step-role" -> "executor"
+    )
+
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"spark-pi-feature-steps-$suffix",
       deployMode,
+      allocation,
       Map("test-type" -> "feature-step")
     )
       .withSparkConf(featureSteps)
-      .withExecutors(executorCount)
-      .assertExecutorCount(executorCount)
-      .assertExecutorsHaveLabels(
-        Map(
-          "feature-step"      -> "executor-applied",
-          "feature-step-role" -> "executor"
+
+    val builder = if (allocation == "static") {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+        .assertExecutorsHaveLabels(featureStepLabels)
+        .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
+        .withExecutorPodAssertion { pod =>
+          Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+        }
+    } else {
+      base
+        .withStandardDynamicAllocation(executorCount)
+        .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(
+          Map("executor-feature-step" -> "configured"),
+          executorCount + 1
         )
-      )
-      .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
-      .withExecutorPodAssertion { pod =>
-        Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
-      }
+        .assertDynamicExecutorPod(
+          pod =>
+            Option(pod.getSpec.getActiveDeadlineSeconds)
+              .map(_.longValue)
+              .contains(1800L),
+          "activeDeadlineSeconds=1800",
+          executorCount + 1
+        )
+    }
 
     if (deployMode == "cluster") {
       builder
@@ -407,12 +522,17 @@ class ArmadaSparkE2E
   }
 
   test("SparkPi job with custom feature steps - staticCluster", E2ETest) {
-    baseFeatureStepTest("cluster", 2)
+    baseFeatureStepTest("cluster", "static", 2)
       .run()
   }
 
   test("SparkPi job with custom feature steps - staticClient", E2ETest) {
-    baseFeatureStepTest("client", 2)
+    baseFeatureStepTest("client", "static", 2)
+      .run()
+  }
+
+  test("SparkPi job with custom feature steps - dynamicCluster", E2ETest) {
+    baseFeatureStepTest("cluster", "dynamic", 2)
       .run()
   }
 
@@ -427,7 +547,7 @@ class ArmadaSparkE2E
   )
 
   private def baseIngressCLITest(executorCount: Int): E2ETestBuilder = {
-    baseSparkPiTest("spark-pi-ingress", "cluster", Map("test-type" -> "ingress"))
+    baseSparkPiTest("spark-pi-ingress", "cluster", "static", Map("test-type" -> "ingress"))
       .withDriverIngress(ingressAnnotations)
       .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
       .withExecutors(executorCount)
@@ -436,15 +556,20 @@ class ArmadaSparkE2E
   }
 
   private def baseIngressTemplateTest(executorCount: Int): E2ETestBuilder = {
-    baseSparkPiTest("spark-pi-ingress-template", "cluster", Map("test-type" -> "ingress-template"))
-      .withJobTemplate(templatePath("spark-pi-job-template.yaml"))
+    baseSparkPiTest(
+      "spark-pi-ingress-template",
+      "cluster",
+      "static",
+      Map("test-type" -> "ingress-template")
+    )
+      .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
       .withSparkConf(
         Map(
           "spark.armada.driver.ingress.enabled" -> "true",
-          "spark.armada.driver.jobItemTemplate" -> templatePath(
+          "spark.armada.driver.jobItemTemplate" -> templateServer.url(
             "spark-pi-driver-ingress-template.yaml"
           ),
-          "spark.armada.executor.jobItemTemplate" -> templatePath(
+          "spark.armada.executor.jobItemTemplate" -> templateServer.url(
             "spark-pi-executor-template.yaml"
           )
         )
