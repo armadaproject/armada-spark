@@ -38,6 +38,8 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
   */
 class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
+  private val THREAD_JOIN_TIMEOUT_MS = 10000L
+
   var backend: ArmadaClusterManagerBackend = _
   var sc: SparkContext                     = _
   var sparkConf: SparkConf                 = _
@@ -64,12 +66,8 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     }
   }
 
-  /** Ignores NullPointerException from removeExecutor when driverEndpoint is null in tests.
-    */
-  private def ignoreRpcErrors(block: => Unit): Unit = {
-    try { block }
-    catch { case _: NullPointerException => }
-  }
+  private def ignoreRpcErrors(block: => Unit): Unit =
+    ArmadaBackendTestUtils.ignoreRpcErrors(block)
 
   // ==================================================================
   // Terminal executor cannot be re-added to pending
@@ -135,6 +133,7 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
           while (!readerDone.get() && error.get() == null) {
             val pending = backend.getPendingExecutorCount
             pending should be >= 0
+            Thread.sleep(1)
           }
         } catch {
           case t: Throwable => error.compareAndSet(null, t)
@@ -146,10 +145,13 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     reader.start()
     latch.countDown()
 
-    terminator.join(10000)
-    reSubmitter.join(10000)
+    terminator.join(THREAD_JOIN_TIMEOUT_MS)
+    terminator.isAlive shouldBe false
+    reSubmitter.join(THREAD_JOIN_TIMEOUT_MS)
+    reSubmitter.isAlive shouldBe false
     readerDone.set(true)
-    reader.join(10000)
+    reader.join(THREAD_JOIN_TIMEOUT_MS)
+    reader.isAlive shouldBe false
 
     error.get() shouldBe null
 
@@ -199,8 +201,10 @@ class BackendContentionSuite extends AnyFunSuite with BeforeAndAfter with Matche
     thread2.start()
     latch.countDown()
 
-    thread1.join(10000)
-    thread2.join(10000)
+    thread1.join(THREAD_JOIN_TIMEOUT_MS)
+    thread1.isAlive shouldBe false
+    thread2.join(THREAD_JOIN_TIMEOUT_MS)
+    thread2.isAlive shouldBe false
 
     error.get() shouldBe null
 

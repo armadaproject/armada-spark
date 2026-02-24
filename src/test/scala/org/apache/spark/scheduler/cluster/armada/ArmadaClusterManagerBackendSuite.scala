@@ -75,11 +75,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
-  /** Ignores NullPointerException from removeExecutor when driverEndpoint is null in tests */
-  private def ignoreRpcErrors(block: => Unit): Unit = {
-    try { block }
-    catch { case _: NullPointerException => }
-  }
+  private def ignoreRpcErrors(block: => Unit): Unit =
+    ArmadaBackendTestUtils.ignoreRpcErrors(block)
 
   test("recordExecutor returns same ID for duplicate job") {
     val id1 = backend.recordExecutor("job-123")
@@ -224,30 +221,37 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
   }
 
   test("pending executor lifecycle - submit to running") {
+    val executorService = Executors.newScheduledThreadPool(1)
     val testableBackend = new TestableArmadaClusterManagerBackend(
       taskScheduler,
       sc,
-      Executors.newScheduledThreadPool(1),
+      executorService,
       "armada://localhost:50051"
     )
 
-    val jobId = "job-lifecycle-test"
+    try {
+      val jobId = "job-lifecycle-test"
 
-    testableBackend.getPendingExecutorCount shouldBe 0
+      testableBackend.getPendingExecutorCount shouldBe 0
 
-    // Submit executor - should be added to pending
-    testableBackend.onExecutorSubmitted(jobId)
-    testableBackend.getPendingExecutorCount shouldBe 1
+      // Submit executor - should be added to pending
+      testableBackend.onExecutorSubmitted(jobId)
+      testableBackend.getPendingExecutorCount shouldBe 1
 
-    val execId = testableBackend.recordExecutor(jobId)
+      val execId = testableBackend.recordExecutor(jobId)
 
-    // Mark as running - executor stays in pending until it registers with Spark
-    testableBackend.onExecutorRunning(jobId, execId)
-    testableBackend.getPendingExecutorCount shouldBe 1
+      // Mark as running - executor stays in pending until it registers with Spark
+      testableBackend.onExecutorRunning(jobId, execId)
+      testableBackend.getPendingExecutorCount shouldBe 1
 
-    testableBackend.simulateExecutorRegistration(execId)
+      testableBackend.simulateExecutorRegistration(execId)
 
-    testableBackend.getPendingExecutorCount shouldBe 0
+      testableBackend.getPendingExecutorCount shouldBe 0
+    } finally {
+      try { testableBackend.stop() }
+      catch { case NonFatal(_) => }
+      executorService.shutdownNow()
+    }
   }
 
   // Use multiple threads to terminate half the jobs, then confirm the number
@@ -287,6 +291,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       testRegisteredExecutors += executorId
     }
 
+    // in real life, super.getExecutorIds() would be used here, but that
+    // isn't being used in this test
     override def getExecutorIds(): Seq[String] = synchronized {
       testRegisteredExecutors.toSeq
     }

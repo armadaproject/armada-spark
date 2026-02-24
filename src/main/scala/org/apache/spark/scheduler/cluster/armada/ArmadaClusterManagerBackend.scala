@@ -121,10 +121,6 @@ private[spark] class ArmadaClusterManagerBackend(
   private val terminalExecutors: java.util.Set[String] =
     ConcurrentHashMap.newKeySet[String]()
 
-  // Lock ordering (acquire in this order to prevent deadlocks):
-  //   1. this (backend)   — guards getExecutorIds() via parent class
-  //   2. pendingExecutors — guards the pendingExecutors HashSet
-
   /** Initial executor count */
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
@@ -544,6 +540,10 @@ private[spark] class ArmadaClusterManagerBackend(
 
   // ========================================================================
   // PENDING EXECUTORS MANAGEMENT
+  //
+  // Lock ordering (acquire in this order to prevent deadlocks):
+  //   1. this (backend)   — guards getExecutorIds() via parent class
+  //   2. pendingExecutors — guards the pendingExecutors HashSet
   // ========================================================================
 
   /** Returns a consistent snapshot of (activeExecutorCount, pendingExecutorCount). Both values are
