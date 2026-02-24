@@ -17,7 +17,7 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import java.util.concurrent.{ConcurrentHashMap, ScheduledExecutorService, TimeUnit}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -43,6 +43,7 @@ import org.apache.spark.scheduler.{
   TaskSchedulerImpl
 }
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.k8s.GenerateExecID
 import org.apache.spark.util.{ThreadUtils, Utils}
 
@@ -107,6 +108,8 @@ private[spark] class ArmadaClusterManagerBackend(
   // ========================================================================
 
   private val execIdCounter = new AtomicInteger(0)
+
+  private val gangAttributesCaptured = new AtomicBoolean(false)
 
   /** Maps Spark executor ID to Armada job ID */
   private val executorToJobId = new ConcurrentHashMap[String, String]()
@@ -602,6 +605,27 @@ private[spark] class ArmadaClusterManagerBackend(
     safeRemoveExecutor(executorId, exitReason)
   }
 
+  /** Capture gang node selector from the first executor's attributes.
+    *
+    * In dynamic client mode the driver runs outside the cluster and lacks ARMADA_GANG_* env vars.
+    * Executors forward these via SPARK_EXECUTOR_ATTRIBUTE_* prefix (stripped by Spark before
+    * delivery). We store the values in SparkConf so that subsequent executor allocations can use
+    * them as node selectors.
+    */
+  private[armada] def captureGangAttributes(attributes: Map[String, String]): Unit = {
+    if (!gangAttributesCaptured.get()) {
+      val labelName  = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+      val labelValue = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+      if (labelName.nonEmpty && gangAttributesCaptured.compareAndSet(false, true)) {
+        conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
+        conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
+        logInfo(
+          s"Captured gang node selector from executor attributes: $labelName=$labelValue"
+        )
+      }
+    }
+  }
+
   // ========================================================================
   // CUSTOM DRIVER ENDPOINT
   // ========================================================================
@@ -628,8 +652,23 @@ private[spark] class ArmadaClusterManagerBackend(
         logDebug(s"Assigned executor ID $newId to Armada job $jobId")
     }
 
+    /** Message handler chain, tried in order:
+      *   1. gangInterceptor — intercepts RegisterExecutor to capture gang node selector attributes,
+      *      then delegates to super for the actual executor registration.
+      *   2. generateExecID — handles the custom GenerateExecID message.
+      *   3. super — handles all other standard Spark driver endpoint messages.
+      *
+      * @see
+      *   org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
+      */
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
-      generateExecID(context)
+      val gangInterceptor: PartialFunction[Any, Unit] = {
+        case msg @ RegisterExecutor(_, _, _, _, _, attributes, _, _) =>
+          captureGangAttributes(attributes)
+          super.receiveAndReply(context)(msg)
+      }
+      gangInterceptor
+        .orElse(generateExecID(context))
         .orElse(super.receiveAndReply(context))
     }
 

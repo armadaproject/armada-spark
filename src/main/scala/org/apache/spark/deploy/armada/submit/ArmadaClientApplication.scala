@@ -34,6 +34,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_REQUEST_CORES,
   ARMADA_EXECUTOR_REQUEST_MEMORY,
   ARMADA_HEALTH_CHECK_TIMEOUT,
+  ARMADA_INTERNAL_GANG_NODE_LABEL_NAME,
+  ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
   ARMADA_JOB_QUEUE,
@@ -1258,8 +1260,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
       .withNodeSelector(
         if (resolvedConfig.nodeSelectors.nonEmpty)
-          resolvedConfig.nodeSelectors ++ getGangNodeSelector
-        else currentPodSpec.nodeSelector ++ getGangNodeSelector
+          resolvedConfig.nodeSelectors ++ getGangNodeSelector(conf)
+        else currentPodSpec.nodeSelector ++ getGangNodeSelector(conf)
       )
 
     JobSubmitRequestItem(
@@ -1286,11 +1288,14 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     )
   }
 
-  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
-  // node should be selected
-  private def getGangNodeSelector = {
-    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
-    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+  // Gang node selector for constraining subsequent executors to the same cluster as
+  // the initial gang. Values arrive via executor attributes: executors forward
+  // ARMADA_GANG_* env vars as SPARK_EXECUTOR_ATTRIBUTE_* during registration, and the
+  // driver stores them in SparkConf (see ArmadaClusterManagerBackend.captureGangAttributes).
+  // The initial gang does not need node selectors — Armada's gang annotations handle that.
+  private[submit] def getGangNodeSelector(conf: SparkConf) = {
+    val nodeLabel = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME).getOrElse("")
+    val nodeValue = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE).getOrElse("")
     if (nodeLabel.nonEmpty)
       Map(nodeLabel -> nodeValue)
     else Map.empty

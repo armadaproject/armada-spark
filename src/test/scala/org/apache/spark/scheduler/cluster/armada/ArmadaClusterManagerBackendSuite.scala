@@ -278,6 +278,57 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     backend.getActiveExecutorIds.size shouldBe numJobs / 2
   }
 
+  // ========================================================================
+  // captureGangAttributes tests
+  // ========================================================================
+
+  test("captureGangAttributes stores values in SparkConf") {
+    val attributes = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
+    )
+
+    backend.captureGangAttributes(attributes)
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe
+      Some("topology.kubernetes.io/zone")
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelValue") shouldBe
+      Some("us-east-1a")
+  }
+
+  test("captureGangAttributes only captures from the first executor") {
+    val first = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "zone-label",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "zone-a"
+    )
+    val second = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "zone-label",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "zone-b"
+    )
+
+    backend.captureGangAttributes(first)
+    backend.captureGangAttributes(second)
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelValue") shouldBe Some("zone-a")
+  }
+
+  test("captureGangAttributes ignores empty label name") {
+    val attributes = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "some-value"
+    )
+
+    backend.captureGangAttributes(attributes)
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
+  }
+
+  test("captureGangAttributes ignores missing attributes") {
+    backend.captureGangAttributes(Map("UNRELATED_KEY" -> "value"))
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
+  }
+
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,
       sc: SparkContext,
