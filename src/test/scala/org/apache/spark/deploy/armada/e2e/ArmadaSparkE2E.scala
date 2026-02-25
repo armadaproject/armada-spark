@@ -263,8 +263,9 @@ class ArmadaSparkE2E
     baseSparkPiGangTest("cluster", "dynamic", 2)
       .assertGangJobForDynamic(
         "armada-spark",
-        3
-      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
+        expectedMinExecutors = 3, // at least 3 pods (2 initial + 1 scaled) with gang annotations
+        initialExecutors = 2      // initial gang batch must also have Armada-injected env vars
+      )
       .run()
   }
 
@@ -272,8 +273,9 @@ class ArmadaSparkE2E
     baseSparkPiGangTest("client", "dynamic", 2)
       .assertGangJobForDynamic(
         "armada-spark",
-        3
-      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
+        expectedMinExecutors = 3, // at least 3 pods (2 initial + 1 scaled) with gang annotations
+        initialExecutors = 2      // initial gang batch must also have Armada-injected env vars
+      )
       .run()
   }
 

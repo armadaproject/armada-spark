@@ -354,23 +354,32 @@ class E2ETestBuilder(testName: String) {
     withExecutorPodAssertion(validator)
   }
 
-  /** Assert gang annotations on all pods seen across polls, without checking cardinality. Use for
-    * dynamic allocation where pods come and go with different cardinality values. Waits until at
-    * least expectedMinExecutors executor pods with valid annotations have been seen.
+  /** Assert gang scheduling for dynamic allocation. Adds two tracking assertions:
+    *   1. At least `initialExecutors` pods have gang annotations AND Armada-injected env vars (the
+    *      initial gang batch where Armada sets ARMADA_GANG_* env vars)
+    *   2. At least `expectedMinExecutors` pods have gang annotations (includes scale-up executors
+    *      that get node selectors instead of env vars)
     */
   def assertGangJobForDynamic(
       nodeUniformityLabel: String,
-      expectedMinExecutors: Int
+      expectedMinExecutors: Int,
+      initialExecutors: Int
   ): E2ETestBuilder = {
+    // Initial gang executors must have Armada-injected env vars
     assertions :+= new DynamicExecutorTrackingAssertion(
-      s"gang annotations and env vars ($nodeUniformityLabel)",
+      s"gang env vars ($nodeUniformityLabel)",
+      hasGangEnvVars(nodeUniformityLabel),
+      initialExecutors
+    )
+    // All executors (initial + scale-up) must have gang annotations
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"gang annotations ($nodeUniformityLabel)",
       pod => {
         val annotations = pod.getMetadata.getAnnotations
         annotations != null &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-          .contains(nodeUniformityLabel) &&
-        hasGangEnvVars(nodeUniformityLabel)(pod)
+          .contains(nodeUniformityLabel)
       },
       expectedMinExecutors
     )
