@@ -572,6 +572,37 @@ private[spark] class ArmadaClusterManagerBackend(
     */
   private[armada] def getPendingExecutorCount: Int = getExecutorCounts._2
 
+  /** Check if it's safe to allocate more executors.
+    *
+    * In dynamic client mode with nodeUniformity configured, we must wait for the initial executors
+    * to register and send their gang attributes before allocating more. Otherwise, scale-up
+    * executors may land on a different cluster than the initial gang.
+    *
+    * @return
+    *   true if we can allocate, false if we should wait for gang attributes to be captured
+    */
+  private[armada] def isReadyToAllocateMore: Boolean = {
+    val nodeUniformityConfigured = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).isDefined
+    val isClusterMode            = sys.env.contains("ARMADA_JOB_SET_ID")
+
+    if (!nodeUniformityConfigured) {
+      // No gang scheduling, always ready
+      true
+    } else if (isClusterMode) {
+      // Cluster mode: gang attributes seeded from env vars at startup
+      true
+    } else {
+      // Client mode with nodeUniformity: wait for gang attributes from first executor
+      val ready = gangAttributesCaptured.get()
+      if (!ready) {
+        logDebug(
+          "Waiting for gang attributes to be captured from initial executor before allocating more"
+        )
+      }
+      ready
+    }
+  }
+
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
   private[armada] def onArmadaPreempting(jobId: String): Unit = {
