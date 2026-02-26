@@ -666,12 +666,14 @@ private[spark] class ArmadaClusterManagerBackend(
     if (!gangAttributesCaptured.get()) {
       val labelName  = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
       val labelValue = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
-      if (labelName.nonEmpty && gangAttributesCaptured.compareAndSet(false, true)) {
+      if (labelName.nonEmpty) {
         conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
         conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
-        logInfo(
-          s"Captured gang node selector from executor attributes: $labelName=$labelValue"
-        )
+        if (gangAttributesCaptured.compareAndSet(false, true)) {
+          logInfo(
+            s"Captured gang node selector from executor attributes: $labelName=$labelValue"
+          )
+        }
       }
     }
   }
