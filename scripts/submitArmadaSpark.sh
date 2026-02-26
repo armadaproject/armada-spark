@@ -79,6 +79,7 @@ else
         --conf spark.decommission.enabled=true
         --conf spark.storage.decommission.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
+        --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
     )
 fi
 
