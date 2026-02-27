@@ -145,6 +145,8 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Executor allocation manager */
   private var executorAllocator: Option[ArmadaExecutorAllocator] = None
 
+  private lazy val modeHelper = DeploymentModeHelper(conf)
+
   override def applicationId(): String = {
     conf.getAppId
   }
@@ -164,7 +166,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val modeHelper  = DeploymentModeHelper(conf)
+    val modeHelper  = this.modeHelper
     val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
@@ -193,7 +195,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
           // proactively request executors in static client mode only
           // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
-          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
+          val isClusterModeEnvCheck = modeHelper.isDriverInCluster
           val shouldProactivelyRequest =
             !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
 
@@ -583,7 +585,7 @@ private[spark] class ArmadaClusterManagerBackend(
     */
   private[armada] def isReadyToAllocateMore: Boolean = {
     val nodeUniformityConfigured = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).isDefined
-    val isClusterMode            = sys.env.contains("ARMADA_JOB_SET_ID")
+    val isClusterMode            = modeHelper.isDriverInCluster
 
     if (!nodeUniformityConfigured) {
       // No gang scheduling, always ready
@@ -646,12 +648,11 @@ private[spark] class ArmadaClusterManagerBackend(
     * subsequent executor allocations. If the env vars are absent (client mode), this is a no-op.
     */
   private[armada] def seedGangAttributesFromEnv(): Unit = {
-    val envVars = Map(
-      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME" -> sys.env
-        .getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", ""),
-      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> sys.env
-        .getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    val gangEnvKeys = Seq(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE"
     )
+    val envVars = gangEnvKeys.map(k => k -> sys.env.getOrElse(k, "")).toMap
     captureGangAttributes(envVars)
   }
 
@@ -663,18 +664,15 @@ private[spark] class ArmadaClusterManagerBackend(
     * them as node selectors.
     */
   private[armada] def captureGangAttributes(attributes: Map[String, String]): Unit = {
-    if (!gangAttributesCaptured.get()) {
-      val labelName  = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
-      val labelValue = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
-      if (labelName.nonEmpty) {
-        conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
-        conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
-        if (gangAttributesCaptured.compareAndSet(false, true)) {
-          logInfo(
-            s"Captured gang node selector from executor attributes: $labelName=$labelValue"
-          )
-        }
-      }
+    if (gangAttributesCaptured.get()) return
+    val labelName  = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+    val labelValue = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    if (labelName.nonEmpty && gangAttributesCaptured.compareAndSet(false, true)) {
+      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
+      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
+      logInfo(
+        s"Captured gang node selector from executor attributes: $labelName=$labelValue"
+      )
     }
   }
 

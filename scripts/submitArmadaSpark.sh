@@ -42,6 +42,7 @@ DISABLE_CONFIG_MAP=true
 # Set memory limits
 EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
 DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
+ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then

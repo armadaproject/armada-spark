@@ -330,6 +330,10 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
   }
 
   test("seedGangAttributesFromEnv is a no-op when env vars are absent") {
+    assume(
+      !sys.env.contains("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"),
+      "Test requires ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME to not be set in the environment"
+    )
     backend.seedGangAttributesFromEnv()
 
     sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
@@ -349,6 +353,39 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     sparkConf.getOption("spark.armada.internal.gangNodeLabelValue") shouldBe
       Some("us-east-1a")
   }
+
+  // ========================================================================
+  // isReadyToAllocateMore tests
+  // ========================================================================
+
+  test("isReadyToAllocateMore returns true when nodeUniformity is not configured") {
+    backend.isReadyToAllocateMore shouldBe true
+  }
+
+  test("isReadyToAllocateMore returns false in client mode before gang attributes captured") {
+    sparkConf.set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+    sparkConf.set("spark.submit.deployMode", "client")
+
+    backend.isReadyToAllocateMore shouldBe false
+  }
+
+  test("isReadyToAllocateMore returns true in client mode after gang attributes captured") {
+    sparkConf.set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+    sparkConf.set("spark.submit.deployMode", "client")
+
+    val attributes = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
+    )
+    backend.captureGangAttributes(attributes)
+
+    backend.isReadyToAllocateMore shouldBe true
+  }
+
+  // Note: We do not test the cluster-mode branch of isReadyToAllocateMore here
+  // because it depends on DeploymentModeHelper.isDriverInCluster, which checks
+  // sys.env for SPARK_DRIVER_URL. Mocking sys.env in a unit test is fragile and
+  // not worth the complexity; the cluster-mode path is covered by e2e tests.
 
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,

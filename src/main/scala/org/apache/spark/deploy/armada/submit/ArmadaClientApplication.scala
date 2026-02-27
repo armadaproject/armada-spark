@@ -1306,7 +1306,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private[submit] def getGangNodeSelector(conf: SparkConf) = {
     val nodeLabel = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME).getOrElse("")
     val nodeValue = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE).getOrElse("")
-    if (nodeLabel.nonEmpty)
+    if (nodeLabel.nonEmpty && nodeValue.nonEmpty)
       Map(nodeLabel -> nodeValue)
     else Map.empty
   }
