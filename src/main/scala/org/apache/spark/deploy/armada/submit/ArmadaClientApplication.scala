@@ -427,7 +427,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // If gang attributes are already captured, skip gang scheduling for scale-up executors.
     // They only need the nodeSelector (from getGangNodeSelector) to land on the same cluster.
     // This avoids unnecessary gang scheduling overhead for subsequent batches.
-    val gangAttributesCaptured = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME).exists(_.nonEmpty)
+    val gangAttributesCaptured = getGangNodeSelector(conf).nonEmpty
     val cardinality            = if (gangAttributesCaptured) 0 else executorCount
 
     submitExecutorJobs(
