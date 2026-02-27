@@ -193,9 +193,9 @@ private[spark] class ArmadaClusterManagerBackend(
 
           createAllocator(q, jsId, client)
 
+          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
+
           // proactively request executors in static client mode only
-          // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
-          val isClusterModeEnvCheck = modeHelper.isDriverInCluster
           val shouldProactivelyRequest =
             !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
 
@@ -585,7 +585,7 @@ private[spark] class ArmadaClusterManagerBackend(
     */
   private[armada] def isReadyToAllocateMore: Boolean = {
     val nodeUniformityConfigured = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).isDefined
-    val isClusterMode            = modeHelper.isDriverInCluster
+    val isClusterMode            = sys.env.contains("ARMADA_JOB_SET_ID")
 
     if (!nodeUniformityConfigured) {
       // No gang scheduling, always ready

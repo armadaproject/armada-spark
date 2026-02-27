@@ -383,9 +383,9 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
   }
 
   // Note: We do not test the cluster-mode branch of isReadyToAllocateMore here
-  // because it depends on DeploymentModeHelper.isDriverInCluster, which checks
-  // sys.env for SPARK_DRIVER_URL. Mocking sys.env in a unit test is fragile and
-  // not worth the complexity; the cluster-mode path is covered by e2e tests.
+  // because it depends on sys.env.contains("ARMADA_JOB_SET_ID"), which is only
+  // set in cluster-mode driver pods. Mocking sys.env in a unit test is fragile
+  // and not worth the complexity; the cluster-mode path is covered by e2e tests.
 
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,
