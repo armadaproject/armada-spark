@@ -271,322 +271,322 @@ class ArmadaSparkE2E
       .run()
   }
 
-  // // ========================================================================
-  // // Node Selector Tests
-  // // ========================================================================
+  // ========================================================================
+  // Node Selector Tests
+  // ========================================================================
 
-  // private def baseNodeSelectorTest(
-  //     deployMode: String,
-  //     allocation: String,
-  //     executorCount: Int
-  // ): E2ETestBuilder = {
-  //   val suffix = s"$allocation-$deployMode"
-  //   val base = baseSparkPiTest(
-  //     s"spark-pi-node-selectors-$suffix",
-  //     deployMode,
-  //     allocation,
-  //     Map("test-type" -> "node-selector")
-  //   )
-  //     .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
-  //     .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+  private def baseNodeSelectorTest(
+      deployMode: String,
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"spark-pi-node-selectors-$suffix",
+      deployMode,
+      allocation,
+      Map("test-type" -> "node-selector")
+    )
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
 
-  //   val configured = base.withAllocationMode(allocation, executorCount)
-  //   if (allocation == "dynamic")
-  //     configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
-  //   else configured
-  // }
+    val configured = base.withAllocationMode(allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
+  }
 
-  // test("SparkPi job with node selectors - staticCluster", E2ETest) {
-  //   baseNodeSelectorTest("cluster", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job with node selectors - staticCluster", E2ETest) {
+    baseNodeSelectorTest("cluster", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job with node selectors - staticClient", E2ETest) {
-  //   baseNodeSelectorTest("client", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job with node selectors - staticClient", E2ETest) {
+    baseNodeSelectorTest("client", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job with node selectors - dynamicCluster", E2ETest) {
-  //   baseNodeSelectorTest("cluster", "dynamic", 2)
-  //     .run()
-  // }
+  test("SparkPi job with node selectors - dynamicCluster", E2ETest) {
+    baseNodeSelectorTest("cluster", "dynamic", 2)
+      .run()
+  }
 
-  // // ========================================================================
-  // // Python Tests
-  // // ========================================================================
+  // ========================================================================
+  // Python Tests
+  // ========================================================================
 
-  // private def basePythonSparkPiTest(
-  //     deployMode: String,
-  //     allocation: String,
-  //     executorCount: Int
-  // ): E2ETestBuilder = {
-  //   val suffix = s"$allocation-$deployMode"
-  //   val base = baseSparkPiTest(
-  //     s"python-spark-pi-$suffix",
-  //     deployMode,
-  //     allocation,
-  //     Map("test-type" -> "python")
-  //   )
-  //     .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
-  //     .withSparkConf(
-  //       Map(
-  //         "spark.kubernetes.file.upload.path"          -> "/tmp",
-  //         "spark.kubernetes.executor.disableConfigMap" -> "true"
-  //       )
-  //     )
+  private def basePythonSparkPiTest(
+      deployMode: String,
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"python-spark-pi-$suffix",
+      deployMode,
+      allocation,
+      Map("test-type" -> "python")
+    )
+      .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
+      .withSparkConf(
+        Map(
+          "spark.kubernetes.file.upload.path"          -> "/tmp",
+          "spark.kubernetes.executor.disableConfigMap" -> "true"
+        )
+      )
 
-  //   val configured = base.withAllocationMode(allocation, executorCount)
-  //   if (allocation == "dynamic")
-  //     configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
-  //   else configured
-  // }
+    val configured = base.withAllocationMode(allocation, executorCount)
+    if (allocation == "dynamic")
+      configured.assertExecutorCountMaxReachedAtLeast(executorCount + 1)
+    else configured
+  }
 
-  // test("Basic python SparkPi job - staticCluster", E2ETest) {
-  //   basePythonSparkPiTest("cluster", "static", 2)
-  //     .run()
-  // }
+  test("Basic python SparkPi job - staticCluster", E2ETest) {
+    basePythonSparkPiTest("cluster", "static", 2)
+      .run()
+  }
 
-  // test("Basic python SparkPi job - staticClient", E2ETest) {
-  //   basePythonSparkPiTest("client", "static", 2)
-  //     .run()
-  // }
+  test("Basic python SparkPi job - staticClient", E2ETest) {
+    basePythonSparkPiTest("client", "static", 2)
+      .run()
+  }
 
-  // test("Basic python SparkPi job - dynamicCluster", E2ETest) {
-  //   basePythonSparkPiTest("cluster", "dynamic", 2)
-  //     .run()
-  // }
+  test("Basic python SparkPi job - dynamicCluster", E2ETest) {
+    basePythonSparkPiTest("cluster", "dynamic", 2)
+      .run()
+  }
 
-  // // ========================================================================
-  // // Template Tests
-  // // ========================================================================
+  // ========================================================================
+  // Template Tests
+  // ========================================================================
 
-  // private val templateLabels = Map(
-  //   "app"             -> "spark-pi",
-  //   "component"       -> "executor",
-  //   "template-source" -> "e2e-test"
-  // )
+  private val templateLabels = Map(
+    "app"             -> "spark-pi",
+    "component"       -> "executor",
+    "template-source" -> "e2e-test"
+  )
 
-  // private val templateAnnotations = Map(
-  //   "armada/component" -> "spark-executor",
-  //   "armada/template"  -> "spark-pi-executor"
-  // )
+  private val templateAnnotations = Map(
+    "armada/component" -> "spark-executor",
+    "armada/template"  -> "spark-pi-executor"
+  )
 
-  // private def baseTemplateTest(
-  //     deployMode: String,
-  //     allocation: String,
-  //     executorCount: Int
-  // ): E2ETestBuilder = {
-  //   val suffix = s"$allocation-$deployMode"
-  //   val base =
-  //     baseSparkPiTest(
-  //       s"spark-pi-templates-$suffix",
-  //       deployMode,
-  //       allocation,
-  //       Map("test-type" -> "template")
-  //     )
-  //       .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
-  //       .withSparkConf(
-  //         Map(
-  //           "spark.armada.driver.jobItemTemplate" -> templateServer.url(
-  //             "spark-pi-driver-template.yaml"
-  //           ),
-  //           "spark.armada.executor.jobItemTemplate" -> templateServer.url(
-  //             "spark-pi-executor-template.yaml"
-  //           )
-  //         )
-  //       )
+  private def baseTemplateTest(
+      deployMode: String,
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    val suffix = s"$allocation-$deployMode"
+    val base =
+      baseSparkPiTest(
+        s"spark-pi-templates-$suffix",
+        deployMode,
+        allocation,
+        Map("test-type" -> "template")
+      )
+        .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
+        .withSparkConf(
+          Map(
+            "spark.armada.driver.jobItemTemplate" -> templateServer.url(
+              "spark-pi-driver-template.yaml"
+            ),
+            "spark.armada.executor.jobItemTemplate" -> templateServer.url(
+              "spark-pi-executor-template.yaml"
+            )
+          )
+        )
 
-  //   val builder = if (allocation == "dynamic") {
-  //     base
-  //       .withStandardDynamicAllocation(executorCount)
-  //       .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
-  //       .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
-  //   } else {
-  //     base
-  //       .withExecutors(executorCount)
-  //       .assertExecutorCount(executorCount)
-  //       .assertExecutorsHaveLabels(templateLabels)
-  //       .assertExecutorsHaveAnnotations(templateAnnotations)
-  //   }
+    val builder = if (allocation == "dynamic") {
+      base
+        .withStandardDynamicAllocation(executorCount)
+        .assertDynamicExecutorsHaveLabels(templateLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(templateAnnotations, executorCount + 1)
+    } else {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+        .assertExecutorsHaveLabels(templateLabels)
+        .assertExecutorsHaveAnnotations(templateAnnotations)
+    }
 
-  //   if (deployMode == "cluster") {
-  //     builder
-  //       .assertDriverHasLabels(
-  //         Map(
-  //           "app"             -> "spark-pi",
-  //           "component"       -> "driver",
-  //           "template-source" -> "e2e-test"
-  //         )
-  //       )
-  //       .assertDriverHasAnnotations(
-  //         Map(
-  //           "armada/component" -> "spark-driver",
-  //           "armada/template"  -> "spark-pi-driver"
-  //         )
-  //       )
-  //   } else {
-  //     builder
-  //   }
-  // }
+    if (deployMode == "cluster") {
+      builder
+        .assertDriverHasLabels(
+          Map(
+            "app"             -> "spark-pi",
+            "component"       -> "driver",
+            "template-source" -> "e2e-test"
+          )
+        )
+        .assertDriverHasAnnotations(
+          Map(
+            "armada/component" -> "spark-driver",
+            "armada/template"  -> "spark-pi-driver"
+          )
+        )
+    } else {
+      builder
+    }
+  }
 
-  // test("SparkPi job using job templates - staticCluster", E2ETest) {
-  //   baseTemplateTest("cluster", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job using job templates - staticCluster", E2ETest) {
+    baseTemplateTest("cluster", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job using job templates - staticClient", E2ETest) {
-  //   baseTemplateTest("client", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job using job templates - staticClient", E2ETest) {
+    baseTemplateTest("client", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job using job templates - dynamicCluster", E2ETest) {
-  //   baseTemplateTest("cluster", "dynamic", 2)
-  //     .run()
-  // }
+  test("SparkPi job using job templates - dynamicCluster", E2ETest) {
+    baseTemplateTest("cluster", "dynamic", 2)
+      .run()
+  }
 
-  // // ========================================================================
-  // // Feature Step Tests
-  // // ========================================================================
+  // ========================================================================
+  // Feature Step Tests
+  // ========================================================================
 
-  // private def baseFeatureStepTest(
-  //     deployMode: String,
-  //     allocation: String,
-  //     executorCount: Int
-  // ): E2ETestBuilder = {
-  //   val featureSteps = if (deployMode == "cluster") {
-  //     Map(
-  //       "spark.kubernetes.driver.pod.featureSteps" ->
-  //         "org.apache.spark.deploy.armada.e2e.featurestep.DriverFeatureStep",
-  //       "spark.kubernetes.executor.pod.featureSteps" ->
-  //         "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
-  //     )
-  //   } else {
-  //     Map(
-  //       "spark.kubernetes.executor.pod.featureSteps" ->
-  //         "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
-  //     )
-  //   }
-  //   val featureStepLabels = Map(
-  //     "feature-step"      -> "executor-applied",
-  //     "feature-step-role" -> "executor"
-  //   )
+  private def baseFeatureStepTest(
+      deployMode: String,
+      allocation: String,
+      executorCount: Int
+  ): E2ETestBuilder = {
+    val featureSteps = if (deployMode == "cluster") {
+      Map(
+        "spark.kubernetes.driver.pod.featureSteps" ->
+          "org.apache.spark.deploy.armada.e2e.featurestep.DriverFeatureStep",
+        "spark.kubernetes.executor.pod.featureSteps" ->
+          "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
+      )
+    } else {
+      Map(
+        "spark.kubernetes.executor.pod.featureSteps" ->
+          "org.apache.spark.deploy.armada.e2e.featurestep.ExecutorFeatureStep"
+      )
+    }
+    val featureStepLabels = Map(
+      "feature-step"      -> "executor-applied",
+      "feature-step-role" -> "executor"
+    )
 
-  //   val suffix = s"$allocation-$deployMode"
-  //   val base = baseSparkPiTest(
-  //     s"spark-pi-feature-steps-$suffix",
-  //     deployMode,
-  //     allocation,
-  //     Map("test-type" -> "feature-step")
-  //   )
-  //     .withSparkConf(featureSteps)
+    val suffix = s"$allocation-$deployMode"
+    val base = baseSparkPiTest(
+      s"spark-pi-feature-steps-$suffix",
+      deployMode,
+      allocation,
+      Map("test-type" -> "feature-step")
+    )
+      .withSparkConf(featureSteps)
 
-  //   val builder = if (allocation == "static") {
-  //     base
-  //       .withExecutors(executorCount)
-  //       .assertExecutorCount(executorCount)
-  //       .assertExecutorsHaveLabels(featureStepLabels)
-  //       .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
-  //       .withExecutorPodAssertion { pod =>
-  //         Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
-  //       }
-  //   } else {
-  //     base
-  //       .withStandardDynamicAllocation(executorCount)
-  //       .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
-  //       .assertDynamicExecutorsHaveAnnotations(
-  //         Map("executor-feature-step" -> "configured"),
-  //         executorCount + 1
-  //       )
-  //       .assertDynamicExecutorPod(
-  //         pod =>
-  //           Option(pod.getSpec.getActiveDeadlineSeconds)
-  //             .map(_.longValue)
-  //             .contains(1800L),
-  //         "activeDeadlineSeconds=1800",
-  //         executorCount + 1
-  //       )
-  //   }
+    val builder = if (allocation == "static") {
+      base
+        .withExecutors(executorCount)
+        .assertExecutorCount(executorCount)
+        .assertExecutorsHaveLabels(featureStepLabels)
+        .assertExecutorsHaveAnnotation("executor-feature-step", "configured")
+        .withExecutorPodAssertion { pod =>
+          Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(1800L)
+        }
+    } else {
+      base
+        .withStandardDynamicAllocation(executorCount)
+        .assertDynamicExecutorsHaveLabels(featureStepLabels, executorCount + 1)
+        .assertDynamicExecutorsHaveAnnotations(
+          Map("executor-feature-step" -> "configured"),
+          executorCount + 1
+        )
+        .assertDynamicExecutorPod(
+          pod =>
+            Option(pod.getSpec.getActiveDeadlineSeconds)
+              .map(_.longValue)
+              .contains(1800L),
+          "activeDeadlineSeconds=1800",
+          executorCount + 1
+        )
+    }
 
-  //   if (deployMode == "cluster") {
-  //     builder
-  //       .assertDriverHasLabels(
-  //         Map(
-  //           "feature-step"      -> "driver-applied",
-  //           "feature-step-role" -> "driver"
-  //         )
-  //       )
-  //       .assertDriverHasAnnotation("driver-feature-step", "configured")
-  //       .withDriverPodAssertion { pod =>
-  //         Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
-  //       }
-  //   } else {
-  //     builder
-  //   }
-  // }
+    if (deployMode == "cluster") {
+      builder
+        .assertDriverHasLabels(
+          Map(
+            "feature-step"      -> "driver-applied",
+            "feature-step-role" -> "driver"
+          )
+        )
+        .assertDriverHasAnnotation("driver-feature-step", "configured")
+        .withDriverPodAssertion { pod =>
+          Option(pod.getSpec.getActiveDeadlineSeconds).map(_.longValue).contains(3600L)
+        }
+    } else {
+      builder
+    }
+  }
 
-  // test("SparkPi job with custom feature steps - staticCluster", E2ETest) {
-  //   baseFeatureStepTest("cluster", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job with custom feature steps - staticCluster", E2ETest) {
+    baseFeatureStepTest("cluster", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job with custom feature steps - staticClient", E2ETest) {
-  //   baseFeatureStepTest("client", "static", 2)
-  //     .run()
-  // }
+  test("SparkPi job with custom feature steps - staticClient", E2ETest) {
+    baseFeatureStepTest("client", "static", 2)
+      .run()
+  }
 
-  // test("SparkPi job with custom feature steps - dynamicCluster", E2ETest) {
-  //   baseFeatureStepTest("cluster", "dynamic", 2)
-  //     .run()
-  // }
+  test("SparkPi job with custom feature steps - dynamicCluster", E2ETest) {
+    baseFeatureStepTest("cluster", "dynamic", 2)
+      .run()
+  }
 
-  // // ========================================================================
-  // // Ingress Tests
-  // // ========================================================================
+  // ========================================================================
+  // Ingress Tests
+  // ========================================================================
 
-  // private val ingressAnnotations = Map(
-  //   "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
-  //   "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
-  //   "kubernetes.io/ingress.class"                  -> "nginx"
-  // )
+  private val ingressAnnotations = Map(
+    "nginx.ingress.kubernetes.io/rewrite-target"   -> "/",
+    "nginx.ingress.kubernetes.io/backend-protocol" -> "HTTP",
+    "kubernetes.io/ingress.class"                  -> "nginx"
+  )
 
-  // private def baseIngressCLITest(executorCount: Int): E2ETestBuilder = {
-  //   baseSparkPiTest("spark-pi-ingress", "cluster", "static", Map("test-type" -> "ingress"))
-  //     .withDriverIngress(ingressAnnotations)
-  //     .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
-  //     .withExecutors(executorCount)
-  //     .assertExecutorCount(executorCount)
-  //     .assertIngressAnnotations(ingressAnnotations)
-  // }
+  private def baseIngressCLITest(executorCount: Int): E2ETestBuilder = {
+    baseSparkPiTest("spark-pi-ingress", "cluster", "static", Map("test-type" -> "ingress"))
+      .withDriverIngress(ingressAnnotations)
+      .withSparkConf("spark.armada.driver.ingress.tls.enabled", "false")
+      .withExecutors(executorCount)
+      .assertExecutorCount(executorCount)
+      .assertIngressAnnotations(ingressAnnotations)
+  }
 
-  // private def baseIngressTemplateTest(executorCount: Int): E2ETestBuilder = {
-  //   baseSparkPiTest(
-  //     "spark-pi-ingress-template",
-  //     "cluster",
-  //     "static",
-  //     Map("test-type" -> "ingress-template")
-  //   )
-  //     .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
-  //     .withSparkConf(
-  //       Map(
-  //         "spark.armada.driver.ingress.enabled" -> "true",
-  //         "spark.armada.driver.jobItemTemplate" -> templateServer.url(
-  //           "spark-pi-driver-ingress-template.yaml"
-  //         ),
-  //         "spark.armada.executor.jobItemTemplate" -> templateServer.url(
-  //           "spark-pi-executor-template.yaml"
-  //         )
-  //       )
-  //     )
-  //     .withExecutors(executorCount)
-  //     .assertExecutorCount(executorCount)
-  //     .assertIngressAnnotations(ingressAnnotations)
-  // }
+  private def baseIngressTemplateTest(executorCount: Int): E2ETestBuilder = {
+    baseSparkPiTest(
+      "spark-pi-ingress-template",
+      "cluster",
+      "static",
+      Map("test-type" -> "ingress-template")
+    )
+      .withJobTemplate(templateServer.url("spark-pi-job-template.yaml"))
+      .withSparkConf(
+        Map(
+          "spark.armada.driver.ingress.enabled" -> "true",
+          "spark.armada.driver.jobItemTemplate" -> templateServer.url(
+            "spark-pi-driver-ingress-template.yaml"
+          ),
+          "spark.armada.executor.jobItemTemplate" -> templateServer.url(
+            "spark-pi-executor-template.yaml"
+          )
+        )
+      )
+      .withExecutors(executorCount)
+      .assertExecutorCount(executorCount)
+      .assertIngressAnnotations(ingressAnnotations)
+  }
 
-  // test("SparkPi job with driver ingress using cli - staticCluster", E2ETest) {
-  //   baseIngressCLITest(2).run()
-  // }
+  test("SparkPi job with driver ingress using cli - staticCluster", E2ETest) {
+    baseIngressCLITest(2).run()
+  }
 
-  // test("SparkPi job with driver ingress using template - staticCluster", E2ETest) {
-  //   baseIngressTemplateTest(2).run()
-  // }
+  test("SparkPi job with driver ingress using template - staticCluster", E2ETest) {
+    baseIngressTemplateTest(2).run()
+  }
 }
