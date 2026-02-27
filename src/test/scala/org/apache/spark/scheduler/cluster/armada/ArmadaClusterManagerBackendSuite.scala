@@ -323,6 +323,17 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
   }
 
+  test("captureGangAttributes ignores empty label value") {
+    val attributes = Map(
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> ""
+    )
+
+    backend.captureGangAttributes(attributes)
+
+    sparkConf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
+  }
+
   test("captureGangAttributes ignores missing attributes") {
     backend.captureGangAttributes(Map("UNRELATED_KEY" -> "value"))
 
