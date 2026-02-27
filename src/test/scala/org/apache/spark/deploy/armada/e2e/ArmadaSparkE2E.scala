@@ -262,12 +262,14 @@ class ArmadaSparkE2E
   test("Basic SparkPi job with gang scheduling - dynamicCluster", E2ETest) {
     baseSparkPiGangTest("cluster", "dynamic", 2)
       .assertGangJobForDynamic("armada-spark", initialGangPods = 2)
+      .assertExecutorCountMaxReachedAtLeast(3)
       .run()
   }
 
   test("Basic SparkPi job with gang scheduling - dynamicClient", E2ETest) {
     baseSparkPiGangTest("client", "dynamic", 2)
       .assertGangJobForDynamic("armada-spark", initialGangPods = 2)
+      .assertExecutorCountMaxReachedAtLeast(3)
       .run()
   }
 
