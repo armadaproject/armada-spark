@@ -27,6 +27,7 @@ COPY target/armada-cluster-manager_${scala_binary_version}-*-all.jar /opt/spark/
 COPY extraFiles /opt/spark/extraFiles
 COPY extraJars/* /opt/spark/jars
 COPY docker/jupyter-entrypoint.sh /opt/spark/bin/jupyter-entrypoint.sh
+COPY docker/armada-entrypoint.sh /opt/armada-entrypoint.sh
 
 
 USER 0
@@ -61,6 +62,8 @@ RUN if [ "$include_python" = "true" ]; then \
     fi && \
     chmod +x /opt/spark/bin/jupyter-entrypoint.sh
 
+RUN chmod +x /opt/armada-entrypoint.sh
+
 ARG spark_uid=185
 USER ${spark_uid}
 
@@ -75,3 +78,8 @@ ENV PYSPARK_PYTHON=python3
 ENV PYSPARK_DRIVER_PYTHON=python3
 ENV PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-*src.zip
 ENV JUPYTER_RUNTIME_DIR=/home/spark/.local/share/jupyter/runtime
+
+# Use Armada entrypoint wrapper that forwards ARMADA_GANG* env vars as
+# SPARK_EXECUTOR_ATTRIBUTE_* for dynamic client mode, then delegates to
+# the original Spark entrypoint.
+ENTRYPOINT ["/opt/armada-entrypoint.sh"]
