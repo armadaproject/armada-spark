@@ -584,8 +584,9 @@ private[spark] class ArmadaClusterManagerBackend(
     *   true if we can allocate, false if we should wait for gang attributes to be captured
     */
   private[armada] def isReadyToAllocateMore: Boolean = {
-    val nodeUniformityConfigured = conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).isDefined
-    val isClusterMode            = modeHelper.isDriverInCluster
+    val nodeUniformityConfigured =
+      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).exists(_.nonEmpty)
+    val isClusterMode = modeHelper.isDriverInCluster
 
     if (!nodeUniformityConfigured) {
       // No gang scheduling, always ready

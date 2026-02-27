@@ -2440,4 +2440,14 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result shouldBe Map.empty
   }
 
+  test("getGangNodeSelector returns empty map when label value is empty") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.internal.gangNodeLabelName", "topology.kubernetes.io/zone")
+      .set("spark.armada.internal.gangNodeLabelValue", "")
+
+    val result = armadaClientApp.getGangNodeSelector(conf)
+
+    result shouldBe Map.empty
+  }
+
 }
