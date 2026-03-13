@@ -42,6 +42,7 @@ DISABLE_CONFIG_MAP=true
 # Set memory limits
 EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
 DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
+ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
@@ -71,14 +72,16 @@ else
         --conf spark.executor.instances=1
         --conf spark.sql.shuffle.partitions=5
         --conf spark.dynamicAllocation.enabled=true
-        --conf spark.dynamicAllocation.minExecutors=1
-        --conf spark.dynamicAllocation.maxExecutors=4
-        --conf spark.dynamicAllocation.initialExecutors=1
+        --conf spark.dynamicAllocation.minExecutors=2
+        --conf spark.dynamicAllocation.maxExecutors=10
+        --conf spark.dynamicAllocation.initialExecutors=2
         --conf spark.dynamicAllocation.executorIdleTimeout=5
         --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
         --conf spark.decommission.enabled=true
         --conf spark.storage.decommission.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
+        --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
+        --conf spark.armada.allocation.batchSize=4
     )
 fi
 

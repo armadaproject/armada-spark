@@ -110,8 +110,14 @@ private[spark] class ArmadaExecutorAllocator(
             val (currentCount, pending) = backend.getExecutorCounts
             val gap                     = target - (currentCount + pending)
             if (gap > 0 && pending < maxPendingJobs) {
-              val toAllocate = math.min(gap, batchSize)
-              submitExecutorJobs(toAllocate, rpId)
+              // In client mode with nodeUniformity, wait for initial executors to register
+              // and send gang attributes before submitting scale-up executors.
+              // This prevents scale-up executors from landing on a different cluster.
+              val isInitialBatch = currentCount == 0 && pending == 0
+              if (isInitialBatch || backend.isReadyToAllocateMore) {
+                val toAllocate = math.min(gap, batchSize)
+                submitExecutorJobs(toAllocate, rpId)
+              }
             }
 
           case None =>

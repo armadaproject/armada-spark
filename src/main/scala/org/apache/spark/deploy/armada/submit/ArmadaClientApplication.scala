@@ -360,7 +360,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int
+      executorCount: Int,
+      gangCardinalityOverride: Option[Int] = None
   ): Seq[String] = {
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
@@ -374,7 +375,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverData.configGenerator,
       driverData.templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
-      conf
+      conf,
+      gangCardinalityOverride
     )
 
     val executorResolvedConfig = resolveJobConfig(
@@ -419,12 +421,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
+    val modeHelper      = DeploymentModeHelper(conf)
+    val cardinality     = modeHelper.getScaleUpGangCardinality(executorCount)
+
     submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
       conf,
       driverJobId,
-      executorCount
+      executorCount,
+      gangCardinalityOverride = Some(cardinality)
     )
   }
 
@@ -1256,11 +1262,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
-      .withNodeSelector(
+      .withNodeSelector({
+        val gangSelector = DeploymentModeHelper(conf).getGangNodeSelector
         if (resolvedConfig.nodeSelectors.nonEmpty)
-          resolvedConfig.nodeSelectors ++ getGangNodeSelector
-        else currentPodSpec.nodeSelector ++ getGangNodeSelector
-      )
+          resolvedConfig.nodeSelectors ++ gangSelector
+        else currentPodSpec.nodeSelector ++ gangSelector
+      })
 
     JobSubmitRequestItem(
       priority = if (resolvedConfig.priority != ArmadaClientApplication.DEFAULT_PRIORITY) {
@@ -1284,16 +1291,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .getOrElse(Map.empty) ++ resolvedConfig.annotations,
       podSpec = Some(finalPodSpec)
     )
-  }
-
-  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
-  // node should be selected
-  private def getGangNodeSelector = {
-    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
-    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
-    if (nodeLabel.nonEmpty)
-      Map(nodeLabel -> nodeValue)
-    else Map.empty
   }
 
   private def newDriverContainer(
@@ -1773,10 +1770,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       templateAnnotations: Map[String, String],
       nodeUniformityLabel: Option[String],
-      conf: SparkConf
+      conf: SparkConf,
+      gangCardinalityOverride: Option[Int] = None
   ): Map[String, String] = {
     val modeHelper      = DeploymentModeHelper(conf)
-    val gangCardinality = modeHelper.getGangCardinality
+    val gangCardinality = gangCardinalityOverride.getOrElse(modeHelper.getGangCardinality)
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>

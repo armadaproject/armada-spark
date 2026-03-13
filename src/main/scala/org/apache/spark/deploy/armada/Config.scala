@@ -233,6 +233,20 @@ private[spark] object Config {
       )
       .createOptional
 
+  val ARMADA_INTERNAL_GANG_NODE_LABEL_NAME: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.internal.gangNodeLabelName")
+      .doc("Internal: gang node uniformity label name captured from executor attributes.")
+      .internal()
+      .stringConf
+      .createOptional
+
+  val ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.internal.gangNodeLabelValue")
+      .doc("Internal: gang node uniformity label value captured from executor attributes.")
+      .internal()
+      .stringConf
+      .createOptional
+
   val ARMADA_EXECUTOR_INIT_CONTAINER_CPU: ConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.initContainer.cpu")
       .doc(
