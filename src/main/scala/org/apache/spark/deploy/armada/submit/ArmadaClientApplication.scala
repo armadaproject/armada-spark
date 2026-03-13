@@ -34,8 +34,6 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_REQUEST_CORES,
   ARMADA_EXECUTOR_REQUEST_MEMORY,
   ARMADA_HEALTH_CHECK_TIMEOUT,
-  ARMADA_INTERNAL_GANG_NODE_LABEL_NAME,
-  ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
   ARMADA_JOB_QUEUE,
@@ -423,12 +421,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
-
-    // If gang attributes are already captured, skip gang scheduling for scale-up executors.
-    // They only need the nodeSelector (from getGangNodeSelector) to land on the same cluster.
-    // This avoids unnecessary gang scheduling overhead for subsequent batches.
-    val gangAttributesCaptured = getGangNodeSelector(conf).nonEmpty
-    val cardinality            = if (gangAttributesCaptured) 0 else executorCount
+    val modeHelper      = DeploymentModeHelper(conf)
+    val cardinality     = modeHelper.getScaleUpGangCardinality(executorCount)
 
     submitExecutorJobs(
       armadaClient,
@@ -1268,11 +1262,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
-      .withNodeSelector(
+      .withNodeSelector({
+        val gangSelector = DeploymentModeHelper(conf).getGangNodeSelector
         if (resolvedConfig.nodeSelectors.nonEmpty)
-          resolvedConfig.nodeSelectors ++ getGangNodeSelector(conf)
-        else currentPodSpec.nodeSelector ++ getGangNodeSelector(conf)
-      )
+          resolvedConfig.nodeSelectors ++ gangSelector
+        else currentPodSpec.nodeSelector ++ gangSelector
+      })
 
     JobSubmitRequestItem(
       priority = if (resolvedConfig.priority != ArmadaClientApplication.DEFAULT_PRIORITY) {
@@ -1296,19 +1291,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .getOrElse(Map.empty) ++ resolvedConfig.annotations,
       podSpec = Some(finalPodSpec)
     )
-  }
-
-  // Gang node selector for constraining subsequent executors to the same cluster as
-  // the initial gang. Values arrive via executor attributes: executors forward
-  // ARMADA_GANG_* env vars as SPARK_EXECUTOR_ATTRIBUTE_* during registration, and the
-  // driver stores them in SparkConf (see ArmadaClusterManagerBackend.captureGangAttributes).
-  // The initial gang does not need node selectors — Armada's gang annotations handle that.
-  private[submit] def getGangNodeSelector(conf: SparkConf) = {
-    val nodeLabel = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME).getOrElse("")
-    val nodeValue = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE).getOrElse("")
-    if (nodeLabel.nonEmpty && nodeValue.nonEmpty)
-      Map(nodeLabel -> nodeValue)
-    else Map.empty
   }
 
   private def newDriverContainer(

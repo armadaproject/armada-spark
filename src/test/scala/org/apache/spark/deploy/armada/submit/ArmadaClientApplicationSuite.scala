@@ -2408,46 +2408,4 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     cliIngress.tls shouldBe Some(false)
   }
 
-  // ========================================================================
-  // getGangNodeSelector tests
-  // ========================================================================
-
-  test("getGangNodeSelector returns node selector from SparkConf") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.internal.gangNodeLabelName", "topology.kubernetes.io/zone")
-      .set("spark.armada.internal.gangNodeLabelValue", "us-east-1a")
-
-    val result = armadaClientApp.getGangNodeSelector(conf)
-
-    result shouldBe Map("topology.kubernetes.io/zone" -> "us-east-1a")
-  }
-
-  test("getGangNodeSelector returns empty map when SparkConf has no values") {
-    val conf = new SparkConf(false)
-
-    val result = armadaClientApp.getGangNodeSelector(conf)
-
-    result shouldBe Map.empty
-  }
-
-  test("getGangNodeSelector returns empty map when label name is empty") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.internal.gangNodeLabelName", "")
-      .set("spark.armada.internal.gangNodeLabelValue", "us-east-1a")
-
-    val result = armadaClientApp.getGangNodeSelector(conf)
-
-    result shouldBe Map.empty
-  }
-
-  test("getGangNodeSelector returns empty map when label value is empty") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.internal.gangNodeLabelName", "topology.kubernetes.io/zone")
-      .set("spark.armada.internal.gangNodeLabelValue", "")
-
-    val result = armadaClientApp.getGangNodeSelector(conf)
-
-    result shouldBe Map.empty
-  }
-
 }

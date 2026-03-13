@@ -17,7 +17,7 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import java.util.concurrent.{ConcurrentHashMap, ScheduledExecutorService, TimeUnit}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -109,8 +109,6 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private val execIdCounter = new AtomicInteger(0)
 
-  private val gangAttributesCaptured = new AtomicBoolean(false)
-
   /** Maps Spark executor ID to Armada job ID */
   private val executorToJobId = new ConcurrentHashMap[String, String]()
 
@@ -161,8 +159,8 @@ private[spark] class ArmadaClusterManagerBackend(
     // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
     ArmadaUtils.setDefaultAppId(conf)
 
-    // Seed gang env vars into SparkConf (cluster mode); no-op in client mode.
-    seedGangAttributesFromEnv()
+    // Capture gang attributes from env vars (cluster mode); no-op in client mode.
+    this.modeHelper.captureGangAttributes(sys.env.toMap)
 
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
@@ -574,37 +572,7 @@ private[spark] class ArmadaClusterManagerBackend(
     */
   private[armada] def getPendingExecutorCount: Int = getExecutorCounts._2
 
-  /** Check if it's safe to allocate more executors.
-    *
-    * In dynamic client mode with nodeUniformity configured, we must wait for the initial executors
-    * to register and send their gang attributes before allocating more. Otherwise, scale-up
-    * executors may land on a different cluster than the initial gang.
-    *
-    * @return
-    *   true if we can allocate, false if we should wait for gang attributes to be captured
-    */
-  private[armada] def isReadyToAllocateMore: Boolean = {
-    val nodeUniformityConfigured =
-      conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).exists(_.nonEmpty)
-    val isClusterMode = modeHelper.isDriverInCluster
-
-    if (!nodeUniformityConfigured) {
-      // No gang scheduling, always ready
-      true
-    } else if (isClusterMode) {
-      // Cluster mode: gang attributes seeded from env vars at startup
-      true
-    } else {
-      // Client mode with nodeUniformity: wait for gang attributes from first executor
-      val ready = gangAttributesCaptured.get()
-      if (!ready) {
-        logDebug(
-          "Waiting for gang attributes to be captured from initial executor before allocating more"
-        )
-      }
-      ready
-    }
-  }
+  private[armada] def isReadyToAllocateMore: Boolean = modeHelper.isReadyToAllocateMore
 
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
@@ -640,43 +608,6 @@ private[spark] class ArmadaClusterManagerBackend(
 
     markTerminal(executorId)
     safeRemoveExecutor(executorId, exitReason)
-  }
-
-  /** Seed gang node selector from the driver's own environment variables.
-    *
-    * In dynamic cluster mode the driver pod receives ARMADA_GANG_* env vars directly from Armada.
-    * We write them into SparkConf at startup so that getGangNodeSelector picks them up for
-    * subsequent executor allocations. If the env vars are absent (client mode), this is a no-op.
-    */
-  private[armada] def seedGangAttributesFromEnv(): Unit = {
-    val gangEnvKeys = Seq(
-      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME",
-      "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE"
-    )
-    val envVars = gangEnvKeys.map(k => k -> sys.env.getOrElse(k, "")).toMap
-    captureGangAttributes(envVars)
-  }
-
-  /** Capture gang node selector from the first executor's attributes.
-    *
-    * In dynamic client mode the driver runs outside the cluster and lacks ARMADA_GANG_* env vars.
-    * Executors forward these via SPARK_EXECUTOR_ATTRIBUTE_* prefix (stripped by Spark before
-    * delivery). We store the values in SparkConf so that subsequent executor allocations can use
-    * them as node selectors.
-    */
-  private[armada] def captureGangAttributes(attributes: Map[String, String]): Unit = {
-    if (gangAttributesCaptured.get()) return
-    val labelName  = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
-    val labelValue = attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
-    if (
-      labelName.nonEmpty && labelValue.nonEmpty && gangAttributesCaptured.compareAndSet(false, true)
-    ) {
-      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
-      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
-      logInfo(
-        s"Captured gang node selector from executor attributes: $labelName=$labelValue"
-      )
-    }
   }
 
   // ========================================================================
@@ -717,7 +648,7 @@ private[spark] class ArmadaClusterManagerBackend(
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
       val gangInterceptor: PartialFunction[Any, Unit] = {
         case msg @ RegisterExecutor(_, _, _, _, _, attributes, _, _) =>
-          captureGangAttributes(attributes)
+          modeHelper.captureGangAttributes(attributes)
           super.receiveAndReply(context)(msg)
       }
       gangInterceptor

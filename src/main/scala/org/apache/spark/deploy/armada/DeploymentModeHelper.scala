@@ -16,9 +16,12 @@
  */
 package org.apache.spark.deploy.armada
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config._
 import org.apache.spark.deploy.armada.submit.ArmadaUtils
+import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 
 /** Helper trait that encapsulates deployment mode-specific behavior for Armada Spark jobs.
@@ -91,6 +94,46 @@ trait DeploymentModeHelper {
     *   In client mode if spark.driver.host is not configured
     */
   def getDriverHostName(driverJobId: String): String
+
+  /** Captures gang node-uniformity attributes from the first executor's environment.
+    *
+    * In dynamic client mode with nodeUniformity configured, this stores the label name/value from
+    * the initial gang into SparkConf so that subsequent allocations can use them. Only captures
+    * once; subsequent calls are no-ops.
+    *
+    * @param attributes
+    *   Map of executor environment attributes
+    */
+  def captureGangAttributes(attributes: Map[String, String]): Unit
+
+  /** Returns whether the allocator should submit more executor requests.
+    *
+    * In dynamic client mode with nodeUniformity, this returns false until gang attributes have been
+    * captured from the initial executor batch.
+    *
+    * @return
+    *   true if additional allocations are allowed
+    */
+  def isReadyToAllocateMore: Boolean
+
+  /** Returns the gang node selector derived from captured attributes.
+    *
+    * @return
+    *   Map of label name to label value, or empty if not yet captured
+    */
+  def getGangNodeSelector: Map[String, String]
+
+  /** Returns the gang cardinality for scale-up requests.
+    *
+    * After the initial gang attributes have been captured, scale-up requests should use cardinality
+    * 0 (no gang constraint). Before capture, uses the requested count.
+    *
+    * @param requestedCount
+    *   The number of executors requested
+    * @return
+    *   The gang cardinality to use for the submission
+    */
+  def getScaleUpGangCardinality(requestedCount: Int): Int
 }
 
 /** Static allocation in cluster mode.
@@ -122,6 +165,11 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
     // In cluster mode, driver runs in a pod, so use service name from job ID
     ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
+
+  override def captureGangAttributes(attributes: Map[String, String]): Unit = {}
+  override def isReadyToAllocateMore: Boolean                               = true
+  override def getGangNodeSelector: Map[String, String]                     = Map.empty
+  override def getScaleUpGangCardinality(requestedCount: Int): Int          = requestedCount
 
   override def toString: String = "StaticCluster"
 }
@@ -163,7 +211,49 @@ class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
       )
   }
 
+  override def captureGangAttributes(attributes: Map[String, String]): Unit = {}
+  override def isReadyToAllocateMore: Boolean                               = true
+  override def getGangNodeSelector: Map[String, String]                     = Map.empty
+  override def getScaleUpGangCardinality(requestedCount: Int): Int          = requestedCount
+
   override def toString: String = "StaticClient"
+}
+
+/** Base class for dynamic allocation modes, holding shared gang lifecycle logic.
+  *
+  * Provides captureGangAttributes, getGangNodeSelector, and getScaleUpGangCardinality. Subclasses
+  * must implement isReadyToAllocateMore and all other DeploymentModeHelper methods.
+  */
+private[armada] abstract class DynamicModeHelper(conf: SparkConf)
+    extends DeploymentModeHelper
+    with Logging {
+
+  protected val gangAttributesCaptured = new AtomicBoolean(false)
+  protected val nodeUniformityConfigured: Boolean =
+    conf.get(ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY).exists(_.nonEmpty)
+
+  override def captureGangAttributes(attributes: Map[String, String]): Unit = {
+    if (!nodeUniformityConfigured || gangAttributesCaptured.get()) return
+    val labelName =
+      attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
+    val labelValue =
+      attributes.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
+    if (labelName.nonEmpty && labelValue.nonEmpty) {
+      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, labelName)
+      conf.set(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, labelValue)
+      gangAttributesCaptured.compareAndSet(false, true)
+      logInfo(s"Captured gang node selector: $labelName=$labelValue")
+    }
+  }
+
+  override def getGangNodeSelector: Map[String, String] = {
+    val name  = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_NAME).getOrElse("")
+    val value = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE).getOrElse("")
+    if (name.nonEmpty && value.nonEmpty) Map(name -> value) else Map.empty
+  }
+
+  override def getScaleUpGangCardinality(requestedCount: Int): Int =
+    if (getGangNodeSelector.nonEmpty) 0 else requestedCount
 }
 
 /** Dynamic allocation in cluster mode.
@@ -174,7 +264,7 @@ class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes both driver and minimum executors
   */
-class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
+class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -201,6 +291,8 @@ class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
     ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
 
+  override def isReadyToAllocateMore: Boolean = true
+
   override def toString: String = "DynamicCluster"
 }
 
@@ -212,7 +304,7 @@ class DynamicCluster(val conf: SparkConf) extends DeploymentModeHelper {
   *   - Initial allocation uses the configured minimum executor count
   *   - Gang cardinality includes only minimum executors
   */
-class DynamicClient(val conf: SparkConf) extends DeploymentModeHelper {
+class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -244,6 +336,20 @@ class DynamicClient(val conf: SparkConf) extends DeploymentModeHelper {
             "Please set it via --conf spark.driver.host=<hostname> or ensure it's set in your Spark configuration."
         )
       )
+  }
+
+  override def isReadyToAllocateMore: Boolean = {
+    if (!nodeUniformityConfigured) true
+    else {
+      val ready = gangAttributesCaptured.get()
+      if (!ready) {
+        logDebug(
+          "Waiting for gang attributes from initial executor " +
+            "before allocating more"
+        )
+      }
+      ready
+    }
   }
 
   override def toString: String = "DynamicClient"
