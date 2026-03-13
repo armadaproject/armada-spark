@@ -42,7 +42,6 @@ DISABLE_CONFIG_MAP=true
 # Set memory limits
 EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
 DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
-ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
 
 # Build configuration based on allocation mode
 if [ "$STATIC_MODE" = true ]; then
@@ -72,16 +71,14 @@ else
         --conf spark.executor.instances=1
         --conf spark.sql.shuffle.partitions=5
         --conf spark.dynamicAllocation.enabled=true
-        --conf spark.dynamicAllocation.minExecutors=2
-        --conf spark.dynamicAllocation.maxExecutors=10
-        --conf spark.dynamicAllocation.initialExecutors=2
+        --conf spark.dynamicAllocation.minExecutors=1
+        --conf spark.dynamicAllocation.maxExecutors=4
+        --conf spark.dynamicAllocation.initialExecutors=1
         --conf spark.dynamicAllocation.executorIdleTimeout=5
         --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
         --conf spark.decommission.enabled=true
         --conf spark.storage.decommission.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.enabled=true
-        --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
-        --conf spark.armada.allocation.batchSize=4
     )
 fi
 
@@ -96,9 +93,10 @@ SPARK_SUBMIT_ARGS=(
     --conf spark.armada.container.image=$IMAGE_NAME
     --conf spark.armada.queue=$ARMADA_QUEUE
     --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
-    --conf spark.kubernetes.file.upload.path=/tmp
+    --conf spark.kubernetes.file.upload.path=s3a://playpen-georgjah875/upload
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
-    --conf spark.local.dir=/tmp
+    --conf spark.local.dir=s3a://playpen-georgjah875/tmp
+    --files /opt/local/lookup.csv
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
 )
 
@@ -114,5 +112,6 @@ SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
 
-docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+echo docker run "${DOCKER_ENV_ARGS[@]}" -v$scripts/../files:/opt/local -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
+#docker run -it "${DOCKER_ENV_ARGS[@]}" -v$scripts/../files:/opt/local -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME /bin/bash

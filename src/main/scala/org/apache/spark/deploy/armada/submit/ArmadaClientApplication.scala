@@ -77,6 +77,7 @@ import org.apache.spark.deploy.k8s.submit.{
 import org.apache.spark.deploy.k8s.{KubernetesDriverConf, KubernetesExecutorConf}
 import org.apache.spark.deploy.k8s.Config.{
   CONTAINER_IMAGE => KUBERNETES_CONTAINER_IMAGE,
+  KUBERNETES_FILE_UPLOAD_PATH,
   KUBERNETES_SUBMIT_GRACE_PERIOD
 }
 import org.apache.spark.{SecurityManager, SparkConf}
@@ -225,6 +226,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   ): ArmadaJobConfig = {
     // Disable ConfigMap creation as we do not have support for them in Armada
     conf.set("spark.kubernetes.executor.disableConfigMap", "true")
+    // Signal to SparkSubmit inside the driver pod that it should download
+    // remote files (from spark.kubernetes.file.upload.path) to working directory
+    conf.set("spark.kubernetes.submitInDriver", "true")
 
     val jobTemplate: Option[api.submit.JobSubmitRequest] = conf
       .get(ARMADA_JOB_TEMPLATE)
@@ -262,7 +266,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .getOrElse(getApplicationId(conf))
 
     // Get basic feature steps from Spark's Kubernetes integration
-    val (driverJobItem, driverContainer)     = getDriverFeatureSteps(conf, clientArguments)
+    val (driverJobItem, driverContainer, driverSysProps) =
+      getDriverFeatureSteps(conf, clientArguments)
     val (executorJobItem, executorContainer) = getExecutorFeatureSteps(conf)
 
     ArmadaJobConfig(
@@ -276,7 +281,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverFeatureStepJobItem = driverJobItem,
       driverFeatureStepContainer = driverContainer,
       executorFeatureStepJobItem = executorJobItem,
-      executorFeatureStepContainer = executorContainer
+      executorFeatureStepContainer = executorContainer,
+      driverSystemProperties = driverSysProps
     )
   }
 
@@ -293,6 +299,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf
   ): DriverData = {
+    // Apply only file-related system properties from driver feature steps.
+    // BasicDriverFeatureStep uploads local files to spark.kubernetes.file.upload.path
+    // and returns updated remote URIs for these keys. Other system properties
+    // (e.g. spark.driver.host, spark.driver.port) are managed by Armada directly.
+    val fileUploadKeys = Set(
+      "spark.jars",
+      "spark.files",
+      "spark.archives",
+      "spark.submit.pyFiles"
+    )
+    armadaJobConfig.driverSystemProperties
+      .filter { case (k, _) => fileUploadKeys.contains(k) }
+      .foreach { case (k, v) => conf.set(k, v) }
     val confSeq         = buildSparkConfArgs(conf)
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
 
@@ -796,7 +815,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverFeatureStepJobItem: Option[api.submit.JobSubmitRequestItem],
       driverFeatureStepContainer: Option[Container],
       executorFeatureStepJobItem: Option[api.submit.JobSubmitRequestItem],
-      executorFeatureStepContainer: Option[Container]
+      executorFeatureStepContainer: Option[Container],
+      driverSystemProperties: Map[String, String]
   )
 
   private[submit] def createDriverJob(
@@ -808,7 +828,16 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq: Seq[String],
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
+    val featureStepContainer = armadaJobConfig.driverFeatureStepContainer
+    val resolvedPrimaryResource = resolveLocalFilesFromFeatureStep(
+      primaryResource,
+      featureStepContainer
+    )
+    val resolvedDriverArgs = resolveLocalFilesFromFeatureStep(
+      clientArguments.driverArgs.toSeq,
+      featureStepContainer
+    )
+    val driverArgs = confSeq ++ resolvedPrimaryResource ++ resolvedDriverArgs
 
     val driverJobItem = mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
@@ -1083,18 +1112,28 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
   private[spark] def getDriverFeatureSteps(
       conf: SparkConf,
       clientArguments: Option[ClientArguments]
-  ): (Option[JobSubmitRequestItem], Option[Container]) = {
+  ): (Option[JobSubmitRequestItem], Option[Container], Map[String, String]) = {
     clientArguments match {
-      case None => (None, None)
+      case None => (None, None, Map.empty)
       case Some(args) =>
         val appId = getApplicationId(conf)
+
+        // Only pass the real mainAppResource when upload path is configured,
+        // so DriverCommandFeatureStep can upload local files to remote storage.
+        // When upload path is not set, use None to avoid SparkException from
+        // DriverCommandFeatureStep trying to upload without a destination.
+        val appResource = if (conf.get(KUBERNETES_FILE_UPLOAD_PATH).isDefined) {
+          args.mainAppResource
+        } else {
+          JavaMainAppResource(None)
+        }
 
         // Clone conf to prevent feature step builders from mutating the original
         val driverSpec = new KubernetesDriverBuilder().buildFromFeatures(
           new KubernetesDriverConf(
             sparkConf = conf.clone(),
             appId = appId,
-            mainAppResource = args.mainAppResource,
+            mainAppResource = appResource,
             mainClass = args.mainClass,
             appArgs = args.driverArgs,
             proxyUser = args.proxyUser
@@ -1105,7 +1144,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         val jobItem   = fabric8PodToJobItem(driverSpec.pod.pod)
         val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
 
-        (Some(jobItem), Some(container))
+        (Some(jobItem), Some(container), driverSpec.systemProperties)
     }
   }
 
@@ -1739,6 +1778,43 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case PythonMainAppResource(resource)     => Seq(resource)
       case RMainAppResource(resource)          => Seq(resource)
       case _                                   => Seq()
+    }
+  }
+
+  /** Known file extensions for local application files. */
+  private val localFileExtensions = Set(".jar", ".py", ".r", ".zip")
+
+  /** Returns true if the arg looks like a local file path (by extension). */
+  private def isLocalFile(arg: String): Boolean = {
+    val lower = arg.toLowerCase
+    localFileExtensions.exists(lower.endsWith)
+  }
+
+  /** Resolves local file paths in driver args using the feature step container's args.
+    *
+    * When Spark's feature steps process the driver pod, they may transform file paths (e.g.,
+    * resolving them to container-local paths). This method matches local files in
+    * `clientDriverArgs` to their counterparts in the feature step container's args by basename, and
+    * returns the feature step's version when a match is found.
+    */
+  private[submit] def resolveLocalFilesFromFeatureStep(
+      clientDriverArgs: Seq[String],
+      featureStepContainer: Option[Container]
+  ): Seq[String] = {
+    featureStepContainer match {
+      case None => clientDriverArgs
+      case Some(container) =>
+        val featureStepFilesByName = container.args
+          .filter(isLocalFile)
+          .map(f => f.split("/").last -> f)
+          .toMap
+        clientDriverArgs.map { arg =>
+          if (isLocalFile(arg)) {
+            featureStepFilesByName.getOrElse(arg.split("/").last, arg)
+          } else {
+            arg
+          }
+        }
     }
   }
 

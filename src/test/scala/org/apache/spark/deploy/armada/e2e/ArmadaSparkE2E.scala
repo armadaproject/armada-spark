@@ -336,7 +336,6 @@ class ArmadaSparkE2E
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
-          "spark.kubernetes.file.upload.path"          -> "/tmp",
           "spark.kubernetes.executor.disableConfigMap" -> "true"
         )
       )
