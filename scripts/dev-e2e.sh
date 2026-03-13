@@ -87,8 +87,8 @@ start-armada() {
     fi
   fi
 
-  echo  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
-  if ! (cd "$AOHOME"; make kind-all 2>&1) | tee armada-start.txt; then
+  echo  "Running 'make kind-all-dev' to install and start Armada; this may take up to 6 minutes"
+  if ! (cd "$AOHOME"; make kind-all-dev 2>&1) | tee armada-start.txt; then
     echo ""
     err "There was a problem starting Armada; exiting now"
     exit 1

@@ -39,3 +39,29 @@ index a8d45c3..4a72570 100644
 +- role: worker
 +  labels:
 +    armada-spark: true
+diff --git a/charts/armada-operator/values.yaml b/charts/armada-operator/values.yaml
+index 9ead2fe..1862720 100644
+--- a/charts/armada-operator/values.yaml
++++ b/charts/armada-operator/values.yaml
+@@ -11,7 +11,7 @@ controllerManager:
+         drop:
+         - ALL
+     image:
+-      repository: gcr.io/kubebuilder/kube-rbac-proxy
++      repository: docker.io/kubebuilder/kube-rbac-proxy
+       tag: v0.16.0
+     resources:
+       limits:
+diff --git a/config/default/manager_auth_proxy_patch.yaml b/config/default/manager_auth_proxy_patch.yaml
+index 801e9bb..4dae292 100644
+--- a/config/default/manager_auth_proxy_patch.yaml
++++ b/config/default/manager_auth_proxy_patch.yaml
+@@ -31,7 +31,7 @@ spec:
+           capabilities:
+             drop:
+               - "ALL"
+-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
++        image: docker.io/kubebuilder/kube-rbac-proxy:v0.16.0
+         args:
+         - "--secure-listen-address=0.0.0.0:8443"
+         - "--upstream=http://127.0.0.1:8080/"
