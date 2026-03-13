@@ -45,7 +45,6 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
-    --conf spark.kubernetes.executor.disableConfigMap=true \
     $ARMADA_BENCHMARK_JAR \
     $ARMADA_BENCHMARK_DATA \
     $ARMADA_S3_USER_DIR/benchmark/results \
@@ -54,5 +53,5 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     1g \
     1 \
     false \
-    "q10-v2.4" \
+    $TESTS_TO_RUN \
     false
