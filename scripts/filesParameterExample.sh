@@ -3,7 +3,9 @@ set -euo pipefail
 
 echo test --files parameter
 
-source "scripts/config.gr.sh"
+# init environment variables
+scripts="$(cd "$(dirname "$0")"; pwd)"
+source "$scripts/init.sh"
 
 EXAMPLE_FILES_DIR="example/files"
 mkdir -p "$EXAMPLE_FILES_DIR"
@@ -45,7 +47,7 @@ EOF
 docker run \
   -v "$(pwd)/$EXAMPLE_FILES_DIR":/opt/files \
   -v ~/incoming/conf:/opt/spark/conf \
-  -e ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN \
+  "${DOCKER_ENV_ARGS[@]}" \
   --rm --network host $IMAGE_NAME \
                           \
   /opt/spark/bin/spark-submit \
@@ -53,5 +55,6 @@ docker run \
     --deploy-mode cluster \
     --name python-pi \
     --conf spark.armada.container.image=$IMAGE_NAME \
+    --conf spark.kubernetes.file.upload.path=$ARMADA_S3_USER_DIR/tmp \
     --files /opt/files/lookup.csv \
     /opt/files/read_lines.py
