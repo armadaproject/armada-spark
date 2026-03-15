@@ -54,6 +54,7 @@ docker run \
     --master $ARMADA_MASTER \
     --deploy-mode cluster \
     --name python-pi \
+    --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.kubernetes.file.upload.path=$ARMADA_S3_USER_DIR/tmp \
     --files /opt/files/lookup.csv \
