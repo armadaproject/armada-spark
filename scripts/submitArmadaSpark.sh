@@ -96,7 +96,6 @@ SPARK_SUBMIT_ARGS=(
     --conf spark.armada.container.image=$IMAGE_NAME
     --conf spark.armada.queue=$ARMADA_QUEUE
     --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
-    --conf spark.kubernetes.file.upload.path=/tmp
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
     --conf spark.local.dir=/tmp
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
