@@ -24,7 +24,7 @@ echo "  UI: http://localhost:18080"
 
 docker run --name armada-spark-history-server "${DOCKER_ENV_ARGS[@]}" \
     -e "SPARK_HISTORY_OPTS=${HISTORY_OPTS}" \
-    -v $(pwd)/conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
+    -v "$(pwd)/conf":/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer 2>&1 | {
     while IFS= read -r line; do
         echo "$line"
