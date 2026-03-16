@@ -1816,7 +1816,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         val args     = container.args
         val classIdx = args.indexOf("--class")
         if (classIdx >= 0 && classIdx + 2 < args.length) {
-          args(classIdx + 2) // arg after --class <className>
+          val resolved         = args(classIdx + 2)
+          val originalBasename = new java.io.File(appResource).getName
+          val resolvedBasename =
+            new java.net.URI(resolved).getPath.split('/').lastOption.getOrElse("")
+          if (resolvedBasename == originalBasename) resolved else appResource
         } else {
           appResource
         }
