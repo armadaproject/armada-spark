@@ -13,17 +13,20 @@ mkdir -p "$EXAMPLE_FILES_DIR"
 RUN_UUID=$(uuidgen)
 echo "Run UUID: $RUN_UUID"
 
+# Local Data to be processed by executors
 cat > "$EXAMPLE_FILES_DIR/lookup.csv" <<EOF
 $RUN_UUID,line1
 $RUN_UUID,line2
 EOF
 
+# Local program to be copied to driver which in turn tells the
+# executors to read the "local" data file and print out
+# one of the lines
 cat > "$EXAMPLE_FILES_DIR/read_lines.py" <<EOF
 import time
 
 from pyspark import SparkFiles
 from pyspark.sql import SparkSession
-
 
 def read_line(line_num):
     path = SparkFiles.get("lookup.csv")
@@ -43,11 +46,11 @@ if __name__ == "__main__":
     uuid = '$RUN_UUID'
     print('starting uuid: ' + uuid)
 
-
+    # get total number of lines in data file
     with open(SparkFiles.get("lookup.csv")) as f:
         num_lines = sum(1 for _ in f)
 
-    # send out a line number for each line
+    # tell the executors which line to read
     sc.parallelize(range(num_lines), num_lines).foreach(read_line)
 
     spark.stop()
