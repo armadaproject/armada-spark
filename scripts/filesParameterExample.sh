@@ -10,12 +10,15 @@ source "$scripts/init.sh"
 EXAMPLE_FILES_DIR="example/files"
 mkdir -p "$EXAMPLE_FILES_DIR"
 
-cat > "$EXAMPLE_FILES_DIR/lookup.csv" <<'EOF'
-gbdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line1
-gbdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line2
+RUN_UUID=$(uuidgen)
+echo "Run UUID: $RUN_UUID"
+
+cat > "$EXAMPLE_FILES_DIR/lookup.csv" <<EOF
+$RUN_UUID,line1
+$RUN_UUID,line2
 EOF
 
-cat > "$EXAMPLE_FILES_DIR/read_lines.py" <<'EOF'
+cat > "$EXAMPLE_FILES_DIR/read_lines.py" <<EOF
 import time
 
 from pyspark import SparkFiles
@@ -37,7 +40,7 @@ if __name__ == "__main__":
     spark = SparkSession.builder.appName("LookupLineReader").getOrCreate()
     sc = spark.sparkContext
 
-    uuid = '0db50801-bea4-4953-927b-5997e091ae0c'
+    uuid = '$RUN_UUID'
     print('starting uuid: ' + uuid)
 
 
