@@ -1119,10 +1119,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       case Some(args) =>
         val appId = getApplicationId(conf)
 
-        // Only pass the real mainAppResource when upload path is configured,
-        // so DriverCommandFeatureStep can upload local files to remote storage.
-        // When upload path is not set, use None to avoid SparkException from
-        // DriverCommandFeatureStep trying to upload without a destination.
+        // We want to use the driver featuresteps to upload the local files, but
+        // they will throw if the appResource is defined and
+        // KUBERNETES_FILE_UPLOAD_PATH is not.  This hack works around that problem.
         val appResource = if (conf.get(KUBERNETES_FILE_UPLOAD_PATH).isDefined) {
           args.mainAppResource
         } else {
