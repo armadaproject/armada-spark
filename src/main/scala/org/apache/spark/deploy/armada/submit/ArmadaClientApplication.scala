@@ -1781,13 +1781,21 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  /** Known file extensions for local application files. */
-  private val localFileExtensions = Set(".jar", ".py", ".r", ".zip")
+  /** URI schemes for remote storage — files with these schemes are not local filesystem paths. */
+  private val remoteSchemes =
+    Set("s3a", "s3", "hdfs", "gs", "wasb", "wasbs", "abfs", "abfss", "http", "https", "ftp")
 
-  /** Returns true if the arg looks like a local file path (by extension). */
+  /** Returns true if the arg represents a file path rather than a remote resource. Includes bare
+    * paths, file:// URIs, and Spark's local:// scheme (container-local files).
+    */
   private def isLocalFile(arg: String): Boolean = {
-    val lower = arg.toLowerCase
-    localFileExtensions.exists(lower.endsWith)
+    try {
+      val uri    = new java.net.URI(arg)
+      val scheme = Option(uri.getScheme).map(_.toLowerCase)
+      scheme.isEmpty || scheme.contains("file") || scheme.contains("local")
+    } catch {
+      case _: java.net.URISyntaxException => !remoteSchemes.exists(s => arg.startsWith(s + ":"))
+    }
   }
 
   /** Resolves local file paths in driver args using the feature step container's args.

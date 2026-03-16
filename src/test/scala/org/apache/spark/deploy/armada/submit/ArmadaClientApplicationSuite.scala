@@ -1631,6 +1631,66 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result shouldBe Seq("app.jar", "--input", "data.txt")
   }
 
+  test("resolveLocalFilesFromFeatureStep does not resolve s3a:// remote args") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/data.csv"))
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("s3a://bucket/path/data.csv", "--input", "flag"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq("s3a://bucket/path/data.csv", "--input", "flag")
+  }
+
+  test("resolveLocalFilesFromFeatureStep does not resolve hdfs:// remote args") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("hdfs://namenode/path/app.jar"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq("hdfs://namenode/path/app.jar")
+  }
+
+  test("resolveLocalFilesFromFeatureStep resolves bare filenames") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/script.py"))
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("script.py"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq("local:///opt/spark/work/script.py")
+  }
+
+  test("resolveLocalFilesFromFeatureStep resolves absolute local paths") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("/home/user/app.jar"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq("local:///opt/spark/work/app.jar")
+  }
+
+  test("resolveLocalFilesFromFeatureStep resolves file:// URI args") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/data.csv"))
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("file:///tmp/data.csv"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq("local:///opt/spark/work/data.csv")
+  }
+
   test("createExecutorJobs should create multiple executor jobs") {
     val cliConfig = armadaClientApp.CLIConfig(
       queue = Some("test-queue"),
