@@ -1810,10 +1810,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       featureStepContainer: Option[Container]
   ): Seq[String] = {
     featureStepContainer match {
-      case None => clientDriverArgs
+      case None            => clientDriverArgs
       case Some(container) =>
+        // Feature step args contain resolved paths that may be any scheme (s3a://, local://, etc.)
+        // so we match on any arg that looks like a file path (contains "/" and is not a flag).
         val featureStepFilesByName = container.args
-          .filter(isLocalFile)
+          .filter(a => a.contains("/") && !a.startsWith("--"))
           .map(f => f.split("/").last -> f)
           .toMap
         clientDriverArgs.map { arg =>

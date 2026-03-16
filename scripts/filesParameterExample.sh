@@ -11,8 +11,8 @@ EXAMPLE_FILES_DIR="example/files"
 mkdir -p "$EXAMPLE_FILES_DIR"
 
 cat > "$EXAMPLE_FILES_DIR/lookup.csv" <<'EOF'
-bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line1
-bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line2
+gbdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line1
+gbdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line2
 EOF
 
 cat > "$EXAMPLE_FILES_DIR/read_lines.py" <<'EOF'

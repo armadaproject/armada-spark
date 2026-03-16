@@ -1631,6 +1631,29 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result shouldBe Seq("app.jar", "--input", "data.txt")
   }
 
+  test("resolveLocalFilesFromFeatureStep resolves local files to s3a:// uploaded paths") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq(
+          "driver",
+          "--properties-file",
+          "/opt/spark/conf/spark.properties",
+          "--class",
+          "org.apache.spark.deploy.PythonRunner",
+          "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
+        )
+      )
+
+    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
+      Seq("/opt/files/read_lines.py"),
+      Some(featureStepContainer)
+    )
+
+    result shouldBe Seq(
+      "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
+    )
+  }
+
   test("resolveLocalFilesFromFeatureStep does not resolve s3a:// remote args") {
     val featureStepContainer = Container()
       .withArgs(Seq("driver", "local:///opt/spark/work/data.csv"))
