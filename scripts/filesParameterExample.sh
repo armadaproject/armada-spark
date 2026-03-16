@@ -11,8 +11,8 @@ EXAMPLE_FILES_DIR="example/files"
 mkdir -p "$EXAMPLE_FILES_DIR"
 
 cat > "$EXAMPLE_FILES_DIR/lookup.csv" <<'EOF'
-bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,executor1-1,executor1-2,executor1-3
-bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,executor2-1,executor2-2,executor2-3
+bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line1
+bdeee1ec-9f0f-4280-91ca-ade78f37c1fa,line2
 EOF
 
 cat > "$EXAMPLE_FILES_DIR/read_lines.py" <<'EOF'
@@ -53,9 +53,13 @@ docker run \
   /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER \
     --deploy-mode cluster \
-    --name python-pi \
+    --name files-paramater-example \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.kubernetes.file.upload.path=$ARMADA_S3_USER_DIR/tmp \
+    --conf spark.hadoop.fs.s3a.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
+    --conf spark.hadoop.fs.s3a.path.style.access=true \
+    "${S3_CONF[@]}" \
+    "${ARMADA_AUTH_ARGS[@]}" \
     --files /opt/files/lookup.csv \
     /opt/files/read_lines.py
