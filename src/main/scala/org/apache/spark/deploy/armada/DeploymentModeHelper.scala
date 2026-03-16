@@ -289,6 +289,19 @@ class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
   *   - Gang cardinality includes only minimum executors
   */
 class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
+
+  // In client mode the driver is external, so gang cardinality = minExecutors.
+  // Armada requires cardinality >= 2 to inject gang env vars needed for placing
+  // subsequent executors into the same cluster in a multi-cluster environment.
+  if (getExecutorCount < 2) {
+    throw new IllegalArgumentException(
+      s"spark.dynamicAllocation.minExecutors must be >= 2 in " +
+        s"dynamic client mode, but got: ${getExecutorCount}. " +
+        s"Armada requires gang cardinality >= 2 to co-locate " +
+        s"executors in the same cluster."
+    )
+  }
+
   override def getExecutorCount: Int = {
     // For dynamic allocation, use minExecutors as the initial count
     conf.getInt(
@@ -345,18 +358,24 @@ object DeploymentModeHelper {
 
   /** Creates the appropriate ModeHelper implementation based on deployment configuration.
     *
+    * Detects cluster mode via config or the ARMADA_JOB_SET_ID env var. The env var check is needed
+    * because Spark rewrites deployMode to "client" inside cluster-mode driver pods.
+    *
     * @return
     *   A ModeHelper instance appropriate for the configured deployment mode
     */
   def apply(conf: SparkConf): DeploymentModeHelper = {
     val deployMode = conf.get("spark.submit.deployMode", "cluster")
-    val isDynamic  = conf.getBoolean("spark.dynamicAllocation.enabled", false)
+    val isCluster =
+      deployMode.equalsIgnoreCase("cluster") ||
+        sys.env.contains("ARMADA_JOB_SET_ID")
+    val isDynamic = conf.getBoolean("spark.dynamicAllocation.enabled", false)
 
-    (deployMode.toLowerCase, isDynamic) match {
-      case ("cluster", true)  => new DynamicCluster(conf)
-      case ("cluster", false) => new StaticCluster(conf)
-      case ("client", true)   => new DynamicClient(conf)
-      case _                  => new StaticClient(conf)
+    (isCluster, isDynamic) match {
+      case (true, true)   => new DynamicCluster(conf)
+      case (true, false)  => new StaticCluster(conf)
+      case (false, true)  => new DynamicClient(conf)
+      case (false, false) => new StaticClient(conf)
     }
   }
 }

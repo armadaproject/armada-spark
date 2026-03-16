@@ -191,11 +191,8 @@ private[spark] class ArmadaClusterManagerBackend(
 
           createAllocator(q, jsId, client)
 
-          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
-
-          // proactively request executors in static client mode only
           val shouldProactivelyRequest =
-            !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
+            modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
 
           if (shouldProactivelyRequest) {
             val executorCount  = modeHelper.getExecutorCount
