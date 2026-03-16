@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo test --files parameter
+echo show that '"--files"' parameter copies local files to driver/executor
 
 # init environment variables
 scripts="$(cd "$(dirname "$0")"; pwd)"
@@ -65,8 +65,6 @@ docker run \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.kubernetes.file.upload.path=$ARMADA_S3_USER_DIR/tmp \
-    --conf spark.hadoop.fs.s3a.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.hadoop.fs.s3a.path.style.access=true \
     "${S3_CONF[@]}" \
     "${ARMADA_AUTH_ARGS[@]}" \
     --files /opt/files/lookup.csv \

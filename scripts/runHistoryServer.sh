@@ -31,15 +31,7 @@ docker run "${DOCKER_ENV_ARGS[@]}" \
         if echo "$line" | grep -q "Log directory specified does not exist"; then
             echo ""
             echo "========================================="
-            echo "Error: Event log directory does not exist: ${ARMADA_EVENT_LOG_DIR}"
-            echo ""
-            echo "To create it, submit a Spark job with event logging enabled:"
-            echo "  --conf spark.eventLog.enabled=true"
-            echo "  --conf spark.eventLog.dir=${ARMADA_EVENT_LOG_DIR}"
-            echo ""
-            echo "Or create the directory manually:"
-            echo "  s3cmd put /dev/null ${ARMADA_EVENT_LOG_DIR}/"
-            echo "========================================="
+            echo "Error: Event log directory does not exist: ${ARMADA_EVENT_LOG_DIR} Exiting"
         fi
     done
 }
