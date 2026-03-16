@@ -294,24 +294,31 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq: Seq[String]
   )
 
-  private def buildDriverData(
-      clientArguments: Option[ClientArguments],
-      armadaJobConfig: ArmadaJobConfig,
+  /** Get file-related system properties from driver feature steps. BasicDriverFeatureStep uploads
+    * local files to spark.kubernetes.file.upload.path and returns updated remote URIs for these
+    * keys.
+    */
+  private def applyFileUploadProperties(
+      driverSystemProperties: Map[String, String],
       conf: SparkConf
-  ): DriverData = {
-    // Apply only file-related system properties from driver feature steps.
-    // BasicDriverFeatureStep uploads local files to spark.kubernetes.file.upload.path
-    // and returns updated remote URIs for these keys. Other system properties
-    // (e.g. spark.driver.host, spark.driver.port) are managed by Armada directly.
+  ): Unit = {
     val fileUploadKeys = Set(
       "spark.jars",
       "spark.files",
       "spark.archives",
       "spark.submit.pyFiles"
     )
-    armadaJobConfig.driverSystemProperties
+    driverSystemProperties
       .filter { case (k, _) => fileUploadKeys.contains(k) }
       .foreach { case (k, v) => conf.set(k, v) }
+  }
+
+  private def buildDriverData(
+      clientArguments: Option[ClientArguments],
+      armadaJobConfig: ArmadaJobConfig,
+      conf: SparkConf
+  ): DriverData = {
+    applyFileUploadProperties(armadaJobConfig.driverSystemProperties, conf)
     val confSeq         = buildSparkConfArgs(conf)
     val configGenerator = new ConfigGenerator("armada-spark-config", conf)
 
@@ -339,7 +346,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // Only create the actual job item if clientArguments is provided
     val jobItem = clientArguments.map { args =>
-      val primaryResource = extractPrimaryResource(args.mainAppResource)
+      val primaryResource = resolveLocalFilesFromFeatureStep(
+        extractPrimaryResource(args.mainAppResource),
+        armadaJobConfig.driverFeatureStepContainer
+      )
       createDriverJob(
         armadaJobConfig,
         resolvedConfig,
@@ -828,16 +838,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       confSeq: Seq[String],
       conf: SparkConf
   ): api.submit.JobSubmitRequestItem = {
-    val featureStepContainer = armadaJobConfig.driverFeatureStepContainer
-    val resolvedPrimaryResource = resolveLocalFilesFromFeatureStep(
-      primaryResource,
-      featureStepContainer
-    )
-    val resolvedDriverArgs = resolveLocalFilesFromFeatureStep(
-      clientArguments.driverArgs.toSeq,
-      featureStepContainer
-    )
-    val driverArgs = confSeq ++ resolvedPrimaryResource ++ resolvedDriverArgs
+    val driverArgs = confSeq ++ primaryResource ++ clientArguments.driverArgs
 
     val driverJobItem = mergeDriverTemplate(
       armadaJobConfig.driverJobItemTemplate,
