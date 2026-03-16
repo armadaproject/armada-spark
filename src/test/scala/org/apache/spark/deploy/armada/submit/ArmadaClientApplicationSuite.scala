@@ -1572,7 +1572,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.services should have size 1
   }
 
-  test("resolveLocalFilesFromFeatureStep replaces local files by basename") {
+  test("resolveLocalAppResource returns feature step app resource for local path") {
     val featureStepContainer = Container()
       .withArgs(
         Seq(
@@ -1582,56 +1582,25 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
           "--class",
           "org.apache.spark.deploy.PythonRunner",
           "local:///opt/spark/work/pi.py",
-          "local:///opt/spark/work/utils.zip"
+          "100"
         )
       )
 
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("pi.py", "utils.zip", "--input", "data.txt"),
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/pi.py",
       Some(featureStepContainer)
     )
 
-    result shouldBe Seq(
-      "local:///opt/spark/work/pi.py",
-      "local:///opt/spark/work/utils.zip",
-      "--input",
-      "data.txt"
-    )
+    result shouldBe "local:///opt/spark/work/pi.py"
   }
 
-  test("resolveLocalFilesFromFeatureStep returns original args when no container") {
-    val args = Seq("script.py", "--input", "data.txt")
+  test("resolveLocalAppResource returns original when no container") {
+    val result = armadaClientApp.resolveLocalAppResource("script.py", None)
 
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(args, None)
-
-    result shouldBe args
+    result shouldBe "script.py"
   }
 
-  test("resolveLocalFilesFromFeatureStep preserves non-file args unchanged") {
-    val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
-
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("--verbose", "--conf", "k=v"),
-      Some(featureStepContainer)
-    )
-
-    result shouldBe Seq("--verbose", "--conf", "k=v")
-  }
-
-  test("resolveLocalFilesFromFeatureStep keeps original when no basename match") {
-    val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/other.jar"))
-
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("app.jar", "--input", "data.txt"),
-      Some(featureStepContainer)
-    )
-
-    result shouldBe Seq("app.jar", "--input", "data.txt")
-  }
-
-  test("resolveLocalFilesFromFeatureStep resolves local files to s3a:// uploaded paths") {
+  test("resolveLocalAppResource resolves to s3a:// uploaded path") {
     val featureStepContainer = Container()
       .withArgs(
         Seq(
@@ -1644,74 +1613,38 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         )
       )
 
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("/opt/files/read_lines.py"),
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/read_lines.py",
       Some(featureStepContainer)
     )
 
-    result shouldBe Seq(
-      "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
-    )
+    result shouldBe "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
   }
 
-  test("resolveLocalFilesFromFeatureStep does not resolve s3a:// remote args") {
+  test("resolveLocalAppResource does not resolve s3a:// remote resource") {
     val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/data.csv"))
+      .withArgs(
+        Seq("driver", "--class", "Main", "local:///opt/spark/work/data.csv")
+      )
 
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("s3a://bucket/path/data.csv", "--input", "flag"),
+    val result = armadaClientApp.resolveLocalAppResource(
+      "s3a://bucket/path/data.csv",
       Some(featureStepContainer)
     )
 
-    result shouldBe Seq("s3a://bucket/path/data.csv", "--input", "flag")
+    result shouldBe "s3a://bucket/path/data.csv"
   }
 
-  test("resolveLocalFilesFromFeatureStep does not resolve hdfs:// remote args") {
-    val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
-
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("hdfs://namenode/path/app.jar"),
-      Some(featureStepContainer)
-    )
-
-    result shouldBe Seq("hdfs://namenode/path/app.jar")
-  }
-
-  test("resolveLocalFilesFromFeatureStep resolves bare filenames") {
-    val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/script.py"))
-
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("script.py"),
-      Some(featureStepContainer)
-    )
-
-    result shouldBe Seq("local:///opt/spark/work/script.py")
-  }
-
-  test("resolveLocalFilesFromFeatureStep resolves absolute local paths") {
+  test("resolveLocalAppResource returns original when no --class in args") {
     val featureStepContainer = Container()
       .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
 
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("/home/user/app.jar"),
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/home/user/app.jar",
       Some(featureStepContainer)
     )
 
-    result shouldBe Seq("local:///opt/spark/work/app.jar")
-  }
-
-  test("resolveLocalFilesFromFeatureStep resolves file:// URI args") {
-    val featureStepContainer = Container()
-      .withArgs(Seq("driver", "local:///opt/spark/work/data.csv"))
-
-    val result = armadaClientApp.resolveLocalFilesFromFeatureStep(
-      Seq("file:///tmp/data.csv"),
-      Some(featureStepContainer)
-    )
-
-    result shouldBe Seq("local:///opt/spark/work/data.csv")
+    result shouldBe "/home/user/app.jar"
   }
 
   test("createExecutorJobs should create multiple executor jobs") {

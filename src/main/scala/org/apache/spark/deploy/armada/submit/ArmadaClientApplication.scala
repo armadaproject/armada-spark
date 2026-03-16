@@ -346,9 +346,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     // Only create the actual job item if clientArguments is provided
     val jobItem = clientArguments.map { args =>
-      val primaryResource = resolveLocalFilesFromFeatureStep(
-        extractPrimaryResource(args.mainAppResource),
-        armadaJobConfig.driverFeatureStepContainer
+      val primaryResource = extractPrimaryResource(args.mainAppResource).map(r =>
+        resolveLocalAppResource(r, armadaJobConfig.driverFeatureStepContainer)
       )
       createDriverJob(
         armadaJobConfig,
@@ -1121,7 +1120,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
         // We want to use the driver featuresteps to upload the local files, but
         // they will throw if the appResource is defined and
-        // KUBERNETES_FILE_UPLOAD_PATH is not.  This hack works around that problem.
+        // KUBERNETES_FILE_UPLOAD_PATH is not.  This hack works around that problem,
+        // by temporarily removing the app resource during feature step processing.
         val appResource = if (conf.get(KUBERNETES_FILE_UPLOAD_PATH).isDefined) {
           args.mainAppResource
         } else {
@@ -1798,32 +1798,27 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  /** Resolves local file paths in driver args using the feature step container's args.
+  /** Resolves a local app resource path using the feature step container's args.
     *
-    * When Spark's feature steps process the driver pod, they may transform file paths (e.g.,
-    * resolving them to container-local paths). This method matches local files in
-    * `clientDriverArgs` to their counterparts in the feature step container's args by basename, and
-    * returns the feature step's version when a match is found.
+    * When Spark's feature steps process the driver pod, they upload local files (e.g., to S3) and
+    * put the resolved remote URI in the container args. The app resource is always the arg
+    * immediately after the --class value in the DriverCommandFeatureStep output: ["driver", ...,
+    * "--class", "<mainClass>", "<appResource>", ...appArgs]
     */
-  private[submit] def resolveLocalFilesFromFeatureStep(
-      clientDriverArgs: Seq[String],
+  private[submit] def resolveLocalAppResource(
+      appResource: String,
       featureStepContainer: Option[Container]
-  ): Seq[String] = {
+  ): String = {
+    if (!isLocalFile(appResource)) return appResource
     featureStepContainer match {
-      case None            => clientDriverArgs
+      case None => appResource
       case Some(container) =>
-        // Feature step args contain resolved paths that may be any scheme (s3a://, local://, etc.)
-        // so we match on any arg that looks like a file path (contains "/" and is not a flag).
-        val featureStepFilesByName = container.args
-          .filter(a => a.contains("/") && !a.startsWith("--"))
-          .map(f => f.split("/").last -> f)
-          .toMap
-        clientDriverArgs.map { arg =>
-          if (isLocalFile(arg)) {
-            featureStepFilesByName.getOrElse(arg.split("/").last, arg)
-          } else {
-            arg
-          }
+        val args     = container.args
+        val classIdx = args.indexOf("--class")
+        if (classIdx >= 0 && classIdx + 2 < args.length) {
+          args(classIdx + 2) // arg after --class <className>
+        } else {
+          appResource
         }
     }
   }
