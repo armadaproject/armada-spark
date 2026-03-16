@@ -25,9 +25,10 @@ from pyspark.sql import SparkSession
 def read_line(line_num):
     path = SparkFiles.get("lookup.csv")
     with open(path) as f:
+        # when we reach this executors line print it out
         for i, line in enumerate(f):
             if i == line_num:
-                print(line.rstrip())
+                print('executor uuid is: ' + line.rstrip())
                 time.sleep(10)
                 return
 
@@ -36,9 +37,14 @@ if __name__ == "__main__":
     spark = SparkSession.builder.appName("LookupLineReader").getOrCreate()
     sc = spark.sparkContext
 
+    uuid = '0db50801-bea4-4953-927b-5997e091ae0c'
+    print('starting uuid: ' + uuid)
+
+
     with open(SparkFiles.get("lookup.csv")) as f:
         num_lines = sum(1 for _ in f)
 
+    # send out a line number for each line
     sc.parallelize(range(num_lines), num_lines).foreach(read_line)
 
     spark.stop()

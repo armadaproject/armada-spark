@@ -107,6 +107,9 @@ SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 # Add auth args
 SPARK_SUBMIT_ARGS+=("${ARMADA_AUTH_ARGS[@]}")
 
+# Add event log conf
+SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]}")
+
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 
