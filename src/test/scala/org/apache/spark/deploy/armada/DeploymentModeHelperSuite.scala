@@ -359,17 +359,18 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     helper.getGangNodeSelector shouldBe Map("topology.kubernetes.io/zone" -> "us-east-1a")
   }
 
-  test("DynamicClient: getScaleUpGangCardinality returns requestedCount before capture") {
+  test("DynamicClient: getGangCardinality returns cardinality before capture") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "3")
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
-    helper.getScaleUpGangCardinality(5) shouldBe 5
+    helper.getGangCardinality shouldBe 3
   }
 
-  test("DynamicClient: getScaleUpGangCardinality returns 0 after capture") {
+  test("DynamicClient: getGangCardinality returns 0 after capture") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
@@ -384,7 +385,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       )
     )
 
-    helper.getScaleUpGangCardinality(5) shouldBe 0
+    helper.getGangCardinality shouldBe 0
   }
 
   test("StaticClient: gang methods return defaults") {
@@ -397,7 +398,6 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     val helper = DeploymentModeHelper(conf)
     helper.isReadyToAllocateMore shouldBe true
     helper.getGangNodeSelector shouldBe Map.empty
-    helper.getScaleUpGangCardinality(3) shouldBe 3
   }
 
   test("StaticCluster: gang methods return defaults") {
@@ -409,6 +409,5 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     val helper = DeploymentModeHelper(conf)
     helper.isReadyToAllocateMore shouldBe true
     helper.getGangNodeSelector shouldBe Map.empty
-    helper.getScaleUpGangCardinality(5) shouldBe 5
   }
 }

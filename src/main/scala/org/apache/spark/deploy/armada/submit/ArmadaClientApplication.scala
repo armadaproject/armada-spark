@@ -360,8 +360,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       armadaJobConfig: ArmadaJobConfig,
       conf: SparkConf,
       driverJobId: String,
-      executorCount: Int,
-      gangCardinalityOverride: Option[Int] = None
+      executorCount: Int
   ): Seq[String] = {
     val driverData = buildDriverData(None, armadaJobConfig, conf)
 
@@ -375,8 +374,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       driverData.configGenerator,
       driverData.templateAnnotations,
       armadaJobConfig.cliConfig.nodeUniformityLabel,
-      conf,
-      gangCardinalityOverride
+      conf
     )
 
     val executorResolvedConfig = resolveJobConfig(
@@ -421,16 +419,13 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
-    val modeHelper      = DeploymentModeHelper(conf)
-    val cardinality     = modeHelper.getScaleUpGangCardinality(executorCount)
 
     submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
       conf,
       driverJobId,
-      executorCount,
-      gangCardinalityOverride = Some(cardinality)
+      executorCount
     )
   }
 
@@ -1770,11 +1765,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       configGenerator: ConfigGenerator,
       templateAnnotations: Map[String, String],
       nodeUniformityLabel: Option[String],
-      conf: SparkConf,
-      gangCardinalityOverride: Option[Int] = None
+      conf: SparkConf
   ): Map[String, String] = {
     val modeHelper      = DeploymentModeHelper(conf)
-    val gangCardinality = gangCardinalityOverride.getOrElse(modeHelper.getGangCardinality)
+    val gangCardinality = modeHelper.getGangCardinality
     configGenerator.getAnnotations ++ templateAnnotations ++ nodeUniformityLabel
       .filter(_ => gangCardinality > 0) // Only add gang annotations if cardinality > 0
       .map(label =>

@@ -46,8 +46,11 @@ trait DeploymentModeHelper {
     * Gang scheduling ensures all pods in a group are scheduled together atomically. The cardinality
     * indicates how many pods must be scheduled as a unit.
     *
+    * Returns the config-derived gang size unless gang node affinity has already been captured, in
+    * which case returns 0 (no gang constraint needed for subsequent allocations).
+    *
     * @return
-    *   The total number of pods in the gang (executors + driver if applicable)
+    *   The total number of pods in the gang, or 0 if gang affinity already established
     */
   def getGangCardinality: Int
 
@@ -123,17 +126,6 @@ trait DeploymentModeHelper {
     */
   def getGangNodeSelector: Map[String, String]
 
-  /** Returns the gang cardinality for scale-up requests.
-    *
-    * After the initial gang attributes have been captured, scale-up requests should use cardinality
-    * 0 (no gang constraint). Before capture, uses the requested count.
-    *
-    * @param requestedCount
-    *   The number of executors requested
-    * @return
-    *   The gang cardinality to use for the submission
-    */
-  def getScaleUpGangCardinality(requestedCount: Int): Int
 }
 
 /** Static allocation in cluster mode.
@@ -148,10 +140,7 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
 
-  override def getGangCardinality: Int = {
-    // In cluster mode, include the driver pod in gang scheduling
-    getExecutorCount + 1
-  }
+  override def getGangCardinality: Int = getExecutorCount + 1
 
   override def isDriverInCluster: Boolean = true
 
@@ -169,7 +158,6 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
   override def captureGangAttributes(attributes: Map[String, String]): Unit = {}
   override def isReadyToAllocateMore: Boolean                               = true
   override def getGangNodeSelector: Map[String, String]                     = Map.empty
-  override def getScaleUpGangCardinality(requestedCount: Int): Int          = requestedCount
 
   override def toString: String = "StaticCluster"
 }
@@ -214,15 +202,14 @@ class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
   override def captureGangAttributes(attributes: Map[String, String]): Unit = {}
   override def isReadyToAllocateMore: Boolean                               = true
   override def getGangNodeSelector: Map[String, String]                     = Map.empty
-  override def getScaleUpGangCardinality(requestedCount: Int): Int          = requestedCount
 
   override def toString: String = "StaticClient"
 }
 
 /** Base class for dynamic allocation modes, holding shared gang lifecycle logic.
   *
-  * Provides captureGangAttributes, getGangNodeSelector, and getScaleUpGangCardinality. Subclasses
-  * must implement isReadyToAllocateMore and all other DeploymentModeHelper methods.
+  * Provides captureGangAttributes and getGangNodeSelector. Subclasses must implement
+  * isReadyToAllocateMore and all other DeploymentModeHelper methods.
   */
 private[armada] abstract class DynamicModeHelper(conf: SparkConf)
     extends DeploymentModeHelper
@@ -251,9 +238,6 @@ private[armada] abstract class DynamicModeHelper(conf: SparkConf)
     val value = conf.get(ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE).getOrElse("")
     if (name.nonEmpty && value.nonEmpty) Map(name -> value) else Map.empty
   }
-
-  override def getScaleUpGangCardinality(requestedCount: Int): Int =
-    if (getGangNodeSelector.nonEmpty) 0 else requestedCount
 }
 
 /** Dynamic allocation in cluster mode.
@@ -273,10 +257,10 @@ class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
     )
   }
 
-  override def getGangCardinality: Int = {
-    // In cluster mode, include the driver pod in gang scheduling
-    getExecutorCount + 1
-  }
+  // Returns 0 if node affinity already captured (no gang needed for subsequent allocations)
+  // In cluster mode, include the driver pod in gang scheduling
+  override def getGangCardinality: Int =
+    if (getGangNodeSelector.nonEmpty) 0 else getExecutorCount + 1
 
   override def isDriverInCluster: Boolean = true
 
@@ -313,10 +297,10 @@ class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
     )
   }
 
-  override def getGangCardinality: Int = {
-    // In client mode, driver runs externally, so only count executors
-    getExecutorCount
-  }
+  // Returns 0 if node affinity already captured (no gang needed for subsequent allocations)
+  // In client mode, driver runs externally, so only count executors
+  override def getGangCardinality: Int =
+    if (getGangNodeSelector.nonEmpty) 0 else getExecutorCount
 
   override def isDriverInCluster: Boolean = false
 
