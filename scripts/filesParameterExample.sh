@@ -55,7 +55,6 @@ EOF
 
 docker run \
   -v "$(pwd)/$EXAMPLE_FILES_DIR":/opt/files \
-  -v ~/incoming/conf:/opt/spark/conf \
   "${DOCKER_ENV_ARGS[@]}" \
   --rm --network host $IMAGE_NAME \
                           \
