@@ -230,6 +230,12 @@ else if [[ ${ARMADA_SPARK_SECRET_KEY-} != "" ]]; then
     )
      fi
 fi
+if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT-} != "" ]]; then
+    S3_CONF+=(
+        --conf spark.hadoop.fs.s3a.endpoint=$ARMADA_S3_BUCKET_ENDPOINT
+        --conf spark.hadoop.fs.s3a.path.style.access=true
+    )
+fi
 
 EVENT_LOG_CONF=()
 if [ ${#S3_CONF[@]} -gt 0 ]; then
