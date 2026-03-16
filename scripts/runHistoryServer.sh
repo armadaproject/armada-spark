@@ -22,7 +22,7 @@ echo "Starting Spark History Server"
 echo "  Log directory: ${ARMADA_EVENT_LOG_DIR}"
 echo "  UI: http://localhost:18080"
 
-docker run "${DOCKER_ENV_ARGS[@]}" \
+docker run --name armada-spark-history-server "${DOCKER_ENV_ARGS[@]}" \
     -e "SPARK_HISTORY_OPTS=${HISTORY_OPTS}" \
     -v $(pwd)/conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer 2>&1 | {
@@ -31,7 +31,9 @@ docker run "${DOCKER_ENV_ARGS[@]}" \
         if echo "$line" | grep -q "Log directory specified does not exist"; then
             echo ""
             echo "========================================="
-            echo "Error: Event log directory does not exist: ${ARMADA_EVENT_LOG_DIR} Exiting"
+            echo "Error: Event log directory does not exist: ${ARMADA_EVENT_LOG_DIR}"
+            docker stop armada-spark-history-server 2>/dev/null
+            exit 1
         fi
     done
 }

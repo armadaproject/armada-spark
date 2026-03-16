@@ -57,7 +57,6 @@ docker run \
   -v "$(pwd)/$EXAMPLE_FILES_DIR":/opt/files \
   "${DOCKER_ENV_ARGS[@]}" \
   --rm --network host $IMAGE_NAME \
-                          \
   /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER \
     --deploy-mode cluster \

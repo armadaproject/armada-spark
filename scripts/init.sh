@@ -221,14 +221,13 @@ if [[ ${AWS_ACCESS_KEY-} != "" ]]; then
         --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY
         --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY
     )
-else if [[ ${ARMADA_SPARK_SECRET_KEY-} != "" ]]; then
+elif [[ ${ARMADA_SPARK_SECRET_KEY-} != "" ]]; then
     S3_CONF=(
         --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
         --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
         --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
         --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
     )
-     fi
 fi
 if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT-} != "" ]]; then
     S3_CONF+=(
