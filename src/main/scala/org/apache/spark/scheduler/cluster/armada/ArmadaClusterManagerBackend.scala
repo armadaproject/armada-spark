@@ -43,6 +43,7 @@ import org.apache.spark.scheduler.{
   TaskSchedulerImpl
 }
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.k8s.GenerateExecID
 import org.apache.spark.util.{ThreadUtils, Utils}
 
@@ -142,6 +143,8 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Executor allocation manager */
   private var executorAllocator: Option[ArmadaExecutorAllocator] = None
 
+  private lazy val modeHelper = DeploymentModeHelper(conf)
+
   override def applicationId(): String = {
     conf.getAppId
   }
@@ -156,9 +159,12 @@ private[spark] class ArmadaClusterManagerBackend(
     // Set default application ID if not already set (needed for client mode where ArmadaClientApplication doesn't run)
     ArmadaUtils.setDefaultAppId(conf)
 
+    // Capture gang attributes from env vars (cluster mode); no-op in client mode.
+    this.modeHelper.captureGangAttributes(sys.env.toMap)
+
     // Initialize Armada event watcher if queue and jobSetId are provided
     val queueOpt    = conf.get(ARMADA_JOB_QUEUE)
-    val modeHelper  = DeploymentModeHelper(conf)
+    val modeHelper  = this.modeHelper
     val jobSetIdOpt = modeHelper.getJobSetIdSource(applicationId())
 
     (queueOpt, jobSetIdOpt) match {
@@ -185,11 +191,8 @@ private[spark] class ArmadaClusterManagerBackend(
 
           createAllocator(q, jsId, client)
 
-          // proactively request executors in static client mode only
-          // Additional check: check for ARMADA_JOB_SET_ID env var (only set in cluster mode)
-          val isClusterModeEnvCheck = sys.env.contains("ARMADA_JOB_SET_ID")
           val shouldProactivelyRequest =
-            !isClusterModeEnvCheck && modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
+            modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
 
           if (shouldProactivelyRequest) {
             val executorCount  = modeHelper.getExecutorCount
@@ -566,6 +569,8 @@ private[spark] class ArmadaClusterManagerBackend(
     */
   private[armada] def getPendingExecutorCount: Int = getExecutorCounts._2
 
+  private[armada] def isReadyToAllocateMore: Boolean = modeHelper.isReadyToAllocateMore
+
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
   private[armada] def onArmadaPreempting(jobId: String): Unit = {
@@ -628,8 +633,23 @@ private[spark] class ArmadaClusterManagerBackend(
         logDebug(s"Assigned executor ID $newId to Armada job $jobId")
     }
 
+    /** Message handler chain, tried in order:
+      *   1. gangInterceptor — intercepts RegisterExecutor to capture gang node selector attributes,
+      *      then delegates to super for the actual executor registration.
+      *   2. generateExecID — handles the custom GenerateExecID message.
+      *   3. super — handles all other standard Spark driver endpoint messages.
+      *
+      * @see
+      *   org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
+      */
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
-      generateExecID(context)
+      val gangInterceptor: PartialFunction[Any, Unit] = {
+        case msg @ RegisterExecutor(_, _, _, _, _, attributes, _, _) =>
+          modeHelper.captureGangAttributes(attributes)
+          super.receiveAndReply(context)(msg)
+      }
+      gangInterceptor
+        .orElse(generateExecID(context))
         .orElse(super.receiveAndReply(context))
     }
 

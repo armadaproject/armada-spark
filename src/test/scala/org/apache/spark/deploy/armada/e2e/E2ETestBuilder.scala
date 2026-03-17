@@ -354,25 +354,55 @@ class E2ETestBuilder(testName: String) {
     withExecutorPodAssertion(validator)
   }
 
-  /** Assert gang annotations on all pods seen across polls, without checking cardinality. Use for
-    * dynamic allocation where pods come and go with different cardinality values. Waits until at
-    * least expectedMinExecutors executor pods with valid annotations have been seen.
+  /** Assert gang scheduling for dynamic allocation. Adds three tracking assertions:
+    *   1. At least `initialGangPods` pods have Armada-injected gang env vars
+    *   2. At least `initialGangPods` pods have gang annotations (only the initial batch gets gang
+    *      annotations; scale-up batches use cardinality=0 and rely on node selectors)
+    *   3. Every scale-up pod (no gang annotations) must have a node selector for the uniformity
+    *      label. Initial gang pods pass unconditionally. Uses `initialGangPods` as min count so the
+    *      test passes even if the job completes before scale-up, but if a scale-up pod appears
+    *      without a node selector it fails.
     */
   def assertGangJobForDynamic(
       nodeUniformityLabel: String,
-      expectedMinExecutors: Int
+      initialGangPods: Int
   ): E2ETestBuilder = {
+    // Initial gang executors must have Armada-injected env vars
     assertions :+= new DynamicExecutorTrackingAssertion(
-      s"gang annotations and env vars ($nodeUniformityLabel)",
+      s"gang env vars ($nodeUniformityLabel)",
+      hasGangEnvVars(nodeUniformityLabel),
+      initialGangPods
+    )
+    // Only initial batch executors have gang annotations (scale-up uses cardinality=0)
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"gang annotations ($nodeUniformityLabel)",
       pod => {
         val annotations = pod.getMetadata.getAnnotations
         annotations != null &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty) &&
         Option(annotations.get(GangSchedulingAnnotations.GANG_NODE_UNIFORMITY_LABEL))
-          .contains(nodeUniformityLabel) &&
-        hasGangEnvVars(nodeUniformityLabel)(pod)
+          .contains(nodeUniformityLabel)
       },
-      expectedMinExecutors
+      initialGangPods
+    )
+    // Scale-up pods must have a node selector for the uniformity label.
+    // Initial gang pods (which have gang annotations) pass unconditionally.
+    assertions :+= new DynamicExecutorTrackingAssertion(
+      s"scale-up node selector ($nodeUniformityLabel)",
+      pod => {
+        val annotations = Option(pod.getMetadata.getAnnotations)
+        val hasGangAnnotation = annotations.exists(a =>
+          Option(a.get(GangSchedulingAnnotations.GANG_ID)).exists(_.nonEmpty)
+        )
+        if (hasGangAnnotation) true // initial gang pod — no node selector expected
+        else {
+          val nodeSelector = Option(pod.getSpec.getNodeSelector)
+            .map(_.asScala.toMap)
+            .getOrElse(Map.empty)
+          nodeSelector.contains(nodeUniformityLabel)
+        }
+      },
+      initialGangPods
     )
     this
   }

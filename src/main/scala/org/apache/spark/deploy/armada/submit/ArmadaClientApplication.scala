@@ -419,6 +419,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       executorCount: Int
   ): Seq[String] = {
     val armadaJobConfig = validateArmadaJobConfig(conf)
+
     submitExecutorJobs(
       armadaClient,
       armadaJobConfig,
@@ -1256,11 +1257,12 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withContainers(Seq(executorContainer) ++ sidecars)
       .withInitContainers(allInitContainers)
       .withSecurityContext(new PodSecurityContext().withRunAsUser(resolvedConfig.runAsUser))
-      .withNodeSelector(
+      .withNodeSelector({
+        val gangSelector = DeploymentModeHelper(conf).getGangNodeSelector
         if (resolvedConfig.nodeSelectors.nonEmpty)
-          resolvedConfig.nodeSelectors ++ getGangNodeSelector
-        else currentPodSpec.nodeSelector ++ getGangNodeSelector
-      )
+          resolvedConfig.nodeSelectors ++ gangSelector
+        else currentPodSpec.nodeSelector ++ gangSelector
+      })
 
     JobSubmitRequestItem(
       priority = if (resolvedConfig.priority != ArmadaClientApplication.DEFAULT_PRIORITY) {
@@ -1284,16 +1286,6 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         .getOrElse(Map.empty) ++ resolvedConfig.annotations,
       podSpec = Some(finalPodSpec)
     )
-  }
-
-  // These "GANG" env vars indicate that the pod is part of a gang and the corresponding
-  // node should be selected
-  private def getGangNodeSelector = {
-    val nodeLabel = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME", "")
-    val nodeValue = sys.env.getOrElse("ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE", "")
-    if (nodeLabel.nonEmpty)
-      Map(nodeLabel -> nodeValue)
-    else Map.empty
   }
 
   private def newDriverContainer(
