@@ -80,7 +80,9 @@ import org.apache.spark.deploy.k8s.Config.{
   KUBERNETES_FILE_UPLOAD_PATH,
   KUBERNETES_SUBMIT_GRACE_PERIOD
 }
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS, DYN_ALLOCATION_ENABLED}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
@@ -347,7 +349,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // Only create the actual job item if clientArguments is provided
     val jobItem = clientArguments.map { args =>
       val primaryResource = extractPrimaryResource(args.mainAppResource).map(r =>
-        resolveLocalAppResource(r, armadaJobConfig.driverFeatureStepContainer)
+        resolveLocalAppResource(r, armadaJobConfig.driverFeatureStepContainer, conf)
       )
       createDriverJob(
         armadaJobConfig,
@@ -1781,20 +1783,19 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     }
   }
 
-  /** URI schemes for remote storage — files with these schemes are not local filesystem paths. */
-  private val remoteSchemes =
-    Set("s3a", "s3", "hdfs", "gs", "wasb", "wasbs", "abfs", "abfss", "http", "https", "ftp")
-
-  /** Returns true if the arg represents a file path rather than a remote resource. Includes bare
-    * paths, file:// URIs, and Spark's local:// scheme (container-local files).
+  /** Returns true if the arg represents a local file path rather than a remote resource. Bare paths
+    * (no scheme) are resolved against the default filesystem from hadoop config.
     */
-  private def isLocalFile(arg: String): Boolean = {
+  private[submit] def isLocalFile(arg: String, conf: SparkConf): Boolean = {
     try {
-      val uri    = new java.net.URI(arg)
-      val scheme = Option(uri.getScheme).map(_.toLowerCase)
-      scheme.isEmpty || scheme.contains("file") || scheme.contains("local")
+      val uri = new java.net.URI(arg)
+      val scheme = Option(uri.getScheme).map(_.toLowerCase).getOrElse {
+        val hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
+        Option(FileSystem.getDefaultUri(hadoopConf).getScheme).map(_.toLowerCase).getOrElse("file")
+      }
+      scheme == "file" || scheme == "local"
     } catch {
-      case _: java.net.URISyntaxException => !remoteSchemes.exists(s => arg.startsWith(s + ":"))
+      case _: java.net.URISyntaxException => false
     }
   }
 
@@ -1807,9 +1808,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     */
   private[submit] def resolveLocalAppResource(
       appResource: String,
-      featureStepContainer: Option[Container]
+      featureStepContainer: Option[Container],
+      conf: SparkConf
   ): String = {
-    if (!isLocalFile(appResource)) return appResource
+    if (!isLocalFile(appResource, conf)) return appResource
     featureStepContainer match {
       case None => appResource
       case Some(container) =>

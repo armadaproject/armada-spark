@@ -1588,14 +1588,15 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.resolveLocalAppResource(
       "/opt/files/pi.py",
-      Some(featureStepContainer)
+      Some(featureStepContainer),
+      sparkConf
     )
 
     result shouldBe "local:///opt/spark/work/pi.py"
   }
 
   test("resolveLocalAppResource returns original when no container") {
-    val result = armadaClientApp.resolveLocalAppResource("script.py", None)
+    val result = armadaClientApp.resolveLocalAppResource("script.py", None, sparkConf)
 
     result shouldBe "script.py"
   }
@@ -1615,7 +1616,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.resolveLocalAppResource(
       "/opt/files/read_lines.py",
-      Some(featureStepContainer)
+      Some(featureStepContainer),
+      sparkConf
     )
 
     result shouldBe "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
@@ -1629,7 +1631,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.resolveLocalAppResource(
       "s3a://bucket/path/data.csv",
-      Some(featureStepContainer)
+      Some(featureStepContainer),
+      sparkConf
     )
 
     result shouldBe "s3a://bucket/path/data.csv"
@@ -1641,10 +1644,22 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
     val result = armadaClientApp.resolveLocalAppResource(
       "/home/user/app.jar",
-      Some(featureStepContainer)
+      Some(featureStepContainer),
+      sparkConf
     )
 
     result shouldBe "/home/user/app.jar"
+  }
+
+  test("isLocalFile treats bare path as remote when defaultFS is s3a") {
+    val s3Conf = sparkConf.clone()
+    s3Conf.set("spark.hadoop.fs.defaultFS", "s3a://my-bucket")
+
+    armadaClientApp.isLocalFile("/data/app.jar", s3Conf) shouldBe false
+  }
+
+  test("isLocalFile treats bare path as local when defaultFS is file") {
+    armadaClientApp.isLocalFile("/data/app.jar", sparkConf) shouldBe true
   }
 
   test("createExecutorJobs should create multiple executor jobs") {
