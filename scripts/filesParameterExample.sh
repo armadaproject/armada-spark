@@ -63,7 +63,7 @@ docker run \
   /opt/spark/bin/spark-submit \
     --master $ARMADA_MASTER \
     --deploy-mode cluster \
-    --name files-paramater-example \
+    --name files-parameter-example \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.container.image=$IMAGE_NAME \
     --conf spark.kubernetes.file.upload.path=$ARMADA_S3_USER_DIR/tmp \
