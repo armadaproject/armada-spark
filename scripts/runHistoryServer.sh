@@ -13,8 +13,8 @@ fi
 HISTORY_OPTS="-Dspark.history.fs.logDirectory=${ARMADA_EVENT_LOG_DIR}"
 HISTORY_OPTS+=" -Dspark.hadoop.fs.s3a.endpoint=${ARMADA_S3_BUCKET_ENDPOINT}"
 HISTORY_OPTS+=" -Dspark.hadoop.fs.s3a.path.style.access=true"
-if [[ ${AWS_ACCESS_KEY:-} != "" ]]; then
-    HISTORY_OPTS+=" -Dspark.hadoop.fs.s3a.access.key=${AWS_ACCESS_KEY}"
+if [[ ${AWS_ACCESS_KEY_ID:-} != "" ]]; then
+    HISTORY_OPTS+=" -Dspark.hadoop.fs.s3a.access.key=${AWS_ACCESS_KEY_ID}"
     HISTORY_OPTS+=" -Dspark.hadoop.fs.s3a.secret.key=${AWS_SECRET_ACCESS_KEY}"
 fi
 

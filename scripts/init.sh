@@ -148,8 +148,8 @@ DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
     DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
 fi
-if [ "${AWS_ACCESS_KEY:-}" != "" ]; then
-    DOCKER_ENV_ARGS+=(-e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY")
+if [ "${AWS_ACCESS_KEY_ID:-}" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY")
 fi
 
 # Validation
@@ -216,9 +216,9 @@ if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHO
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
 
 S3_CONF=()
-if [[ ${AWS_ACCESS_KEY:-} != "" ]]; then
+if [[ ${AWS_ACCESS_KEY_ID:-} != "" ]]; then
     S3_CONF=(
-        --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY
+        --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID
         --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY
     )
 elif [[ ${ARMADA_SPARK_SECRET_KEY:-} != "" ]]; then
