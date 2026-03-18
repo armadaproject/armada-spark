@@ -216,12 +216,12 @@ if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHO
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
 
 S3_CONF=()
-if [[ ${AWS_ACCESS_KEY-} != "" ]]; then
+if [[ ${AWS_ACCESS_KEY:-} != "" ]]; then
     S3_CONF=(
         --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY
         --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY
     )
-elif [[ ${ARMADA_SPARK_SECRET_KEY-} != "" ]]; then
+elif [[ ${ARMADA_SPARK_SECRET_KEY:-} != "" ]]; then
     S3_CONF=(
         --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
         --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
@@ -229,7 +229,7 @@ elif [[ ${ARMADA_SPARK_SECRET_KEY-} != "" ]]; then
         --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
     )
 fi
-if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT-} != "" ]]; then
+if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT:-} != "" ]]; then
     S3_CONF+=(
         --conf spark.hadoop.fs.s3a.endpoint=$ARMADA_S3_BUCKET_ENDPOINT
         --conf spark.hadoop.fs.s3a.path.style.access=true

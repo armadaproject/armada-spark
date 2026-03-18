@@ -1651,6 +1651,28 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result shouldBe "/home/user/app.jar"
   }
 
+  test("resolveLocalAppResource returns original when basenames do not match") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq(
+          "driver",
+          "--properties-file",
+          "/opt/spark/conf/spark.properties",
+          "--class",
+          "org.apache.spark.deploy.PythonRunner",
+          "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/other_script.py"
+        )
+      )
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/read_lines.py",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "/opt/files/read_lines.py"
+  }
+
   test("isLocalFile treats bare path as remote when defaultFS is s3a") {
     val s3Conf = sparkConf.clone()
     s3Conf.set("spark.hadoop.fs.defaultFS", "s3a://my-bucket")
