@@ -1106,10 +1106,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     * @param clientArguments
     *   Client arguments with application details
     * @return
-    *   A tuple of (Some(JobSubmitRequestItem), Some(Container)) with basic feature steps applied.
-    *   JobSubmitRequestItem contains labels, annotations, and PodSpec with init
-    *   containers/sidecars. Container is the main Spark driver container with env vars and volume
-    *   mounts.
+    *   A tuple of (Option[JobSubmitRequestItem], Option[Container], Map[String, String]) with
+    *   basic feature steps applied. JobSubmitRequestItem contains labels, annotations, and PodSpec
+    *   with init containers/sidecars. Container is the main Spark driver container with env vars
+    *   and volume mounts. The Map contains system properties from the driver spec.
     */
   private[spark] def getDriverFeatureSteps(
       conf: SparkConf,
