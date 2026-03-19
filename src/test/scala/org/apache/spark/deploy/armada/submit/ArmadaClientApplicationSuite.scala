@@ -93,8 +93,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
   after {
     if (tempDir != null) {
-      tempDir.toFile.listFiles().foreach(_.delete())
-      Files.deleteIfExists(tempDir)
+      Files
+        .walk(tempDir)
+        .sorted(java.util.Comparator.reverseOrder())
+        .forEach(Files.deleteIfExists(_))
     }
   }
 
@@ -114,15 +116,23 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // spark.kubernetes.file.upload.path support where BasicDriverFeatureStep
     // uploads local files and returns remote URIs in systemProperties.
 
-    val conf = sparkConf.clone()
+    val conf     = sparkConf.clone()
+    val testFile = Files.createTempFile(tempDir, "test-file", ".txt")
+    conf.set("spark.files", testFile.toAbsolutePath.toString)
+    conf.set("spark.kubernetes.file.upload.path", tempDir.toAbsolutePath.toString)
     val armadaJobConfig = armadaClientApp.validateArmadaJobConfig(
       conf,
       Some(clientArguments)
     )
 
-    // Verify that driverSystemProperties is populated (feature steps return props)
-    // The exact contents depend on Spark's feature steps, but the field should exist
-    armadaJobConfig.driverSystemProperties shouldBe a[Map[_, _]]
+    // BasicDriverFeatureStep uploads local files to the upload path and returns
+    // the remote URI in systemProperties under spark.files
+    armadaJobConfig.driverSystemProperties should contain key "spark.files"
+    armadaJobConfig.driverSystemProperties("spark.files") should not be
+      testFile.toAbsolutePath.toString
+    armadaJobConfig.driverSystemProperties("spark.files") should startWith(
+      tempDir.toAbsolutePath.toString
+    )
   }
 
   test("K8s pod templates are correctly read and applied") {
