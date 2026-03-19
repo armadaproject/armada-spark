@@ -160,6 +160,9 @@ DOCKER_ENV_ARGS=(-e SPARK_PRINT_LAUNCH_COMMAND=true)
 if [ "$ARMADA_AUTH_TOKEN" != "" ]; then
     DOCKER_ENV_ARGS+=(-e "ARMADA_AUTH_TOKEN=$ARMADA_AUTH_TOKEN")
 fi
+if [ "${AWS_ACCESS_KEY_ID:-}" != "" ]; then
+    DOCKER_ENV_ARGS+=(-e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY")
+fi
 
 # Validation
 
@@ -223,3 +226,35 @@ fi
 
 if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
+
+S3_CONF=()
+if [[ ${AWS_ACCESS_KEY_ID:-} != "" ]]; then
+    S3_CONF=(
+        --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID
+        --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY
+    )
+elif [[ ${ARMADA_SPARK_SECRET_KEY:-} != "" ]]; then
+    S3_CONF=(
+        --conf spark.kubernetes.driver.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
+        --conf spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY=$ARMADA_SPARK_SECRET_KEY:secret_key
+        --conf spark.kubernetes.driver.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
+        --conf spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID=$ARMADA_SPARK_SECRET_KEY:access_key
+    )
+fi
+if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT:-} != "" ]]; then
+    S3_CONF+=(
+        --conf spark.hadoop.fs.s3a.endpoint=$ARMADA_S3_BUCKET_ENDPOINT
+        --conf spark.hadoop.fs.s3a.path.style.access=true
+    )
+fi
+
+EVENT_LOG_CONF=()
+if [ ${#S3_CONF[@]} -gt 0 ]; then
+    ARMADA_EVENT_LOG_DIR="$ARMADA_S3_USER_DIR/eventLog"
+    EVENT_LOG_CONF=(
+        --conf spark.eventLog.enabled=true
+        --conf spark.eventLog.dir=$ARMADA_EVENT_LOG_DIR
+        --conf spark.history.fs.logDirectory=$ARMADA_EVENT_LOG_DIR
+    )
+fi
+

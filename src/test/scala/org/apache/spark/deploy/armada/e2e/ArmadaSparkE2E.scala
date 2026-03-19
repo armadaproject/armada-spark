@@ -266,8 +266,17 @@ class ArmadaSparkE2E
 
   test("Basic SparkPi job with gang scheduling - dynamicCluster", E2ETest) {
     baseSparkPiGangTest("cluster", "dynamic", 2)
-      .assertGangJobForDynamic(
-        "armada-spark",
+      .assertGangJobForDynamic("armada-spark", initialGangPods = 2)
+      .assertExecutorCountMaxReachedAtLeast(
+        3
+      ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
+      .run()
+  }
+
+  test("Basic SparkPi job with gang scheduling - dynamicClient", E2ETest) {
+    baseSparkPiGangTest("client", "dynamic", 2)
+      .assertGangJobForDynamic("armada-spark", initialGangPods = 2)
+      .assertExecutorCountMaxReachedAtLeast(
         3
       ) // at least 3 executor pods (2 min + 1 scaled) with gang annotations seen
       .run()
@@ -332,7 +341,6 @@ class ArmadaSparkE2E
       .withPythonScript("/opt/spark/examples/src/main/python/pi.py")
       .withSparkConf(
         Map(
-          "spark.kubernetes.file.upload.path"          -> "/tmp",
           "spark.kubernetes.executor.disableConfigMap" -> "true"
         )
       )

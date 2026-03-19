@@ -86,6 +86,7 @@ scripts/.tmp/
 
 # Jupyter
 example/jupyter/workspace/
+example/files
 
 # Claude Code
 plans/
