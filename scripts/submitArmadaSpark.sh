@@ -91,11 +91,11 @@ SPARK_SUBMIT_ARGS=(
     --deploy-mode $DEPLOY_MODE
     --name $NAME
     $CLASS_PROMPT $CLASS_ARG
+    "${S3_CONF[@]}" \
     --conf spark.home=/opt/spark
     --conf spark.armada.container.image=$IMAGE_NAME
     --conf spark.armada.queue=$ARMADA_QUEUE
     --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
-    --conf spark.kubernetes.file.upload.path=/tmp
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
     --conf spark.local.dir=/tmp
     --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
@@ -106,6 +106,9 @@ SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 
 # Add auth args
 SPARK_SUBMIT_ARGS+=("${ARMADA_AUTH_ARGS[@]}")
+
+# Add event log conf
+SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]}")
 
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")

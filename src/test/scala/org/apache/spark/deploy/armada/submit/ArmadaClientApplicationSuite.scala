@@ -93,8 +93,10 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
   after {
     if (tempDir != null) {
-      tempDir.toFile.listFiles().foreach(_.delete())
-      Files.deleteIfExists(tempDir)
+      Files
+        .walk(tempDir)
+        .sorted(java.util.Comparator.reverseOrder())
+        .forEach(Files.deleteIfExists(_))
     }
   }
 
@@ -106,6 +108,31 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     // as the last step in job creation
 
     // Feature steps are now applied as the final transformation during job creation
+  }
+
+  test("Driver system properties from feature steps are included in driver args") {
+    // The driverSystemProperties field in ArmadaJobConfig should be applied
+    // to the SparkConf before building driver args. This is critical for
+    // spark.kubernetes.file.upload.path support where BasicDriverFeatureStep
+    // uploads local files and returns remote URIs in systemProperties.
+
+    val conf     = sparkConf.clone()
+    val testFile = Files.createTempFile(tempDir, "test-file", ".txt")
+    conf.set("spark.files", testFile.toAbsolutePath.toString)
+    conf.set("spark.kubernetes.file.upload.path", tempDir.toAbsolutePath.toString)
+    val armadaJobConfig = armadaClientApp.validateArmadaJobConfig(
+      conf,
+      Some(clientArguments)
+    )
+
+    // BasicDriverFeatureStep uploads local files to the upload path and returns
+    // the remote URI in systemProperties under spark.files
+    armadaJobConfig.driverSystemProperties should contain key "spark.files"
+    armadaJobConfig.driverSystemProperties("spark.files") should not be
+      testFile.toAbsolutePath.toString
+    armadaJobConfig.driverSystemProperties("spark.files") should startWith(
+      tempDir.toAbsolutePath.toString
+    )
   }
 
   test("K8s pod templates are correctly read and applied") {
@@ -453,7 +480,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
@@ -620,7 +648,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -901,7 +930,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -1045,7 +1075,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val result = armadaClientApp.mergeDriverTemplate(
@@ -1163,7 +1194,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val runtimeAnnotations = Map("runtime-key" -> "runtime-value")
@@ -1262,7 +1294,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1376,7 +1409,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val resolvedConfig = armadaClientApp.ResolvedJobConfig(
@@ -1503,7 +1537,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1545,6 +1580,118 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     container.ports.head.containerPort shouldBe Some(7078)
 
     result.services should have size 1
+  }
+
+  test("resolveLocalAppResource returns feature step app resource for local path") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq(
+          "driver",
+          "--properties-file",
+          "/opt/spark/conf/spark.properties",
+          "--class",
+          "org.apache.spark.deploy.PythonRunner",
+          "local:///opt/spark/work/pi.py",
+          "100"
+        )
+      )
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/pi.py",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "local:///opt/spark/work/pi.py"
+  }
+
+  test("resolveLocalAppResource returns original when no container") {
+    val result = armadaClientApp.resolveLocalAppResource("script.py", None, sparkConf)
+
+    result shouldBe "script.py"
+  }
+
+  test("resolveLocalAppResource resolves to s3a:// uploaded path") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq(
+          "driver",
+          "--properties-file",
+          "/opt/spark/conf/spark.properties",
+          "--class",
+          "org.apache.spark.deploy.PythonRunner",
+          "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
+        )
+      )
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/read_lines.py",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/read_lines.py"
+  }
+
+  test("resolveLocalAppResource does not resolve s3a:// remote resource") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq("driver", "--class", "Main", "local:///opt/spark/work/data.csv")
+      )
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "s3a://bucket/path/data.csv",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "s3a://bucket/path/data.csv"
+  }
+
+  test("resolveLocalAppResource returns original when no --class in args") {
+    val featureStepContainer = Container()
+      .withArgs(Seq("driver", "local:///opt/spark/work/app.jar"))
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/home/user/app.jar",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "/home/user/app.jar"
+  }
+
+  test("resolveLocalAppResource returns original when basenames do not match") {
+    val featureStepContainer = Container()
+      .withArgs(
+        Seq(
+          "driver",
+          "--properties-file",
+          "/opt/spark/conf/spark.properties",
+          "--class",
+          "org.apache.spark.deploy.PythonRunner",
+          "s3a://kafka-s3/gbj/tmp/spark-upload-abc123/other_script.py"
+        )
+      )
+
+    val result = armadaClientApp.resolveLocalAppResource(
+      "/opt/files/read_lines.py",
+      Some(featureStepContainer),
+      sparkConf
+    )
+
+    result shouldBe "/opt/files/read_lines.py"
+  }
+
+  test("isLocalFile treats bare path as remote when defaultFS is s3a") {
+    val s3Conf = sparkConf.clone()
+    s3Conf.set("spark.hadoop.fs.defaultFS", "s3a://my-bucket")
+
+    armadaClientApp.isLocalFile("/data/app.jar", s3Conf) shouldBe false
+  }
+
+  test("isLocalFile treats bare path as local when defaultFS is file") {
+    armadaClientApp.isLocalFile("/data/app.jar", sparkConf) shouldBe true
   }
 
   test("createExecutorJobs should create multiple executor jobs") {
@@ -1591,7 +1738,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val configGenerator = new ConfigGenerator(tempDir.toString, sparkConf)
@@ -1683,7 +1831,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     sparkConf.set("spark.executor.instances", "0")
@@ -1723,7 +1872,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     sparkConf.set("spark.submit.deployMode", "cluster")
@@ -2039,7 +2189,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = None,
       driverFeatureStepContainer = None,
       executorFeatureStepJobItem = Some(featureStepJobItem),
-      executorFeatureStepContainer = Some(featureStepContainer)
+      executorFeatureStepContainer = Some(featureStepContainer),
+      driverSystemProperties = Map.empty
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
@@ -2201,7 +2352,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverFeatureStepJobItem = Some(featureStepJobItem),
       driverFeatureStepContainer = Some(featureStepContainer),
       executorFeatureStepJobItem = None,
-      executorFeatureStepContainer = None
+      executorFeatureStepContainer = None,
+      driverSystemProperties = Map.empty
     )
 
     val javaOptEnvVars = Seq(EnvVar().withName("SPARK_JAVA_OPT_0").withValue("-Xmx1g"))
