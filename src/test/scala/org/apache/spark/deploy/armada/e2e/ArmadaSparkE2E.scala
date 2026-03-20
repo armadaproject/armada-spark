@@ -293,8 +293,8 @@ class ArmadaSparkE2E
       allocation,
       Map("test-type" -> "node-selector")
     )
-      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
-      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker"))
+      .withNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker2"))
+      .assertNodeSelectors(Map("kubernetes.io/hostname" -> "armada-worker2"))
 
     val configured = base.withAllocationMode(allocation, executorCount)
     if (allocation == "dynamic")

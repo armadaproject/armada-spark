@@ -1862,7 +1862,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
         executorLabels = Map.empty,
         armadaClusterUrl = Some("armada://localhost:50051"),
         nodeSelectors = Map.empty,
-        nodeUniformityLabel = None,
+        nodeUniformityLabel = Some("armada-spark"),
         executorConnectionTimeout = Some(300.seconds),
         runAsUser = None,
         driverResources = armadaClientApp.ResourceConfig(None, None, None, None),
@@ -1876,6 +1876,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
       driverSystemProperties = Map.empty
     )
 
+    sparkConf.set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+    sparkConf.set("spark.dynamicAllocation.initialExecutors", "2")
     sparkConf.set("spark.submit.deployMode", "cluster")
     sparkConf.set("spark.dynamicAllocation.enabled", "true")
     sparkConf.set("spark.dynamicAllocation.minExecutors", "0")

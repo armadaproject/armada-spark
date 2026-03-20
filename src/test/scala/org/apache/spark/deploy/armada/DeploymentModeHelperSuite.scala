@@ -40,10 +40,11 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   test(
     "DeploymentModeHelper.apply: creates DynamicCluster for cluster mode with dynamic allocation"
   ) {
-    val conf = new SparkConf()
+    val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicCluster]
@@ -68,10 +69,12 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   test(
     "DeploymentModeHelper.apply: creates DynamicClient for client mode with dynamic allocation"
   ) {
-    val conf = new SparkConf()
+    val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicClient]
@@ -93,9 +96,11 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   }
 
   test("getDriverHostName: DynamicCluster returns service name from job ID") {
-    val conf = new SparkConf()
+    val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "1")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
 
     val helper           = DeploymentModeHelper(conf)
     val driverJobId      = "dynamic-job-456"
@@ -118,10 +123,11 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   }
 
   test("getDriverHostName: DynamicClient returns spark.driver.host from config") {
-    val conf = new SparkConf()
+    val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
       .set("spark.driver.host", "external-driver.local")
 
     val helper      = DeploymentModeHelper(conf)
@@ -150,10 +156,11 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   test(
     "getDriverHostName: DynamicClient throws IllegalArgumentException when spark.driver.host is not set"
   ) {
-    val conf = new SparkConf()
+    val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
 
     val helper      = DeploymentModeHelper(conf)
     val driverJobId = "dynamic-client-job-without-host"
@@ -269,35 +276,6 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     conf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
   }
 
-  test("DynamicClient: captureGangAttributes is no-op when nodeUniformity not configured") {
-    val conf = new SparkConf(false)
-      .set("spark.submit.deployMode", "client")
-      .set("spark.dynamicAllocation.enabled", "true")
-      .set("spark.dynamicAllocation.minExecutors", "2")
-      .set("spark.driver.host", "localhost")
-
-    val helper = DeploymentModeHelper(conf)
-    helper.captureGangAttributes(
-      Map(
-        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
-        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
-      )
-    )
-
-    conf.getOption("spark.armada.internal.gangNodeLabelName") shouldBe None
-  }
-
-  test("DynamicClient: isReadyToAllocateMore returns true when nodeUniformity not configured") {
-    val conf = new SparkConf(false)
-      .set("spark.submit.deployMode", "client")
-      .set("spark.dynamicAllocation.enabled", "true")
-      .set("spark.dynamicAllocation.minExecutors", "2")
-      .set("spark.driver.host", "localhost")
-
-    val helper = DeploymentModeHelper(conf)
-    helper.isReadyToAllocateMore shouldBe true
-  }
-
   test("DynamicClient: isReadyToAllocateMore returns false before gang attributes captured") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
@@ -345,6 +323,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
       .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
@@ -370,11 +349,13 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     helper.getGangNodeSelector shouldBe Map("topology.kubernetes.io/zone" -> "us-east-1a")
   }
 
-  test("DynamicClient: getGangCardinality returns cardinality before capture") {
+  test("DynamicClient: getGangCardinality returns initialExecutors before capture") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
-      .set("spark.dynamicAllocation.minExecutors", "3")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "3")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
@@ -385,7 +366,8 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
-      .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
       .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
       .set("spark.driver.host", "localhost")
 
@@ -424,22 +406,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
   }
 
   test(
-    "DynamicClient: throws when minExecutors < 2"
-  ) {
-    val conf = new SparkConf(false)
-      .set("spark.submit.deployMode", "client")
-      .set("spark.dynamicAllocation.enabled", "true")
-      .set("spark.dynamicAllocation.minExecutors", "1")
-      .set("spark.driver.host", "localhost")
-
-    val exception = intercept[IllegalArgumentException] {
-      DeploymentModeHelper(conf)
-    }
-    exception.getMessage should include("minExecutors must be >= 2")
-  }
-
-  test(
-    "DynamicCluster: allows minExecutors = 1 in dynamic cluster mode"
+    "DynamicCluster: allows initialExecutors = 1 in dynamic cluster mode"
   ) {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "cluster")
@@ -449,7 +416,213 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicCluster]
-    // cardinality = 1 + 1 (driver) = 2, so gang envs will be injected
+    // initialExecutors defaults to minExecutors=1, cardinality = 1 + 1 (driver) = 2
     helper.getGangCardinality shouldBe 2
+    helper.getExecutorCount shouldBe 1
+  }
+
+  test("DynamicClient: allows minExecutors = 0 when initialExecutors >= 2") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+    helper shouldBe a[DynamicClient]
+    helper.getExecutorCount shouldBe 0
+  }
+
+  test("DynamicClient: throws when initialExecutors < 2") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "1")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val exception = intercept[IllegalArgumentException] {
+      DeploymentModeHelper(conf)
+    }
+    exception.getMessage should include("initialExecutors must be >= 2")
+  }
+
+  test("DynamicClient: throws when nodeUniformity not configured") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.driver.host", "localhost")
+
+    val exception = intercept[IllegalArgumentException] {
+      DeploymentModeHelper(conf)
+    }
+    exception.getMessage should include("nodeUniformity")
+  }
+
+  test("DynamicClient: minExecutors and initialExecutors are independent") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "2")
+      .set("spark.dynamicAllocation.initialExecutors", "5")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.getExecutorCount shouldBe 2
+    helper.getGangCardinality shouldBe 5
+  }
+
+  // ========================================================================
+  // Scale-from-zero scenario tests
+  // ========================================================================
+
+  test("DynamicClient: gang cardinality is 0 after capture even with minExecutors=0") {
+    // Simulates the post-bootstrap state: gang attributes captured,
+    // then Spark scaled down to 0. Next scale-up should use node selector, not gang.
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+
+    // Before capture: gang cardinality = initialExecutors
+    helper.getGangCardinality shouldBe 2
+
+    // Simulate initial batch registering and sending gang attributes
+    helper.captureGangAttributes(
+      Map(
+        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
+      )
+    )
+
+    // After capture: gang cardinality = 0, node selector carries placement
+    helper.getGangCardinality shouldBe 0
+    helper.getGangNodeSelector shouldBe Map("topology.kubernetes.io/zone" -> "us-east-1a")
+    helper.isReadyToAllocateMore shouldBe true
+  }
+
+  test("DynamicClient: getExecutorCount returns 0 when minExecutors=0") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.getExecutorCount shouldBe 0
+  }
+
+  test("DynamicClient: isReadyToAllocateMore blocks before gang capture") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "3")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.isReadyToAllocateMore shouldBe false
+  }
+
+  test("DynamicClient: minExecutors=0 with high initialExecutors") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "client")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "10")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+      .set("spark.driver.host", "localhost")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.getExecutorCount shouldBe 0
+    helper.getGangCardinality shouldBe 10
+  }
+
+  // ========================================================================
+  // DynamicCluster initialExecutors tests
+  // ========================================================================
+
+  test("DynamicCluster: throws when nodeUniformity not configured") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "cluster")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "2")
+
+    val exception = intercept[IllegalArgumentException] {
+      DeploymentModeHelper(conf)
+    }
+    exception.getMessage should include("nodeUniformity")
+  }
+
+  test("DynamicCluster: throws when initialExecutors < 1") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "cluster")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "0")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+
+    val exception = intercept[IllegalArgumentException] {
+      DeploymentModeHelper(conf)
+    }
+    exception.getMessage should include("initialExecutors must be >= 1")
+  }
+
+  test("DynamicCluster: getExecutorCount returns initialExecutors") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "cluster")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "3")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.getExecutorCount shouldBe 3
+  }
+
+  test("DynamicCluster: getGangCardinality includes driver") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "cluster")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+
+    val helper = DeploymentModeHelper(conf)
+    // cardinality = 2 executors + 1 driver = 3
+    helper.getGangCardinality shouldBe 3
+  }
+
+  test("DynamicCluster: getGangCardinality returns 0 after capture") {
+    val conf = new SparkConf(false)
+      .set("spark.submit.deployMode", "cluster")
+      .set("spark.dynamicAllocation.enabled", "true")
+      .set("spark.dynamicAllocation.minExecutors", "0")
+      .set("spark.dynamicAllocation.initialExecutors", "2")
+      .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
+
+    val helper = DeploymentModeHelper(conf)
+    helper.captureGangAttributes(
+      Map(
+        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_NAME"  -> "topology.kubernetes.io/zone",
+        "ARMADA_GANG_NODE_UNIFORMITY_LABEL_VALUE" -> "us-east-1a"
+      )
+    )
+
+    helper.getGangCardinality shouldBe 0
   }
 }
