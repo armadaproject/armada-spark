@@ -28,6 +28,9 @@ import io.fabric8.kubernetes.client.{
 import io.fabric8.kubernetes.api.model.{NamespaceBuilder, Pod}
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 
+import org.yaml.snakeyaml.Yaml
+
+import java.io.FileReader
 import java.util.concurrent.TimeoutException
 import java.util.Properties
 import scala.jdk.CollectionConverters._
@@ -38,7 +41,20 @@ import scala.concurrent.{ExecutionContext, Future}
 class K8sClient(props: Properties) {
   val armadaMaster: String = props.getProperty("armada.master")
   val pattern              = """armada://([^:]+):.*""".r
-  val k8sApiURL: String    = pattern.replaceAllIn(armadaMaster, "https://$1:6443")
+
+  // If armadaMaster is local, derive k8sApiURL from ~/.kube/config,
+  // which `kind` will create/update.
+  val yaml      = new Yaml()
+  val home      = System.getProperty("user.home")
+  val data      = yaml.load[java.util.Map[String, Object]](new FileReader(s"$home/.kube/config"))
+  var k8sApiURL = "no-K8S-server-found"
+
+  val clusters =
+    data.get("clusters").asInstanceOf[java.util.List[java.util.Map[String, Object]]].asScala
+  clusters.foreach { entry =>
+    val cluster = entry.get("cluster").asInstanceOf[java.util.Map[String, Object]]
+    k8sApiURL = cluster.get("server").toString()
+  }
 
   println(s"-------- K8sClient(): armadaMaster = ${armadaMaster}")
   println(s"-------- K8sClient(): k8sApiURL= ${k8sApiURL}")

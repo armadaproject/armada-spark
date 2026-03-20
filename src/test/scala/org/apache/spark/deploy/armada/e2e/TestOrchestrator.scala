@@ -338,28 +338,20 @@ class TestOrchestrator(
       context: TestContext,
       modeHelper: DeploymentModeHelper
   ): Future[Unit] = Future {
-    val deployMode = if (modeHelper.isDriverInCluster) "cluster" else "client"
-
     // Use spark-examples JAR with the correct path based on Scala binary version and Spark version
     // Following the same pattern as scripts/init.sh
-    val appResource = {
-      if (config.pythonScript.isDefined) {
-        config.pythonScript.get
-      } else if (deployMode == "cluster") {
-        // s"local:///opt/spark/examples/target/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
-        s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
-      } else {
-        // broken s"${sparkRepoCopy}/examples/target/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
-        s"${sparkRepoCopy}/examples/target/scala-${config.scalaVersion}/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
-        // .spark-3.5.5/examples/target/scala-2.13/jars/spark-examples_2.13-3.5.5.jar
-      }
-    }
+    val appResource = config.pythonScript.getOrElse(
+      s"local:///opt/spark/examples/jars/spark-examples_${config.scalaVersion}-${config.sparkVersion}.jar"
+    )
+    val volumeMounts = buildVolumeMounts()
 
     val contextLabelString = context.labels.iterator.map { case (k, v) => s"$k=$v" }.mkString(",")
     val mergedLabels = config.sparkConfs
       .get("spark.armada.pod.labels")
       .map(existing => s"$existing,$contextLabelString")
       .getOrElse(contextLabelString)
+
+    val deployMode = if (modeHelper.isDriverInCluster) "cluster" else "client"
 
     val enhancedSparkConfs = config.sparkConfs ++ Map(
       "spark.armada.pod.labels"           -> mergedLabels,
@@ -369,6 +361,7 @@ class TestOrchestrator(
 
     val runTestCommand = buildRunTestCommand(
       config.imageName,
+      volumeMounts,
       config.masterUrl,
       testName,
       queueName,
@@ -381,7 +374,7 @@ class TestOrchestrator(
       config.appArgs
     )
 
-    println(s"\n[SUBMIT] Submitting Spark job:")
+    println(s"\n[SUBMIT] Submitting Spark job via Docker:")
     println(s"[SUBMIT]   Queue: $queueName")
     println(s"[SUBMIT]   JobSetId: $jobSetId")
     println(s"[SUBMIT]   Namespace: ${context.namespace}")
@@ -600,6 +593,7 @@ class TestOrchestrator(
 
   private def buildRunTestCommand(
       imageName: String,
+      volumeMounts: Seq[String],
       masterUrl: String,
       testName: String,
       queueName: String,
@@ -620,10 +614,15 @@ class TestOrchestrator(
     ).mkString(":")
 
     val baseCommand = Seq(
-      s"${sparkRepoCopy}/bin/spark-class",
+      "docker",
+      "run",
+      "--rm",
+      "--network",
+      "host"
+    ) ++ volumeMounts ++ Seq(
+      imageName,
+      "/opt/spark/bin/spark-class",
       "org.apache.spark.deploy.SparkSubmit",
-      "--driver-class-path",
-      driverClassPath,
       "--master",
       masterUrl,
       "--deploy-mode",
@@ -652,7 +651,7 @@ class TestOrchestrator(
       "spark.armada.executor.request.cores"  -> "100m",
       "spark.armada.executor.request.memory" -> "510Mi",
       "spark.local.dir"                      -> "/tmp",
-      "spark.home"                           -> sparkRepoCopy,
+      "spark.home"                           -> "/opt/spark",
       "spark.driver.extraJavaOptions"        -> "-XX:-UseContainerSupport",
       "spark.executor.extraJavaOptions"      -> "-XX:-UseContainerSupport"
     )
@@ -669,8 +668,7 @@ class TestOrchestrator(
     } else {
       // In cluster mode, driver runs in a pod, so use internal URL
       Map(
-        // "spark.armada.internalUrl" -> "armada://armada-server.armada:50051"
-        "spark.armada.internalUrl" -> "armada://armada-server.armada:30002"
+        "spark.armada.internalUrl" -> "armada://armada-server.armada:50051"
       )
     }
 
@@ -682,5 +680,16 @@ class TestOrchestrator(
     }.toSeq
 
     commandWithApp ++ confArgs ++ (appResource +: appArgs)
+  }
+
+  private def buildVolumeMounts(): Seq[String] = {
+    val userDir = System.getProperty("user.dir")
+    val e2eDir  = new File(s"$userDir/src/test/resources/e2e")
+
+    if (e2eDir.exists() && e2eDir.isDirectory) {
+      Seq("-v", s"${e2eDir.getAbsolutePath}:/opt/spark/work-dir/src/test/resources/e2e:ro")
+    } else {
+      Seq.empty
+    }
   }
 }
