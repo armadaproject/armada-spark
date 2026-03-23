@@ -33,7 +33,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[StaticCluster]
-    helper.getExecutorCount shouldBe 5
+    helper.getInitialExecutorCount shouldBe 5
     helper.getGangCardinality shouldBe 6
   }
 
@@ -48,7 +48,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicCluster]
-    helper.getExecutorCount shouldBe 2
+    helper.getInitialExecutorCount shouldBe 2
     helper.getGangCardinality shouldBe 3
   }
 
@@ -62,7 +62,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[StaticClient]
-    helper.getExecutorCount shouldBe 3
+    helper.getInitialExecutorCount shouldBe 3
     helper.getGangCardinality shouldBe 3
   }
 
@@ -78,7 +78,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicClient]
-    helper.getExecutorCount shouldBe 2
+    helper.getInitialExecutorCount shouldBe 2
     helper.getGangCardinality shouldBe 2
   }
 
@@ -418,7 +418,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     helper shouldBe a[DynamicCluster]
     // initialExecutors defaults to minExecutors=1, cardinality = 1 + 1 (driver) = 2
     helper.getGangCardinality shouldBe 2
-    helper.getExecutorCount shouldBe 1
+    helper.getInitialExecutorCount shouldBe 1
   }
 
   test("DynamicClient: allows minExecutors = 0 when initialExecutors >= 2") {
@@ -432,7 +432,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
 
     val helper = DeploymentModeHelper(conf)
     helper shouldBe a[DynamicClient]
-    helper.getExecutorCount shouldBe 0
+    helper.getInitialExecutorCount shouldBe 2
   }
 
   test("DynamicClient: throws when initialExecutors < 2") {
@@ -474,7 +474,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
-    helper.getExecutorCount shouldBe 2
+    helper.getInitialExecutorCount shouldBe 5
     helper.getGangCardinality shouldBe 5
   }
 
@@ -512,7 +512,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     helper.isReadyToAllocateMore shouldBe true
   }
 
-  test("DynamicClient: getExecutorCount returns 0 when minExecutors=0") {
+  test("DynamicClient: getInitialExecutorCount returns initialExecutors") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "client")
       .set("spark.dynamicAllocation.enabled", "true")
@@ -522,7 +522,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
-    helper.getExecutorCount shouldBe 0
+    helper.getInitialExecutorCount shouldBe 2
   }
 
   test("DynamicClient: isReadyToAllocateMore blocks before gang capture") {
@@ -548,7 +548,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.driver.host", "localhost")
 
     val helper = DeploymentModeHelper(conf)
-    helper.getExecutorCount shouldBe 0
+    helper.getInitialExecutorCount shouldBe 10
     helper.getGangCardinality shouldBe 10
   }
 
@@ -582,7 +582,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
     exception.getMessage should include("initialExecutors must be >= 1")
   }
 
-  test("DynamicCluster: getExecutorCount returns initialExecutors") {
+  test("DynamicCluster: getInitialExecutorCount returns initialExecutors") {
     val conf = new SparkConf(false)
       .set("spark.submit.deployMode", "cluster")
       .set("spark.dynamicAllocation.enabled", "true")
@@ -591,7 +591,7 @@ class DeploymentModeHelperSuite extends AnyFunSuite with Matchers {
       .set("spark.armada.scheduling.nodeUniformity", "armada-spark")
 
     val helper = DeploymentModeHelper(conf)
-    helper.getExecutorCount shouldBe 3
+    helper.getInitialExecutorCount shouldBe 3
   }
 
   test("DynamicCluster: getGangCardinality includes driver") {

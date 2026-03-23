@@ -466,7 +466,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf: SparkConf
   ): (String, Seq[String]) = {
     val modeHelper    = DeploymentModeHelper(conf)
-    val executorCount = modeHelper.getExecutorCount
+    val executorCount = modeHelper.getInitialExecutorCount
     val isDynamic     = conf.getBoolean(DYN_ALLOCATION_ENABLED.key, false)
 
     // Allow minExecutors=0 for dynamic allocation

@@ -31,15 +31,15 @@ import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
   */
 trait DeploymentModeHelper {
 
-  /** Returns the initial number of executors to allocate.
+  /** Returns the initial number of executors to request at submission time.
     *
     * For static allocation, this returns the configured executor count. For dynamic allocation,
-    * this returns the minimum executor count.
+    * this returns the initial executor count used for the one-time gang bootstrap.
     *
     * @return
-    *   The number of executor pods to create
+    *   The number of executor pods to submit initially
     */
-  def getExecutorCount: Int
+  def getInitialExecutorCount: Int
 
   /** Returns the gang scheduling cardinality.
     *
@@ -136,11 +136,11 @@ trait DeploymentModeHelper {
   *   - Gang cardinality includes both driver and executors
   */
 class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
-  override def getExecutorCount: Int = {
+  override def getInitialExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
 
-  override def getGangCardinality: Int = getExecutorCount + 1
+  override def getGangCardinality: Int = getInitialExecutorCount + 1
 
   override def isDriverInCluster: Boolean = true
 
@@ -170,13 +170,13 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
   *   - Gang cardinality includes only executors
   */
 class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
-  override def getExecutorCount: Int = {
+  override def getInitialExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
 
   override def getGangCardinality: Int = {
     // In client mode, driver runs externally, so only count executors
-    getExecutorCount
+    getInitialExecutorCount
   }
 
   override def isDriverInCluster: Boolean = false
@@ -246,13 +246,13 @@ private[armada] abstract class DynamicModeHelper(conf: SparkConf)
   *   - Executors are allocated/deallocated dynamically based on workload
   *   - The driver runs as a pod inside the cluster
   *   - Gang cardinality uses initialExecutors + 1 (driver) for one-time cluster discovery
-  *   - submitArmadaJob uses getExecutorCount (= initialExecutors) for the initial batch
+  *   - submitArmadaJob uses getInitialExecutorCount (= initialExecutors) for the initial batch
   */
 class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
 
   // The initial executor count used for the one-time gang bootstrap.
-  // submitArmadaJob reads getExecutorCount to know how many executors to
-  // submit with the driver, so getExecutorCount returns this value.
+  // submitArmadaJob reads getInitialExecutorCount to know how many executors to
+  // submit with the driver.
   private val initialExecutorCount: Int =
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
@@ -279,7 +279,7 @@ class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
 
   // Return initialExecutors for the submission batch count.
   // submitArmadaJob reads this to decide how many executors to submit with the driver.
-  override def getExecutorCount: Int = initialExecutorCount
+  override def getInitialExecutorCount: Int = initialExecutorCount
 
   // Before capture: initialExecutorCount + 1 (driver included in gang).
   // After capture: return 0 (subsequent submissions use node selector instead).
@@ -345,13 +345,7 @@ class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
     )
   }
 
-  override def getExecutorCount: Int = {
-    // minExecutors is the scale-down floor. Can be 0.
-    conf.getInt(
-      "spark.dynamicAllocation.minExecutors",
-      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-    )
-  }
+  override def getInitialExecutorCount: Int = initialExecutorCount
 
   // Before capture: use initialExecutorCount for gang cardinality (the bootstrap batch).
   // After capture: return 0 (subsequent submissions use node selector instead).
