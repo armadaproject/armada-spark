@@ -360,6 +360,7 @@ class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
     conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
   }
 
+  // In client mode, driver runs externally, so use spark.driver.host from config
   override def getDriverHostName(driverJobId: String): String = {
     conf
       .getOption("spark.driver.host")
