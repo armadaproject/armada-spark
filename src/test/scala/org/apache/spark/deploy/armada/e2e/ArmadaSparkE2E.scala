@@ -287,6 +287,9 @@ class ArmadaSparkE2E
       executorCount: Int
   ): E2ETestBuilder = {
     val suffix = s"$allocation-$deployMode"
+    // Pin to armada-worker2 because nodeUniformity=armada-spark is set globally
+    // for dynamic allocation, and only armada-worker2 has the armada-spark label
+    // in our kind cluster (added via e2e/armada-operator.patch).
     val base = baseSparkPiTest(
       s"spark-pi-node-selectors-$suffix",
       deployMode,
