@@ -31,15 +31,15 @@ import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
   */
 trait DeploymentModeHelper {
 
-  /** Returns the initial number of executors to allocate.
+  /** Returns the initial number of executors to request at submission time.
     *
     * For static allocation, this returns the configured executor count. For dynamic allocation,
-    * this returns the minimum executor count.
+    * this returns the initial executor count used for the one-time gang bootstrap.
     *
     * @return
-    *   The number of executor pods to create
+    *   The number of executor pods to submit initially
     */
-  def getExecutorCount: Int
+  def getInitialExecutorCount: Int
 
   /** Returns the gang scheduling cardinality.
     *
@@ -136,11 +136,11 @@ trait DeploymentModeHelper {
   *   - Gang cardinality includes both driver and executors
   */
 class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
-  override def getExecutorCount: Int = {
+  override def getInitialExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
 
-  override def getGangCardinality: Int = getExecutorCount + 1
+  override def getGangCardinality: Int = getInitialExecutorCount + 1
 
   override def isDriverInCluster: Boolean = true
 
@@ -170,13 +170,13 @@ class StaticCluster(val conf: SparkConf) extends DeploymentModeHelper {
   *   - Gang cardinality includes only executors
   */
 class StaticClient(val conf: SparkConf) extends DeploymentModeHelper {
-  override def getExecutorCount: Int = {
+  override def getInitialExecutorCount: Int = {
     SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
   }
 
   override def getGangCardinality: Int = {
     // In client mode, driver runs externally, so only count executors
-    getExecutorCount
+    getInitialExecutorCount
   }
 
   override def isDriverInCluster: Boolean = false
@@ -245,22 +245,46 @@ private[armada] abstract class DynamicModeHelper(conf: SparkConf)
   * In this mode:
   *   - Executors are allocated/deallocated dynamically based on workload
   *   - The driver runs as a pod inside the cluster
-  *   - Initial allocation uses the configured minimum executor count
-  *   - Gang cardinality includes both driver and minimum executors
+  *   - Gang cardinality uses initialExecutors + 1 (driver) for one-time cluster discovery
+  *   - submitArmadaJob uses getInitialExecutorCount (= initialExecutors) for the initial batch
   */
 class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
-  override def getExecutorCount: Int = {
-    // For dynamic allocation, use minExecutors as the initial count
-    conf.getInt(
-      "spark.dynamicAllocation.minExecutors",
-      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
+  // The initial executor count used for the one-time gang bootstrap.
+  // submitArmadaJob reads getInitialExecutorCount to know how many executors to
+  // submit with the driver.
+  private val initialExecutorCount: Int =
+    SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
+  // Armada is multi-cluster: nodeUniformity must be configured so Armada knows
+  // which label to use for co-locating the gang and for subsequent scale-up node selectors.
+  if (!nodeUniformityConfigured) {
+    throw new IllegalArgumentException(
+      "spark.armada.scheduling.nodeUniformity must be configured in " +
+        "dynamic cluster mode. Armada is multi-cluster and requires " +
+        "a node uniformity label to co-locate all executors on the " +
+        "same cluster."
     )
   }
 
-  // Returns 0 if node affinity already captured (no gang needed for subsequent allocations)
-  // In cluster mode, include the driver pod in gang scheduling
+  // In cluster mode, driver is part of the gang, so 1 executor + driver = cardinality 2.
+  if (initialExecutorCount < 1) {
+    throw new IllegalArgumentException(
+      s"spark.dynamicAllocation.initialExecutors must be >= 1 in " +
+        s"dynamic cluster mode, but got: $initialExecutorCount. " +
+        s"Armada requires gang cardinality >= 2 (driver + executors) " +
+        s"to co-locate pods in the same cluster."
+    )
+  }
+
+  // Return initialExecutors for the submission batch count.
+  // submitArmadaJob reads this to decide how many executors to submit with the driver.
+  override def getInitialExecutorCount: Int = initialExecutorCount
+
+  // Before capture: initialExecutorCount + 1 (driver included in gang).
+  // After capture: return 0 (subsequent submissions use node selector instead).
   override def getGangCardinality: Int =
-    if (getGangNodeSelector.nonEmpty) 0 else getExecutorCount + 1
+    if (getGangNodeSelector.nonEmpty) 0 else initialExecutorCount + 1
 
   override def isDriverInCluster: Boolean = true
 
@@ -275,6 +299,8 @@ class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
     ArmadaUtils.buildServiceNameFromJobId(driverJobId)
   }
 
+  // Driver captures gang attributes from its own env vars synchronously
+  // at backend.start(), before the allocator runs. No gating needed.
   override def isReadyToAllocateMore: Boolean = true
 
   override def toString: String = "DynamicCluster"
@@ -285,35 +311,46 @@ class DynamicCluster(conf: SparkConf) extends DynamicModeHelper(conf) {
   * In this mode:
   *   - Executors are allocated/deallocated dynamically based on workload
   *   - The driver runs on the client machine (outside the cluster)
-  *   - Initial allocation uses the configured minimum executor count
-  *   - Gang cardinality includes only minimum executors
+  *   - Gang cardinality uses initialExecutors for the one-time cluster discovery
+  *   - minExecutors is purely a scale-down floor (can be 0)
   */
 class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
 
-  // In client mode the driver is external, so gang cardinality = minExecutors.
-  // Armada requires cardinality >= 2 to inject gang env vars needed for placing
-  // subsequent executors into the same cluster in a multi-cluster environment.
-  if (getExecutorCount < 2) {
+  // The initial executor count used for the one-time gang bootstrap.
+  // This is the batch Spark's ExecutorAllocationManager requests at startup.
+  // It is independent of minExecutors (the scale-down floor).
+  private val initialExecutorCount: Int =
+    SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
+  // Armada is multi-cluster: We use gang scheduling to co-locate the initial batch on one cluster,
+  // then capture the cluster label for all subsequent submissions.
+  // nodeUniformity must be configured so Armada knows which label to use.
+  if (!nodeUniformityConfigured) {
     throw new IllegalArgumentException(
-      s"spark.dynamicAllocation.minExecutors must be >= 2 in " +
-        s"dynamic client mode, but got: ${getExecutorCount}. " +
+      "spark.armada.scheduling.nodeUniformity must be configured in " +
+        "dynamic client mode. Armada is multi-cluster and requires " +
+        "a node uniformity label to co-locate all executors on the " +
+        "same cluster."
+    )
+  }
+
+  // Gang cardinality for the initial batch must be >= 2 for Armada to
+  // inject the gang env vars needed for cluster discovery.
+  if (initialExecutorCount < 2) {
+    throw new IllegalArgumentException(
+      s"spark.dynamicAllocation.initialExecutors must be >= 2 in " +
+        s"dynamic client mode, but got: $initialExecutorCount. " +
         s"Armada requires gang cardinality >= 2 to co-locate " +
         s"executors in the same cluster."
     )
   }
 
-  override def getExecutorCount: Int = {
-    // For dynamic allocation, use minExecutors as the initial count
-    conf.getInt(
-      "spark.dynamicAllocation.minExecutors",
-      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-    )
-  }
+  override def getInitialExecutorCount: Int = initialExecutorCount
 
-  // Returns 0 if node affinity already captured (no gang needed for subsequent allocations)
-  // In client mode, driver runs externally, so only count executors
+  // Before capture: use initialExecutorCount for gang cardinality (the bootstrap batch).
+  // After capture: return 0 (subsequent submissions use node selector instead).
   override def getGangCardinality: Int =
-    if (getGangNodeSelector.nonEmpty) 0 else getExecutorCount
+    if (getGangNodeSelector.nonEmpty) 0 else initialExecutorCount
 
   override def isDriverInCluster: Boolean = false
 
@@ -323,8 +360,8 @@ class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
     conf.get(ARMADA_JOB_SET_ID).orElse(Some(applicationId))
   }
 
+  // In client mode, driver runs externally, so use spark.driver.host from config
   override def getDriverHostName(driverJobId: String): String = {
-    // In client mode, driver runs externally, so use spark.driver.host from config
     conf
       .getOption("spark.driver.host")
       .getOrElse(
@@ -335,18 +372,16 @@ class DynamicClient(conf: SparkConf) extends DynamicModeHelper(conf) {
       )
   }
 
+  // Always gate on gang attribute capture. nodeUniformity is required (validated above).
   override def isReadyToAllocateMore: Boolean = {
-    if (!nodeUniformityConfigured) true
-    else {
-      val ready = gangAttributesCaptured.get()
-      if (!ready) {
-        logDebug(
-          "Waiting for gang attributes from initial executor " +
-            "before allocating more"
-        )
-      }
-      ready
+    val ready = gangAttributesCaptured.get()
+    if (!ready) {
+      logDebug(
+        "Waiting for gang attributes from initial executor " +
+          "before allocating more"
+      )
     }
+    ready
   }
 
   override def toString: String = "DynamicClient"

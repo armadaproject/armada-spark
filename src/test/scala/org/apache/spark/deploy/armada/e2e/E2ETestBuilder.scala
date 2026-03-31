@@ -115,7 +115,7 @@ class E2ETestBuilder(testName: String) {
 
   /** Enable dynamic allocation. */
   def withDynamicAllocation(
-      minExecutors: Int,
+      initialExecutors: Int,
       maxExecutors: Int,
       schedulerBacklogTimeoutSeconds: Int = 3,
       executorIdleTimeoutSeconds: Int = 90
@@ -125,8 +125,11 @@ class E2ETestBuilder(testName: String) {
     // This allows dynamic allocation without an external shuffle service
     // Ref: https://issues.apache.org/jira/browse/SPARK-39846
     withSparkConf("spark.dynamicAllocation.shuffleTracking.enabled", "true")
-    withSparkConf("spark.dynamicAllocation.minExecutors", minExecutors.toString)
+    withSparkConf("spark.dynamicAllocation.minExecutors", "0")
     withSparkConf("spark.dynamicAllocation.maxExecutors", maxExecutors.toString)
+    withSparkConf("spark.dynamicAllocation.initialExecutors", initialExecutors.toString)
+    // nodeUniformity is required for all dynamic modes in Armada
+    withSparkConf("spark.armada.scheduling.nodeUniformity", "armada-spark")
     withSparkConf(
       "spark.dynamicAllocation.schedulerBacklogTimeout",
       s"${schedulerBacklogTimeoutSeconds}s"
@@ -142,7 +145,7 @@ class E2ETestBuilder(testName: String) {
 
   /** Enable dynamic allocation with standard defaults (maxExecutors = 4). */
   def withStandardDynamicAllocation(executorCount: Int): E2ETestBuilder = {
-    withDynamicAllocation(minExecutors = executorCount, maxExecutors = 4)
+    withDynamicAllocation(initialExecutors = executorCount, maxExecutors = 4)
   }
 
   /** Apply static or dynamic allocation config. */

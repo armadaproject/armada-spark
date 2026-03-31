@@ -195,7 +195,7 @@ private[spark] class ArmadaClusterManagerBackend(
             modeHelper.shouldProactivelyRequestExecutors && initialExecutors > 0
 
           if (shouldProactivelyRequest) {
-            val executorCount  = modeHelper.getExecutorCount
+            val executorCount  = modeHelper.getInitialExecutorCount
             val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
             doRequestTotalExecutors(Map(defaultProfile -> executorCount))
           }
