@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Builds the fallback storage spark image;
+# Builds the distributed shuffle storage spark image;
 # Also includes the benchmarking tools
-# NOTE this script only needs to be run when the fallback storage spark branch is modified.
+# NOTE this script only needs to be run when the distributed shuffle storage spark branch is modified.
 # Normally you won't need to use this script as the image will be pulled from docker.
 
 
@@ -24,18 +24,18 @@ tmp_dir=$(mktemp -d)
 echo Creating temp dir: $tmp_dir
 cd $tmp_dir
 
-repo=${ARMADA_FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
+repo=${ARMADA_DSSS_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
-branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
+branch=${ARMADA_DSSS_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
 
-# create the spark image with fallback storage support
+# create the spark image with distributed shuffle storage support
 git clone $repo
 cd $repo_dir
 git checkout $branch
 
 export SPARK_HOME=`pwd`
 ./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Pscala-2.12
-./bin/docker-image-tool.sh -u 185 -t "spark.fbs.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
+./bin/docker-image-tool.sh -u 185 -t "spark.dsss.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
 # build the benchmarking tools
@@ -74,7 +74,7 @@ else
 fi
 
 cat <<EOF > Dockerfile
-FROM spark-py:spark.fbs.img
+FROM spark-py:spark.dsss.img
 
 # Reset to root to run installation tasks
 USER 0
@@ -85,5 +85,5 @@ COPY jars/* /opt/spark/jars
 $IMPORT_CERT_COMMANDS
 EOF
 
-docker build --tag spark-py:spark.fbs.img2 .
+docker build --tag spark-py:spark.dsss.img2 .
 

@@ -96,7 +96,7 @@ while getopts "hekpi:m:P:s:c:q:M:A:ef" opt; do
     e) RUNNING_E2E_TESTS=true ;;
     M) DEPLOY_MODE=$OPTARG ;;
     A) ALLOCATION_MODE=$OPTARG ;;
-    f) USE_FALLBACK_STORAGE=true ;;
+    f) USE_DSSS=true ;;
   esac
 done
 
@@ -112,7 +112,7 @@ export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
 export SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
-export USE_FALLBACK_STORAGE="${USE_FALLBACK_STORAGE:-false}"
+export USE_DSSS="${USE_DSSS:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 
 ARMADA_AUTH_ARGS=()
@@ -197,9 +197,9 @@ if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     exit 1
 fi
 
-if [ "$USE_FALLBACK_STORAGE" = "true" ]; then
+if [ "$USE_DSSS" = "true" ]; then
     if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
-        echo fallback storage currently only supported for spark 3.5.3/scala 2.12
+        echo distributed shuffle storage currently only supported for spark 3.5.3/scala 2.12
         echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
         exit 1
     fi
