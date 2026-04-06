@@ -24,9 +24,9 @@ tmp_dir=$(mktemp -d)
 echo Creating temp dir: $tmp_dir
 cd $tmp_dir
 
-repo=${ARMADA_DSSS_REPO:-https://github.com/G-Research/spark}
+repo=${ARMADA_DSS_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
-branch=${ARMADA_DSSS_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
+branch=${ARMADA_DSS_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
 
 # create the spark image with distributed shuffle storage support
 git clone $repo
@@ -35,7 +35,7 @@ git checkout $branch
 
 export SPARK_HOME=`pwd`
 ./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Pscala-2.12
-./bin/docker-image-tool.sh -u 185 -t "spark.dsss.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
+./bin/docker-image-tool.sh -u 185 -t "spark.dss.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
 # build the benchmarking tools
@@ -74,7 +74,7 @@ else
 fi
 
 cat <<EOF > Dockerfile
-FROM spark-py:spark.dsss.img
+FROM spark-py:spark.dss.img
 
 # Reset to root to run installation tasks
 USER 0
@@ -85,5 +85,5 @@ COPY jars/* /opt/spark/jars
 $IMPORT_CERT_COMMANDS
 EOF
 
-docker build --tag spark-py:spark.dsss.img2 .
+docker build --tag spark-py:spark.dss.img2 .
 

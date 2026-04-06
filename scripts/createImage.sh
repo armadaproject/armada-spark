@@ -9,9 +9,9 @@ source "$scripts/init.sh"
 
 image_prefix=apache/spark
 
-if [ "$USE_DSSS" == "true" ]; then
-    image_prefix="${DSSS_PREFIX:-gbj262/spark.dsss.img2}"
-    image_tag="${DSSS_TAG:-latest}"
+if [ "$USE_DSS" == "true" ]; then
+    image_prefix="${DSS_PREFIX:-gbj262/spark.dss.img2}"
+    image_tag="${DSS_TAG:-latest}"
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
 elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] || [[ "$SPARK_VERSION" == "3.3.4" ]] ); then
         echo Checking for images for spark: $SPARK_VERSION scala: $SCALA_BIN_VERSION

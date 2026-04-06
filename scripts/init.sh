@@ -96,7 +96,7 @@ while getopts "hekpi:m:P:s:c:q:M:A:ef" opt; do
     e) RUNNING_E2E_TESTS=true ;;
     M) DEPLOY_MODE=$OPTARG ;;
     A) ALLOCATION_MODE=$OPTARG ;;
-    f) USE_DSSS=true ;;
+    f) USE_DSS=true ;;
   esac
 done
 
@@ -112,7 +112,7 @@ export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
 export SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
-export USE_DSSS="${USE_DSSS:-false}"
+export USE_DSS="${USE_DSS:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 
 ARMADA_AUTH_ARGS=()
@@ -189,7 +189,12 @@ if [[ -z "${SPARK_VERSION:-}" ]]; then
   export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version -q -DforceStdout)
 fi
 
-export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar}"
+if [ "$USE_DSS" = "true" ]; then
+    # Dss jars have a different suffix
+    export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}-gr-6.jar}"
+else
+    export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar}"
+fi
 
 # check the Spark version is supported
 if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
@@ -197,7 +202,7 @@ if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     exit 1
 fi
 
-if [ "$USE_DSSS" = "true" ]; then
+if [ "$USE_DSS" = "true" ]; then
     if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
         echo distributed shuffle storage currently only supported for spark 3.5.3/scala 2.12
         echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
