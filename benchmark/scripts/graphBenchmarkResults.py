@@ -72,7 +72,7 @@ def plot_data_in_chunks(common_keys, chunk_size=34):
         # Customize the plot
         plt.xlabel('Queries')
         plt.ylabel('Seconds')
-        plt.title(f'C3 Benchmarks - Plot {plot_number}')
+        plt.title(f'Benchmarks - Plot {plot_number}')
         plt.legend()
         plt.grid(True)
 
