@@ -9,7 +9,7 @@ source "$scripts/init.sh"
 
 image_prefix=apache/spark
 
-if [ "$USE_DSS" == "true" ]; then
+if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" == "true" ]; then
     image_prefix="${DSS_PREFIX:-gbj262/spark.dss.img2}"
     image_tag="${DSS_TAG:-latest}"
 # There are no Docker images for Spark 3 and Scala 2.13, as well as for Spark 3.3.4 and any Scala
