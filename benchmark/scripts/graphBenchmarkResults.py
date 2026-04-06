@@ -3,7 +3,7 @@ from natsort import natsorted
 import matplotlib.pyplot as plt
 
 if len(sys.argv) != 3:
-    print(f"Usage: {sys.argv[0]} <table1.csv> <table2.csv>")
+    print(f"Usage: {sys.argv[0]} <benchmarkResults1.csv> <benchmarkResults2.csv>")
     sys.exit(1)
 
 file1 = sys.argv[1]
