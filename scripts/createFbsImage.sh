@@ -26,7 +26,7 @@ cd $tmp_dir
 
 repo=${ARMADA_FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
-branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-remote-storage-backed-shuffle-v3.5.3}
+branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
 
 # create the spark image with fallback storage support
 git clone $repo
@@ -50,10 +50,10 @@ popd
 
 # get the benchmark jar files
 mkdir jars
-if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" ]; then
-    # this was built from https://github.com/EnricoMi/eks-spark-benchmark
-    wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1g97dUxbZboI5jq_EjUXaOijtjDBcGsci' \
-         -O  jars/eks-spark-benchmark-assembly-1.0.jar
+if [ `basename $ARMADA_BENCHMARK_JAR` == "armada-eks-spark-benchmark-assembly-1.0.jar" ]; then
+    # this was built from https://github.com/GeorgeJahad/eks-spark-benchmark/tree/hashOutput
+    wget --no-check-certificate "https://drive.google.com/uc?export=download&id=1fjGRrLmbLygqdP-ugoTHLUbNMkTTxvcO" \
+         -O  jars/armada-eks-spark-benchmark-assembly-1.0.jar
 fi
 
 # Copy the cert file into the docker dir and add docker commands to import it
