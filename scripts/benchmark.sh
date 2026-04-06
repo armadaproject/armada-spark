@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Parse -K flag before sourcing init.sh (which consumes its own flags)
+# Parse -K, (Kubernetes benchmark,) flag before sourcing init.sh (which consumes its own flags)
 USE_K8S=false
 for arg in "$@"; do
     if [ "$arg" = "-K" ]; then
@@ -16,6 +16,7 @@ for arg in "$@"; do
         filtered_args+=("$arg")
     fi
 done
+# Replace $@ with filtered args (minus -K) for init.sh;
 set -- "${filtered_args[@]+"${filtered_args[@]}"}"
 
 SPARK_CONF_DIR=/opt/spark/conf
