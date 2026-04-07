@@ -109,6 +109,27 @@ The Docker image includes Jupyter support (requires `INCLUDE_PYTHON=true`):
 
 Opens at `http://localhost:8888`. Override the port with `JUPYTER_PORT` in `scripts/config.sh`. Example notebooks from `example/jupyter/notebooks` are mounted at `/home/spark/workspace/notebooks`.
 
+### Spark History Server
+
+View event logs from completed jobs:
+
+```bash
+./scripts/runHistoryServer.sh
+```
+
+Requires S3 credentials and `spark.eventLog.enabled=true`. UI at `http://localhost:18080`.
+
+### File Distribution (`--files`)
+
+See `scripts/filesParameterExample.sh` for a working example of distributing local files to driver and executor pods using Spark's `--files` parameter and `SparkFiles.get()`.
+
+### Benchmarks (TPC-DS)
+
+```bash
+./scripts/benchmark.sh           # Run against Armada
+./scripts/benchmark.sh -K        # Run against native Kubernetes
+```
+
 ## Architecture
 
 ```
@@ -131,6 +152,7 @@ Key source directories:
 src/main/scala/org/apache/spark/
 ├── deploy/armada/              # Configuration & job submission
 │   ├── Config.scala            # spark.armada.* config entries
+│   ├── DeploymentModeHelper.scala  # Gang scheduling strategy per deploy mode
 │   ├── submit/                 # Job submission pipeline
 │   └── validators/             # Kubernetes validation
 └── scheduler/cluster/armada/   # Cluster manager & scheduling
