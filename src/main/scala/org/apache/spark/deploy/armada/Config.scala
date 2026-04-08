@@ -305,6 +305,29 @@ private[spark] object Config {
       )
       .createOptional
 
+  val ARMADA_SCHEDULING_GANG_PRIORITY_CLASS: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.gangPriorityClass")
+      .doc(
+        "Kubernetes PriorityClassName for pods in the initial gang " +
+          "(driver + initial executors). If not set, no priorityClassName " +
+          "is applied and the pod inherits from its template or cluster default."
+      )
+      .stringConf
+      .checkValue(_.nonEmpty, "Priority class name must not be empty")
+      .createOptional
+
+  val ARMADA_SCHEDULING_NON_GANG_PRIORITY_CLASS: OptionalConfigEntry[String] =
+    ConfigBuilder("spark.armada.scheduling.nonGangPriorityClass")
+      .doc(
+        "Kubernetes PriorityClassName for executor pods allocated after " +
+          "the initial gang (scale-up executors). If not set, no " +
+          "priorityClassName is applied and the pod inherits from its " +
+          "template or cluster default."
+      )
+      .stringConf
+      .checkValue(_.nonEmpty, "Priority class name must not be empty")
+      .createOptional
+
   val ARMADA_SPARK_EXECUTOR_LABELS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.executor.labels")
       .doc(

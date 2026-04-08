@@ -2562,4 +2562,174 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     cliIngress.tls shouldBe Some(false)
   }
 
+  // --- Priority class tests ---
+
+  private def minimalCLIConfig(conf: SparkConf) = armadaClientApp.CLIConfig(
+    queue = Some("test-queue"),
+    jobSetId = Some("test-job-set"),
+    namespace = Some("test-namespace"),
+    priority = Some(RUNTIME_PRIORITY),
+    containerImage = Some(DEFAULT_IMAGE_NAME),
+    podLabels = Map.empty,
+    driverLabels = Map.empty,
+    executorLabels = Map.empty,
+    armadaClusterUrl = Some("armada://localhost:50051"),
+    nodeSelectors = Map.empty,
+    nodeUniformityLabel = None,
+    executorConnectionTimeout = Some(300.seconds),
+    runAsUser = Some(RUNTIME_RUN_AS_USER),
+    driverResources =
+      armadaClientApp.ResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi")),
+    executorResources =
+      armadaClientApp.ResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi"))
+  )
+
+  private def minimalResolvedConfig = armadaClientApp.ResolvedJobConfig(
+    namespace = "test-namespace",
+    priority = RUNTIME_PRIORITY,
+    containerImage = DEFAULT_IMAGE_NAME,
+    armadaClusterUrl = "armada://localhost:50051",
+    executorConnectionTimeout = 300.seconds,
+    runAsUser = RUNTIME_RUN_AS_USER,
+    annotations = Map.empty,
+    labels = Map.empty,
+    nodeSelectors = Map.empty,
+    driverResources =
+      armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi")),
+    executorResources =
+      armadaClientApp.ResolvedResourceConfig(Some("1"), Some("1"), Some("1Gi"), Some("1Gi"))
+  )
+
+  private def minimalArmadaJobConfig(conf: SparkConf) = armadaClientApp.ArmadaJobConfig(
+    queue = "test-queue",
+    jobSetId = "test-job-set",
+    jobTemplate = None,
+    driverJobItemTemplate = None,
+    executorJobItemTemplate = None,
+    cliConfig = minimalCLIConfig(conf),
+    applicationId = "armada-spark-app-id",
+    driverFeatureStepJobItem = None,
+    driverFeatureStepContainer = None,
+    executorFeatureStepJobItem = None,
+    executorFeatureStepContainer = None,
+    driverSystemProperties = Map.empty
+  )
+
+  test("mergeDriverTemplate sets gangPriorityClass on driver pod") {
+    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "gang-priority")
+
+    val result = armadaClientApp.mergeDriverTemplate(
+      None,
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      7078,
+      "org.example.TestClass",
+      Seq.empty[Volume],
+      Seq.empty[VolumeMount],
+      Seq.empty[String],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("gang-priority")
+  }
+
+  test("mergeExecutorTemplate sets gangPriorityClass for initial gang executors") {
+    // Static mode: gangCardinality is always > 0
+    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "gang-priority")
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      None,
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      Seq.empty[EnvVar],
+      "driver-service",
+      7078,
+      Seq.empty[Volume],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("gang-priority")
+  }
+
+  test("mergeExecutorTemplate sets nonGangPriorityClass for scale-up executors") {
+    // Dynamic mode after gang attributes captured: gangCardinality returns 0
+    sparkConf.set(Config.ARMADA_SCHEDULING_NON_GANG_PRIORITY_CLASS.key, "non-gang-priority")
+    sparkConf.set("spark.dynamicAllocation.enabled", "true")
+    sparkConf.set("spark.dynamicAllocation.initialExecutors", "2")
+    sparkConf.set(Config.ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key, "zone")
+    // Simulate post-capture: internal labels set so getGangCardinality returns 0
+    sparkConf.set(Config.ARMADA_INTERNAL_GANG_NODE_LABEL_NAME.key, "zone")
+    sparkConf.set(Config.ARMADA_INTERNAL_GANG_NODE_LABEL_VALUE.key, "cluster-1")
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      None,
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      Seq.empty[EnvVar],
+      "driver-service",
+      7078,
+      Seq.empty[Volume],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("non-gang-priority")
+  }
+
+  test("mergeExecutorTemplate does not set priorityClassName when configs not set") {
+    val result = armadaClientApp.mergeExecutorTemplate(
+      None,
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      Seq.empty[EnvVar],
+      "driver-service",
+      7078,
+      Seq.empty[Volume],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe None
+  }
+
+  test("mergeDriverTemplate preserves template priorityClassName when no config override") {
+    val template = JobSubmitRequestItem(
+      podSpec = Some(PodSpec().withPriorityClassName("template-priority"))
+    )
+
+    val result = armadaClientApp.mergeDriverTemplate(
+      Some(template),
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      7078,
+      "org.example.TestClass",
+      Seq.empty[Volume],
+      Seq.empty[VolumeMount],
+      Seq.empty[String],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("template-priority")
+  }
+
+  test("mergeDriverTemplate overrides template priorityClassName with gangPriorityClass") {
+    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "config-priority")
+
+    val template = JobSubmitRequestItem(
+      podSpec = Some(PodSpec().withPriorityClassName("template-priority"))
+    )
+
+    val result = armadaClientApp.mergeDriverTemplate(
+      Some(template),
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      7078,
+      "org.example.TestClass",
+      Seq.empty[Volume],
+      Seq.empty[VolumeMount],
+      Seq.empty[String],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("config-priority")
+  }
+
 }
