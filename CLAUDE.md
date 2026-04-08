@@ -72,6 +72,7 @@ Cluster-mode submission (separate path):
 **Key classes:**
 - **ArmadaClientApplication** — Cluster-mode submission via SparkApplication SPI; builds driver/executor pods, converts to Protobuf, and submits to Armada
 - **ArmadaClusterManager** — SPI entry point; creates TaskSchedulerImpl + Backend
+- **DeploymentModeHelper** — Factory + 4 strategy classes (`StaticCluster`, `StaticClient`, `DynamicCluster`, `DynamicClient`) that encapsulate gang scheduling, executor gating, and node uniformity capture per deployment mode
 - **ArmadaClusterManagerBackend** — Tracks executors via ConcurrentHashMaps (executorToJobId, jobIdToExecutor, pendingExecutors, terminalExecutors); in dynamic client mode, intercepts `RegisterExecutor` to capture gang node selector attributes from the first executor and stores them in SparkConf for subsequent allocations
 - **ArmadaExecutorAllocator** — Runs on ScheduledExecutorService; respects `ARMADA_ALLOCATION_BATCH_SIZE`, `ARMADA_MAX_PENDING_JOBS`, `ARMADA_ALLOCATION_CHECK_INTERVAL`
 - **ArmadaEventWatcher** — Long-lived daemon thread with `volatile running` flag; 5s join timeout on shutdown

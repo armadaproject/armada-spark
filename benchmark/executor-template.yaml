@@ -1,0 +1,9 @@
+namespace: default
+podSpec:
+  containers:
+    - name: executor
+      resources:
+        requests:
+          ephemeral-storage: "200Gi"
+        limits:
+          ephemeral-storage: "200Gi"
