@@ -113,9 +113,9 @@ to the IP address or hostname of your Armada server. You should not need to chan
 
 Also, set the location of the three TLS certificate files by adding/setting:
 ```
-CLIENT_CERT_FILE=e2e/client.crt
-CLIENT_KEY_FILE=e2e/client.key
-CLUSTER_CA_FILE=e2e/ca.crt
+export CLIENT_CERT_FILE=e2e/client.crt
+export CLIENT_KEY_FILE=e2e/client.key
+export CLUSTER_CA_FILE=e2e/ca.crt
 ```
 
 -  You should be able to now verify the armada-spark configuration by running the E2E tests:

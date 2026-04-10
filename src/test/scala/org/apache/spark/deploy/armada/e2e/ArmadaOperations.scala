@@ -226,9 +226,6 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
         )
     }
 
-    // var armadactlUrl = armadaUrl.replaceFirst("^armada://", "")
-    println(s"-------- buildCommand():  armadaUrl = ${armadaUrl}")
-    println(s"-------- buildCommand():  armadactlUrl = ${armadactlUrl}")
     Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadactlUrl)
   }
 

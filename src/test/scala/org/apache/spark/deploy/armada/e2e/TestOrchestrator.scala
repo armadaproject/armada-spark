@@ -618,7 +618,9 @@ class TestOrchestrator(
       "run",
       "--rm",
       "--network",
-      "host"
+      "host",
+      "-p",
+      "7078:7078" // Driver port must be exposed for client deploy-mode
     ) ++ volumeMounts ++ Seq(
       imageName,
       "/opt/spark/bin/spark-class",
@@ -662,8 +664,10 @@ class TestOrchestrator(
       // For E2E tests running on kind cluster, the driver host is always 172.18.0.1
       // (the Docker bridge network gateway IP that kind uses)
       Map(
-        "spark.driver.host" -> "172.18.0.1",
-        "spark.driver.port" -> "7078"
+        // "spark.driver.host" -> "172.18.0.1",
+        "spark.driver.host" -> sys.env("SPARK_LOCAL_IP"),
+        "spark.driver.port" -> "7078",
+        "spark.driver.bindAddress" -> "0.0.0.0"
       )
     } else {
       // In cluster mode, driver runs in a pod, so use internal URL
