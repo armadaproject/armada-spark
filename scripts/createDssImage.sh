@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Builds the fallback storage spark image;
+# Builds the distributed shuffle storage spark image;
 # Also includes the benchmarking tools
-# NOTE this script only needs to be run when the fallback storage spark branch is modified.
+# NOTE this script only needs to be run when the distributed shuffle storage spark branch is modified.
 # Normally you won't need to use this script as the image will be pulled from docker.
 
 
@@ -24,18 +24,18 @@ tmp_dir=$(mktemp -d)
 echo Creating temp dir: $tmp_dir
 cd $tmp_dir
 
-repo=${ARMADA_FALLBACK_STORAGE_REPO:-https://github.com/G-Research/spark}
+repo=${ARMADA_DSS_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
-branch=${ARMADA_FALLBACK_STORAGE_BRANCH:-remote-storage-backed-shuffle-v3.5.3}
+branch=${ARMADA_DSS_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
 
-# create the spark image with fallback storage support
+# create the spark image with distributed shuffle storage support
 git clone $repo
 cd $repo_dir
 git checkout $branch
 
 export SPARK_HOME=`pwd`
 ./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Pscala-2.12
-./bin/docker-image-tool.sh -u 185 -t "spark.fbs.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
+./bin/docker-image-tool.sh -u 185 -t "spark.dss.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
 # build the benchmarking tools
@@ -50,10 +50,10 @@ popd
 
 # get the benchmark jar files
 mkdir jars
-if [ `basename $ARMADA_BENCHMARK_JAR` == "eks-spark-benchmark-assembly-1.0.jar" ]; then
-    # this was built from https://github.com/EnricoMi/eks-spark-benchmark
-    wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1g97dUxbZboI5jq_EjUXaOijtjDBcGsci' \
-         -O  jars/eks-spark-benchmark-assembly-1.0.jar
+if [ `basename $ARMADA_BENCHMARK_JAR` == "armada-eks-spark-benchmark-assembly-1.0.jar" ]; then
+    # this was built from https://github.com/GeorgeJahad/eks-spark-benchmark/tree/hashOutput
+    wget --no-check-certificate "https://drive.google.com/uc?export=download&id=1fjGRrLmbLygqdP-ugoTHLUbNMkTTxvcO" \
+         -O  jars/armada-eks-spark-benchmark-assembly-1.0.jar
 fi
 
 # Copy the cert file into the docker dir and add docker commands to import it
@@ -74,7 +74,7 @@ else
 fi
 
 cat <<EOF > Dockerfile
-FROM spark-py:spark.fbs.img
+FROM spark-py:spark.dss.img
 
 # Reset to root to run installation tasks
 USER 0
@@ -85,5 +85,5 @@ COPY jars/* /opt/spark/jars
 $IMPORT_CERT_COMMANDS
 EOF
 
-docker build --tag spark-py:spark.fbs.img2 .
+docker build --tag spark-py:spark.dss.img2 .
 
