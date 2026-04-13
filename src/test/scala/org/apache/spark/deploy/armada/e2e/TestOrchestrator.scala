@@ -665,8 +665,8 @@ class TestOrchestrator(
       // (the Docker bridge network gateway IP that kind uses)
       Map(
         // "spark.driver.host" -> "172.18.0.1",
-        "spark.driver.host" -> sys.env("SPARK_LOCAL_IP"),
-        "spark.driver.port" -> "7078",
+        "spark.driver.host"        -> sys.env("SPARK_LOCAL_IP"),
+        "spark.driver.port"        -> "7078",
         "spark.driver.bindAddress" -> "0.0.0.0"
       )
     } else {
