@@ -52,8 +52,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
-  ARMADA_SCHEDULING_GANG_PRIORITY_CLASS,
-  ARMADA_SCHEDULING_NON_GANG_PRIORITY_CLASS,
+  ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS,
+  ARMADA_SCHEDULING_SCALE_UP_PRIORITY_CLASS,
   CONTAINER_IMAGE,
   DEFAULT_CORES,
   DEFAULT_MEM,
@@ -1883,8 +1883,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       isDriver: Boolean
   ): Option[String] = {
     val isGang = isDriver || DeploymentModeHelper(conf).getGangCardinality > 0
-    if (isGang) conf.get(ARMADA_SCHEDULING_GANG_PRIORITY_CLASS)
-    else conf.get(ARMADA_SCHEDULING_NON_GANG_PRIORITY_CLASS)
+    if (isGang) conf.get(ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS)
+    else conf.get(ARMADA_SCHEDULING_SCALE_UP_PRIORITY_CLASS)
   }
 
   private def buildLabels(

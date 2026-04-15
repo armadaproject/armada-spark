@@ -2615,8 +2615,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     driverSystemProperties = Map.empty
   )
 
-  test("mergeDriverTemplate sets gangPriorityClass on driver pod") {
-    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "gang-priority")
+  test("mergeDriverTemplate sets initialPriorityClass on driver pod") {
+    sparkConf.set(Config.ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS.key, "gang-priority")
 
     val result = armadaClientApp.mergeDriverTemplate(
       None,
@@ -2633,9 +2633,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.podSpec.get.priorityClassName shouldBe Some("gang-priority")
   }
 
-  test("mergeExecutorTemplate sets gangPriorityClass for initial gang executors") {
+  test("mergeExecutorTemplate sets initialPriorityClass for initial gang executors") {
     // Static mode: gangCardinality is always > 0
-    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "gang-priority")
+    sparkConf.set(Config.ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS.key, "gang-priority")
 
     val result = armadaClientApp.mergeExecutorTemplate(
       None,
@@ -2651,9 +2651,9 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.podSpec.get.priorityClassName shouldBe Some("gang-priority")
   }
 
-  test("mergeExecutorTemplate sets nonGangPriorityClass for scale-up executors") {
+  test("mergeExecutorTemplate sets scaleUpPriorityClass for scale-up executors") {
     // Dynamic mode after gang attributes captured: gangCardinality returns 0
-    sparkConf.set(Config.ARMADA_SCHEDULING_NON_GANG_PRIORITY_CLASS.key, "non-gang-priority")
+    sparkConf.set(Config.ARMADA_SCHEDULING_SCALE_UP_PRIORITY_CLASS.key, "non-gang-priority")
     sparkConf.set("spark.dynamicAllocation.enabled", "true")
     sparkConf.set("spark.dynamicAllocation.initialExecutors", "2")
     sparkConf.set(Config.ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY.key, "zone")
@@ -2710,8 +2710,8 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.podSpec.get.priorityClassName shouldBe Some("template-priority")
   }
 
-  test("mergeDriverTemplate overrides template priorityClassName with gangPriorityClass") {
-    sparkConf.set(Config.ARMADA_SCHEDULING_GANG_PRIORITY_CLASS.key, "config-priority")
+  test("mergeDriverTemplate overrides template priorityClassName with initialPriorityClass") {
+    sparkConf.set(Config.ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS.key, "config-priority")
 
     val template = JobSubmitRequestItem(
       podSpec = Some(PodSpec().withPriorityClassName("template-priority"))
