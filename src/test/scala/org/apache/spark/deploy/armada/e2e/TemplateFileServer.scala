@@ -30,9 +30,16 @@ import com.sun.net.httpserver.{HttpExchange, HttpServer}
   */
 class TemplateFileServer(baseDir: File) {
 
-  private val defaultHost: String =
-    if (sys.props.getOrElse("os.name", "").toLowerCase.contains("mac")) "host.docker.internal"
+  // On macOS, host.docker.internal resolves inside Docker containers but NOT inside
+  // Kind pods (which use CoreDNS and don't inherit Docker's host alias). SPARK_LOCAL_IP
+  // is the host machine's LAN IP, reachable from both Docker containers (via --network host)
+  // and Kind pods (confirmed: executor pods already connect to this IP in client mode).
+  // On Linux, 172.18.0.1 is the Docker bridge gateway, accessible from both.
+  private val defaultHost: String = {
+    val isMac = sys.props.getOrElse("os.name", "").toLowerCase.contains("mac")
+    if (isMac) sys.env.getOrElse("SPARK_LOCAL_IP", "host.docker.internal")
     else "172.18.0.1"
+  }
 
   private val host: String =
     sys.env.getOrElse("TEMPLATE_SERVER_HOST", defaultHost)
