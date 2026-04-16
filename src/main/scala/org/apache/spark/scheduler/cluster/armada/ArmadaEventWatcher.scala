@@ -112,8 +112,12 @@ private[spark] class ArmadaEventWatcher(
           logInfo("Event watcher interrupted")
           running = false
         case NonFatal(e) =>
-          logWarning(s"Error in event stream: ${e.getMessage}", e)
-          if (running) Thread.sleep(5000)
+          if (running) {
+            logWarning(s"Error in event stream: ${e.getMessage}", e)
+            Thread.sleep(5000)
+          } else {
+            logDebug(s"Error in event stream during shutdown: ${e.getMessage}")
+          }
       }
     }
 
