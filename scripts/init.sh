@@ -246,6 +246,7 @@ if [ ${#S3_CONF[@]} -gt 0 ]; then
     ARMADA_EVENT_LOG_DIR="$ARMADA_S3_USER_DIR/eventLog"
     EVENT_LOG_CONF=(
         --conf spark.eventLog.enabled=true
+        --conf spark.eventLog.createDir=true
         --conf spark.eventLog.dir=$ARMADA_EVENT_LOG_DIR
         --conf spark.history.fs.logDirectory=$ARMADA_EVENT_LOG_DIR
     )

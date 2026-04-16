@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import api.submit.JobCancelRequest
 import io.armadaproject.armada.ArmadaClient
@@ -517,8 +518,11 @@ private[spark] class ArmadaClusterManagerBackend(
     * throw. The critical state (markTerminal) is always set before this is called.
     */
   private def safeRemoveExecutor(executorId: String, reason: ExecutorExited): Unit = {
-    Utils.tryLogNonFatalError {
+    try {
       removeExecutor(executorId, reason)
+    } catch {
+      case NonFatal(e) =>
+        logDebug(s"Could not remove executor $executorId (likely shutdown): ${e.getMessage}")
     }
   }
 
