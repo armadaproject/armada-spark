@@ -178,9 +178,11 @@ init-cluster() {
     fi
   else
     log "Armada is available"
-    log "Armada Cluster Nodes"
-    kubectl get nodes
   fi
+
+  log "Armada Cluster Nodes"
+  kubectl get nodes
+  log "--------"
 
   mkdir -p "$scripts/.tmp"
 
