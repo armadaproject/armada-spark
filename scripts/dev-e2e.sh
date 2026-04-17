@@ -79,18 +79,11 @@ start-armada() {
       exit 1
     fi
 
-
     log "Patching armada-operator"
     if ! patch -p1 -d "$AOHOME/" < "$scripts/../e2e/armada-operator.patch"; then
       err "There was an error patching the repo copy $AOHOME"
       exit 1
     fi
-  fi
-
-  kind_extern_cfg='e2e/kind-config-external-access.yaml'
-  if ! cp "$kind_extern_cfg" "$AOHOME/hack/kind-config.yaml"; then
-    err "There was an error copying $kind_extern_cfg to $AOHOME/hack/kind-config.yaml"
-    exit 1
   fi
 
   # Get IP address of first network interface that is not loopback or a K8S internal network interface
@@ -182,7 +175,6 @@ init-cluster() {
 
   log "Armada Cluster Nodes"
   kubectl get nodes
-  log "--------"
 
   mkdir -p "$scripts/.tmp"
 

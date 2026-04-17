@@ -48,5 +48,6 @@ nodes:
     hostPort: 6443
     protocol: TCP
 - role: worker
+- role: worker
   labels:
     armada-spark: true
