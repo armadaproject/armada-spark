@@ -2564,7 +2564,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
 
   // --- Priority class tests ---
 
-  private def minimalCLIConfig(conf: SparkConf) = armadaClientApp.CLIConfig(
+  private def minimalCLIConfig() = armadaClientApp.CLIConfig(
     queue = Some("test-queue"),
     jobSetId = Some("test-job-set"),
     namespace = Some("test-namespace"),
@@ -2606,7 +2606,7 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     jobTemplate = None,
     driverJobItemTemplate = None,
     executorJobItemTemplate = None,
-    cliConfig = minimalCLIConfig(conf),
+    cliConfig = minimalCLIConfig(),
     applicationId = "armada-spark-app-id",
     driverFeatureStepJobItem = None,
     driverFeatureStepContainer = None,

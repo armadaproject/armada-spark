@@ -322,7 +322,8 @@ private[spark] object Config {
         "Armada PriorityClassName for executor pods allocated after " +
           "the initial gang (scale-up executors). If not set, no " +
           "priorityClassName is applied and the pod inherits from its " +
-          "template or cluster default."
+          "template or cluster default.  NOTE: this only gets used in " +
+          "dynamic cluster mode."
       )
       .stringConf
       .checkValue(_.nonEmpty, "Priority class name must not be empty")
