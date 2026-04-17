@@ -2732,4 +2732,46 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     result.podSpec.get.priorityClassName shouldBe Some("config-priority")
   }
 
+  test("mergeExecutorTemplate preserves template priorityClassName when no config override") {
+    val template = JobSubmitRequestItem(
+      podSpec = Some(PodSpec().withPriorityClassName("template-priority"))
+    )
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      Some(template),
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      Seq.empty[EnvVar],
+      "driver-service",
+      7078,
+      Seq.empty[Volume],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("template-priority")
+  }
+
+  test(
+    "mergeExecutorTemplate overrides template priorityClassName with initialPriorityClass"
+  ) {
+    sparkConf.set(Config.ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS.key, "config-priority")
+
+    val template = JobSubmitRequestItem(
+      podSpec = Some(PodSpec().withPriorityClassName("template-priority"))
+    )
+
+    val result = armadaClientApp.mergeExecutorTemplate(
+      Some(template),
+      minimalResolvedConfig,
+      minimalArmadaJobConfig(sparkConf),
+      Seq.empty[EnvVar],
+      "driver-service",
+      7078,
+      Seq.empty[Volume],
+      sparkConf
+    )
+
+    result.podSpec.get.priorityClassName shouldBe Some("config-priority")
+  }
+
 }
