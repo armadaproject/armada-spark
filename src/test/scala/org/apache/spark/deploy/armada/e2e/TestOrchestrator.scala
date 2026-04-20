@@ -671,7 +671,6 @@ class TestOrchestrator(
       }
 
       Map(
-        // "spark.driver.host" -> "172.18.0.1",
         "spark.driver.host"        -> localIP,
         "spark.driver.port"        -> "7078",
         "spark.driver.bindAddress" -> "0.0.0.0"
