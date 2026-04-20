@@ -76,6 +76,9 @@ project/**/metals.sbt
 # don't check in your config file
 scripts/config.sh
 
+# benchmark kubeconfig
+benchmark/kubeconfig
+
 dependency-reduced-pom.xml
 .spark-*
 scripts/armadactl
