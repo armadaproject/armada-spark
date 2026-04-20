@@ -52,6 +52,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_SPARK_JOB_NAMESPACE,
   ARMADA_SPARK_JOB_PRIORITY,
   ARMADA_SPARK_POD_LABELS,
+  ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS,
+  ARMADA_SCHEDULING_SCALE_UP_PRIORITY_CLASS,
   CONTAINER_IMAGE,
   DEFAULT_CORES,
   DEFAULT_MEM,
@@ -1003,7 +1005,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .getOrElse(ArmadaClientApplication.DEFAULT_DRIVER_GRACE_PERIOD_SECS)
       .toInt
 
-    val finalPodSpec = currentPodSpec
+    val baseFinalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
       .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(driverContainer) ++ sidecars)
@@ -1013,6 +1015,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         if (resolvedConfig.nodeSelectors.nonEmpty) resolvedConfig.nodeSelectors
         else currentPodSpec.nodeSelector
       )
+
+    val finalPodSpec = resolvePriorityClassName(conf, isDriver = true)
+      .map(baseFinalPodSpec.withPriorityClassName)
+      .getOrElse(baseFinalPodSpec)
 
     val services = buildServiceConfig(driverPort, conf)
 
@@ -1292,7 +1298,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     // Set termination grace period for graceful decommissioning
     val gracePeriodSeconds = conf.get(ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD).toInt
 
-    val finalPodSpec = currentPodSpec
+    val baseFinalPodSpec = currentPodSpec
       .withRestartPolicy("Never")
       .withTerminationGracePeriodSeconds(gracePeriodSeconds)
       .withContainers(Seq(executorContainer) ++ sidecars)
@@ -1304,6 +1310,10 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           resolvedConfig.nodeSelectors ++ gangSelector
         else currentPodSpec.nodeSelector ++ gangSelector
       })
+
+    val finalPodSpec = resolvePriorityClassName(conf, isDriver = false)
+      .map(baseFinalPodSpec.withPriorityClassName)
+      .getOrElse(baseFinalPodSpec)
 
     JobSubmitRequestItem(
       priority = if (resolvedConfig.priority != ArmadaClientApplication.DEFAULT_PRIORITY) {
@@ -1866,6 +1876,15 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         )
       )
       .getOrElse(Map.empty)
+  }
+
+  private def resolvePriorityClassName(
+      conf: SparkConf,
+      isDriver: Boolean
+  ): Option[String] = {
+    val isGang = isDriver || DeploymentModeHelper(conf).getGangCardinality > 0
+    if (isGang) conf.get(ARMADA_SCHEDULING_INITIAL_PRIORITY_CLASS)
+    else conf.get(ARMADA_SCHEDULING_SCALE_UP_PRIORITY_CLASS)
   }
 
   private def buildLabels(
