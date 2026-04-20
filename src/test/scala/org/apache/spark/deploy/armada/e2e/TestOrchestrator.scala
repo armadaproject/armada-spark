@@ -663,15 +663,8 @@ class TestOrchestrator(
       // In client mode, driver runs externally, so we need to set spark.driver.host
       // For E2E tests running on kind cluster, the driver host is always 172.18.0.1
       // (the Docker bridge network gateway IP that kind uses)
-      var localIP: String = "undefined SPARK_LOCAL_IP"
-      if (sys.env.get("SPARK_LOCAL_IP") != None) {
-        localIP = sys.env("SPARK_LOCAL_IP")
-      } else {
-        localIP = "172.18.0.1"
-      }
-
       Map(
-        "spark.driver.host"        -> localIP,
+        "spark.driver.host"        -> sys.env.getOrElse("SPARK_LOCAL_IP", "172.18.0.1"),
         "spark.driver.port"        -> "7078",
         "spark.driver.bindAddress" -> "0.0.0.0"
       )
