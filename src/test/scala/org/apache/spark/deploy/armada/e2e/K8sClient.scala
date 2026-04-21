@@ -56,9 +56,6 @@ class K8sClient(props: Properties) {
     k8sApiURL = cluster.get("server").toString()
   }
 
-  println(s"-------- K8sClient(): armadaMaster = ${armadaMaster}")
-  println(s"-------- K8sClient(): k8sApiURL= ${k8sApiURL}")
-
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")
   val clusterCaFile: String  = props.getProperty("cluster_ca_file", "")

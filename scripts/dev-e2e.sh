@@ -241,7 +241,6 @@ run-test() {
   test -n "${CLUSTER_CA_FILE:-}" && tls_args+=( -Dcluster_ca_file="$CLUSTER_CA_FILE" )
 
   # Run the Scala E2E test suite
-  # env MAVEN_OPTS='-Dcom.sun.net.ssl.checkRevocation=false'
   env KUBERNETES_TRUST_CERTIFICATES=true \
   mvn -e scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
     -Dcontainer.image="$IMAGE_NAME" \
