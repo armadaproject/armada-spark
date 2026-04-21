@@ -88,6 +88,12 @@ start-armada() {
 
   # Get IP address of first network interface that is not loopback or a K8S internal network interface
   external_ip=$(ifconfig -a| grep -w 'inet'  | grep -v 'inet 127\.0\.0' | grep -v 'inet 172\.' | awk '{print $2}' | sed -ne '1p')
+
+  if [ -z "$external_ip" ]; then
+    err "Unable to find any IP addresses on an external interface on this system; exiting now"
+    exit 1
+  fi
+
   if [ "$(uname -s)" = 'Darwin' ]; then
     sed_opt='-I .bak'
   else
