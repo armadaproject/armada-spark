@@ -18,7 +18,6 @@
 package org.apache.spark.deploy.armada
 
 import org.apache.spark.deploy.armada.Config
-import org.apache.spark.deploy.armada.submit
 import io.fabric8.kubernetes.client.{
   ConfigBuilder,
   DefaultKubernetesClient,
