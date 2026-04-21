@@ -31,6 +31,8 @@ import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 import org.yaml.snakeyaml.Yaml
 
 import java.io.FileReader
+import java.io.FileInputStream
+import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeoutException
 import java.util.Properties
 import scala.jdk.CollectionConverters._
@@ -59,10 +61,10 @@ class K8sClient(props: Properties) {
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")
   val clusterCaFile: String  = props.getProperty("cluster_ca_file", "")
+  var algo: String           = ""
 
   var cb: ConfigBuilder = new ConfigBuilder()
     .withMasterUrl(k8sApiURL)
-    // .withOauthToken("sha256~secret")
     .withNamespace("default")
 
   if (clusterCaFile.nonEmpty) {
@@ -71,15 +73,18 @@ class K8sClient(props: Properties) {
 
   if (clientCertFile.nonEmpty) {
     cb = cb.withClientCertFile(clientCertFile)
+
+    val cf   = CertificateFactory.getInstance("X.509")
+    val cert = cf.generateCertificate(new FileInputStream(clientCertFile))
+    algo = cert.getPublicKey.getAlgorithm // "RSA" or "EC"
   }
 
   if (clientKeyFile.nonEmpty) {
     cb = cb.withClientKeyFile(clientKeyFile)
   }
 
-  val cfg = cb
-    .withClientKeyAlgo("RSA")
-    .build()
+  val cfg =
+    if (clientCertFile.nonEmpty) cb.withClientKeyAlgo(algo).build() else cb.build()
 
   private val client: KubernetesClient = new KubernetesClientBuilder()
     .withConfig(cfg)
