@@ -55,6 +55,7 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     --class $ARMADA_BENCHMARK_CLASS \
     "${S3_CONF[@]}" \
     "${ARMADA_AUTH_ARGS[@]}" \
+    "${ARMADA_COMMON_CONF[@]}" \
     "${K8S_CONF[@]}" \
     "${DYNAMIC_ALLOC_CONF[@]}" \
     "${FALLBACK_STORAGE_CONF[@]}" \
@@ -64,9 +65,6 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     --conf spark.dynamicAllocation.cachedExecutorIdleTimeout=240 \
     --conf spark.dynamicAllocation.minExecutors=1 \
     --conf spark.dynamicAllocation.maxExecutors=40 \
-    --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
     $ARMADA_BENCHMARK_JAR \
     $ARMADA_BENCHMARK_DATA \
