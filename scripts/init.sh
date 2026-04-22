@@ -173,6 +173,39 @@ else
 fi
 export STATIC_MODE
 
+# Memory limits (overridable via config.sh or env)
+EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
+DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
+ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
+
+# Allocation-mode conf args
+STATIC_ALLOC_CONF=(
+    --conf spark.executor.instances=2
+    --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+)
+
+DYNAMIC_ALLOC_CONF=(
+    --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
+    --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.default.parallelism=10
+    --conf spark.executor.instances=1
+    --conf spark.sql.shuffle.partitions=5
+    --conf spark.dynamicAllocation.enabled=true
+    --conf spark.dynamicAllocation.minExecutors=2
+    --conf spark.dynamicAllocation.maxExecutors=10
+    --conf spark.dynamicAllocation.initialExecutors=2
+    --conf spark.dynamicAllocation.executorIdleTimeout=5
+    --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
+    --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
+    --conf spark.armada.allocation.batchSize=4
+)
+
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
 else
