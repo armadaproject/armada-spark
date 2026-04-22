@@ -73,6 +73,7 @@ docker run -d \
   -e ARMADA_AUTH_SCRIPT_PATH=${ARMADA_AUTH_SCRIPT_PATH:-} \
   -e ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false} \
   -e ARMADA_NODE_UNIFORMITY_LABEL=${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark} \
+  -e FALLBACK_STORAGE_CONF="${FALLBACK_STORAGE_CONF[*]}" \
   -v "$workspace_dir:/home/spark/workspace" \
   -v "$root/conf:/opt/spark/conf:ro" \
   --rm \
