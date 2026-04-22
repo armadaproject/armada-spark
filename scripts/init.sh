@@ -210,6 +210,21 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     fi
 fi
 
+# Distributed shuffle storage / fallback storage conf args
+FALLBACK_STORAGE_CONF=()
+if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
+    FALLBACK_STORAGE_CONF=(
+        --conf spark.decommission.enabled=true
+        --conf spark.storage.decommission.enabled=true
+        --conf spark.storage.decommission.shuffleBlocks.enabled=true
+        --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
+        --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
+        --conf spark.storage.decommission.fallbackStorage.cleanUp=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.enabled=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
+    )
+fi
+
 shift $((OPTIND - 1))
 FINAL_ARGS=("${@:-}")   
 

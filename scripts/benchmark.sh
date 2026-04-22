@@ -56,8 +56,8 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     "${S3_CONF[@]}" \
     "${ARMADA_AUTH_ARGS[@]}" \
     "${K8S_CONF[@]}" \
+    "${FALLBACK_STORAGE_CONF[@]}" \
     --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
     --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
     --conf spark.armada.queue=$ARMADA_QUEUE \
     --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \

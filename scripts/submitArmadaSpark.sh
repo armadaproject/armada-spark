@@ -77,9 +77,6 @@ else
         --conf spark.dynamicAllocation.initialExecutors=2
         --conf spark.dynamicAllocation.executorIdleTimeout=5
         --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
-        --conf spark.decommission.enabled=true
-        --conf spark.storage.decommission.enabled=true
-        --conf spark.storage.decommission.shuffleBlocks.enabled=true
         --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
         --conf spark.armada.allocation.batchSize=4
     )
@@ -98,8 +95,10 @@ SPARK_SUBMIT_ARGS=(
     --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
     --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
     --conf spark.local.dir=/tmp
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
 )
+
+# Add fallback storage / decommission conf if enabled
+SPARK_SUBMIT_ARGS+=("${FALLBACK_STORAGE_CONF[@]}")
 
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
