@@ -265,6 +265,8 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
         --conf spark.storage.decommission.fallbackStorage.cleanUp=true
         --conf spark.storage.decommission.fallbackStorage.proactive.enabled=true
         --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
+        --conf spark.shuffle.io.connectionCreationTimeout=10s
+        --conf spark.shuffle.netty.connect.maxThreads=10
     )
 fi
 
