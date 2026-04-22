@@ -36,9 +36,6 @@ if [ "${USE_KIND}" == "true" ]; then
     mkdir -p "$TMPDIR"
     kind load docker-image $IMAGE_NAME --name armada
 fi
-# Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
-DISABLE_CONFIG_MAP=true
-
 # Build configuration based on allocation mode
 EXTRA_CONF=(
     --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
@@ -59,12 +56,7 @@ SPARK_SUBMIT_ARGS=(
     --name $NAME
     $CLASS_PROMPT $CLASS_ARG
     "${S3_CONF[@]}" \
-    --conf spark.home=/opt/spark
-    --conf spark.armada.container.image=$IMAGE_NAME
-    --conf spark.armada.queue=$ARMADA_QUEUE
-    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
-    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
-    --conf spark.local.dir=/tmp
+    "${ARMADA_COMMON_CONF[@]}" \
 )
 
 # Add fallback storage / decommission conf if enabled

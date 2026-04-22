@@ -115,6 +115,16 @@ export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 export USE_DISTRIBUTED_SHUFFLE_STORAGE="${USE_DISTRIBUTED_SHUFFLE_STORAGE:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 
+# Common Armada spark-submit conf args shared across all scripts
+ARMADA_COMMON_CONF=(
+    --conf spark.home=/opt/spark
+    --conf spark.local.dir=/tmp
+    --conf spark.armada.container.image=$IMAGE_NAME
+    --conf spark.armada.queue=$ARMADA_QUEUE
+    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
+    --conf spark.kubernetes.executor.disableConfigMap=true
+)
+
 ARMADA_AUTH_ARGS=()
 # Add auth script path if configured
 if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
