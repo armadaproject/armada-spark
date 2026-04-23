@@ -131,14 +131,19 @@ fi
 # back to the Driver. Attempt to extract that by examining network interface
 # addresses, and use the first one that is not the loopback interface, or a
 # Docker/K8S virtual interface.
-export SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | grep -Ev '(127\.0\.0\.1|\<172)' | awk '{print $2}' | sed -n '1p')
-if [ "$SPARK_LOCAL_IP" = "" ] ; then
-  echo ""
-  echo "WARNING: could not determine external network interface address. In order to run Spark"
-  echo "applications in client deployment mode, you may need to set SPARK_LOCAL_IP in your"
-  echo "scripts/config.sh to the external IP address of this system, for example:"
-  echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
-  echo ""
+if [ -z "${SPARK_LOCAL_IP:-}" ]; then
+  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | grep -Ev '(127\.0\.0\.1|\<172)' | awk '{print $2}' | sed -n '1p')
+  if [ "$SPARK_LOCAL_IP" = "" ] ; then
+    echo ""
+    echo "ERROR: could not determine external network interface address. In order to run Spark"
+    echo "applications in client deployment mode, you may need to set SPARK_LOCAL_IP in your"
+    echo "scripts/config.sh to the external IP address of this system, for example:"
+    echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
+    echo ""
+    exit 1
+  fi
+
+  export SPARK_LOCAL_IP
 fi
 
 ARMADA_AUTH_ARGS=()
