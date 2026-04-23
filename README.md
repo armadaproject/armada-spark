@@ -33,10 +33,15 @@ mvn clean package
 
 | Spark   | Scala  | Java |
 |---------|--------|------|
-| 3.3.4   | 2.12.15 | 11  |
-| 3.3.4   | 2.13.8  | 11  |
 | 3.5.5   | 2.12.18 | 17  |
 | 3.5.5   | 2.13.8  | 17  |
+
+### Planned Future Version Support
+
+| Spark   | Scala  | Java |
+|---------|--------|------|
+| 3.3.4   | 2.12.15 | 11  |
+| 3.3.4   | 2.13.8  | 11  |
 
 ### Build Docker Images
 
