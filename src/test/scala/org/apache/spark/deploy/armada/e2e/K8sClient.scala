@@ -50,11 +50,14 @@ class K8sClient(props: Properties) {
   val data      = yaml.load[java.util.Map[String, Object]](new FileReader(s"$home/.kube/config"))
   var k8sApiURL = "no-K8S-server-found"
 
+  val activeCluster = data.get("current-context").asInstanceOf[String]
   val clusters =
     data.get("clusters").asInstanceOf[java.util.List[java.util.Map[String, Object]]].asScala
   clusters.foreach { entry =>
-    val cluster = entry.get("cluster").asInstanceOf[java.util.Map[String, Object]]
-    k8sApiURL = cluster.get("server").toString()
+    if (entry.get("name") == activeCluster) {
+      val cluster = entry.get("cluster").asInstanceOf[java.util.Map[String, Object]]
+      k8sApiURL = cluster.get("server").toString()
+    }
   }
 
   val clientCertFile: String = props.getProperty("client_cert_file", "")

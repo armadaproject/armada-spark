@@ -215,11 +215,10 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     }
     // armadactl command expects the server address to be of the form
     // <hostname-or-IP>:<port> with no pseudo-protocol prefix
-    val pattern      = """.*armada://(.+)""".r
-    var armadactlUrl = "undefined-armadactl-url"
+    val pattern = """.*armada://(.+)""".r
 
-    armadaUrl match {
-      case pattern(hostPort) => armadactlUrl = hostPort // e.g. "localhost:30002"
+    val armadactlUrl = armadaUrl match {
+      case pattern(hostPort) => hostPort // e.g. "localhost:30002"
       case _ =>
         throw new RuntimeException(
           s"could not extract valid armadactl URL from armada URL ${armadaUrl}"
