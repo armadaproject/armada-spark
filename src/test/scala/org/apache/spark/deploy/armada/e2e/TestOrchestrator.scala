@@ -608,11 +608,6 @@ class TestOrchestrator(
     val deployMode   = if (modeHelper.isDriverInCluster) "cluster" else "client"
     val isClientMode = !modeHelper.isDriverInCluster
 
-    val driverClassPath = Seq(
-      ".",
-      "./target/armada-cluster-manager_2.13-1.0.0-SNAPSHOT-all.jar"
-    ).mkString(":")
-
     val baseCommand = Seq(
       "docker",
       "run",

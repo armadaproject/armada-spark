@@ -61,7 +61,7 @@ class ArmadaSparkE2E
 
     val props = loadProperties()
 
-    val armadaApiUrl = props.getProperty("armada.master", "localhost:30002")
+    val armadaApiUrl = props.getProperty("armada.master", "armada://localhost:30002")
     armadaClient = new ArmadaClient(armadaApiUrl)
     k8sClient = new K8sClient(props)
     orch = new TestOrchestrator(armadaClient, k8sClient)

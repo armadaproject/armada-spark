@@ -248,7 +248,7 @@ run-test() {
     -Dscala.binary.version="$SCALA_BIN_VERSION" \
     -Dspark.version="$SPARK_VERSION" \
     -Darmada.queue="$ARMADA_QUEUE" \
-    -Darmada.master="armada://$ARMADA_MASTER" \
+    -Darmada.master="$ARMADA_MASTER" \
     -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
     -Darmadactl.path="$scripts/armadactl" \
     ${tls_args[@]:-} 2>&1 | tee e2e-test.log
