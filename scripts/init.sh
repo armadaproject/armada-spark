@@ -120,8 +120,8 @@ export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 if [ -n "${CLIENT_CERT_FILE:-}" ]; then
   export CLIENT_CERT_FILE="${CLIENT_CERT_FILE}"
 fi
-if [ -n "${CLIENT_CERT_KEY:-}" ]; then
-  export CLIENT_CERT_KEY="${CLIENT_CERT_KEY}"
+if [ -n "${CLIENT_KEY_FILE:-}" ]; then
+  export CLIENT_KEY_FILE="${CLIENT_KEY_FILE}"
 fi
 if [ -n "${CLUSTER_CA_FILE:-}" ]; then
   export CLUSTER_CA_FILE="${CLUSTER_CA_FILE}"
