@@ -214,6 +214,9 @@ DYNAMIC_ALLOC_CONF=(
     --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
     --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
     --conf spark.armada.allocation.batchSize=4
+    --conf spark.decommission.enabled=true
+    --conf spark.storage.decommission.enabled=true
+    --conf spark.storage.decommission.shuffleBlocks.enabled=true
 )
 
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
@@ -257,9 +260,6 @@ fi
 FALLBACK_STORAGE_CONF=()
 if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     FALLBACK_STORAGE_CONF=(
-        --conf spark.decommission.enabled=true
-        --conf spark.storage.decommission.enabled=true
-        --conf spark.storage.decommission.shuffleBlocks.enabled=true
         --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
         --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
         --conf spark.storage.decommission.fallbackStorage.cleanUp=true
