@@ -120,13 +120,15 @@ start-armada() {
 }
 
 init-cluster() {
-  if ! (echo "$IMAGE_NAME" | grep -Eq '^[[:alnum:]_./]+:[[:alnum:]_]+$'); then
+  IMG_REGEX='^[[:alnum:]_./-]+:[[:alnum:]_-]+$'
+
+  if ! (echo "$IMAGE_NAME" | grep -Eq "$IMG_REGEX"); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
     exit 1
   fi
 
-  if ! (echo "$INIT_CONTAINER_IMAGE" | grep -Eq '^[[:alnum:]_]+:[[:alnum:]_]+$'); then
+  if ! (echo "$INIT_CONTAINER_IMAGE" | grep -Eq "$IMG_REGEX"); then
     err "INIT_CONTAINER_IMAGE is not defined. Please set it in $scripts/config.sh, for example:"
     err "INIT_CONTAINER_IMAGE=busybox:latest"
     exit 1
