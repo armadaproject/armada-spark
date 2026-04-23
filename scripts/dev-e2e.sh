@@ -120,7 +120,7 @@ start-armada() {
 }
 
 init-cluster() {
-  if ! (echo "$IMAGE_NAME" | grep -Eq '^[[:alnum:]_]+:[[:alnum:]_]+$'); then
+  if ! (echo "$IMAGE_NAME" | grep -Eq '^[[:alnum:]_./]+:[[:alnum:]_]+$'); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
     exit 1
