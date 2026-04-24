@@ -16,6 +16,16 @@ NC='\033[0m'
 
 trap 'rm -f -- "$STATUSFILE"' EXIT
 
+os=$(uname -s)
+arch=$(uname -m)
+
+if [ "$os" = 'Darwin' ]; then
+
+sed_backup='-I .bak'
+else
+sed_backup='-i.bak'
+fi
+
 log() {
   echo -e "${GREEN}$1${NC}"
 }
@@ -32,8 +42,6 @@ log_group() {
 }
 
 fetch-armadactl() {
-  os=$(uname -s)
-  arch=$(uname -m)
   dl_url='https://github.com/armadaproject/armada/releases/download'
 
   if [ "$os" = "Darwin" ]; then
@@ -94,13 +102,7 @@ start-armada() {
     exit 1
   fi
 
-  if [ "$(uname -s)" = 'Darwin' ]; then
-    sed_opt='-I .bak'
-  else
-    sed_opt='-i.bak'
-  fi
-
-  if ! sed "$sed_opt" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
+  if ! sed "$sed_backup" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
     err "There was an error modifying $AOHOME/hack/kind-config.yaml"
     exit 1
   fi
@@ -155,7 +157,28 @@ init-cluster() {
   echo "Checking if image $INIT_CONTAINER_IMAGE is available"
   if ! docker image inspect "$INIT_CONTAINER_IMAGE" > /dev/null 2>&1; then
     echo "Image $INIT_CONTAINER_IMAGE not found in local Docker instance; pulling it from Docker Hub."
-    if ! docker pull "$INIT_CONTAINER_IMAGE"; then
+
+    # On MacOS systems with arch64 CPUs, we must specify pulling the arm64-specific manifest by
+    # its platform digest (not the multi-arch index), then re-tag it locally as busybox:latest
+    # otherwise the subsequent `kind load docker-image busybox:latest` step fails.
+    ARM64_BUSYBOX_IMG='busybox@sha256:c4e5b27bf840ba1ebd5568b6b914f6926f3559b2ad4f505b1f37aae483b907d6'
+    if [ "$os" = "Darwin" ] && [ "$arch" = 'arm64' ]; then
+      if ! docker pull "$ARM64_BUSYBOX_IMG"; then
+        err "Could not pull $ARM64_BUSYBOX_IMG; please try running"
+        err "  docker pull $ARM64_BUSYBOX_IMG"
+        err "then run this script again"
+        exit 1
+      fi
+
+      if ! docker tag "$ARM64_BUSYBOX_IMG" "$INIT_CONTAINER_IMAGE"; then
+        err "Error running"
+        err "  docker tag $ARM64_BUSYBOX_IMG $INIT_CONTAINER_IMAGE"
+        err "Please try it manually, then run this script again"
+        exit 1
+      fi
+
+    # Linux systems and MacOS systems on amd64 processors
+    elif ! docker pull "$INIT_CONTAINER_IMAGE"; then
       err "Could not pull $INIT_CONTAINER_IMAGE; please try running"
       err "  docker pull $INIT_CONTAINER_IMAGE"
       err "then run this script again"
@@ -214,12 +237,12 @@ run-test() {
   cd ".spark-$SPARK_VERSION"
   # Spark 3.3.4 does not compile without this fix
   if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
-    sed -i -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+    sed "$sed_backup" -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
     # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
     spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
     if [ -f "$spark_dockerfile" ]; then
-      sed -i -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
-      sed -i -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+      sed "$sed_backup" -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+      sed "$sed_backup" -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
     fi
   fi
   ./dev/change-scala-version.sh $SCALA_BIN_VERSION

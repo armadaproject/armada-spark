@@ -75,8 +75,6 @@ class TestOrchestrator(
     armadaClient: ArmadaClient,
     k8sClient: K8sClient
 )(implicit ec: ExecutionContext) {
-  val sparkRepoCopy = ".spark-3.5.5"
-
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
