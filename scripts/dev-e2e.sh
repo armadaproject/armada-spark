@@ -94,7 +94,10 @@ start-armada() {
     fi
   fi
 
-  # Get IP address of first network interface that is not loopback or a K8S internal network interface
+  # Get IP address of the Armada servers first network interface that
+  # is not loopback or a K8S internal network interface and patch it
+  # into the Kind config so that it binds to a valid address instead
+  # of the hardcoded placeholder (192.168.12.135).
   external_ip=$(ifconfig -a| grep -w 'inet'  | grep -v 'inet 127\.0\.0' | grep -v 'inet 172\.' | awk '{print $2}' | sed -ne '1p')
 
   if [ -z "$external_ip" ]; then
