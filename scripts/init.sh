@@ -117,16 +117,6 @@ export INIT_CONTAINER_IMAGE="${INIT_CONTAINER_IMAGE:-busybox:latest}"
 export USE_DISTRIBUTED_SHUFFLE_STORAGE="${USE_DISTRIBUTED_SHUFFLE_STORAGE:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 
-if [ -n "${CLIENT_CERT_FILE:-}" ]; then
-  export CLIENT_CERT_FILE="${CLIENT_CERT_FILE}"
-fi
-if [ -n "${CLIENT_KEY_FILE:-}" ]; then
-  export CLIENT_KEY_FILE="${CLIENT_KEY_FILE}"
-fi
-if [ -n "${CLUSTER_CA_FILE:-}" ]; then
-  export CLUSTER_CA_FILE="${CLUSTER_CA_FILE}"
-fi
-
 # 'client' deployment mode requires SPARK_LOCAL_IP for Executor connectivity
 # back to the Driver. Attempt to extract that by examining network interface
 # addresses, and use the first one that is not the loopback interface, or a
