@@ -215,15 +215,12 @@ class ArmadaClient(armadaUrl: String = "armada://localhost:30002") {
     }
     // armadactl command expects the server address to be of the form
     // <hostname-or-IP>:<port> with no pseudo-protocol prefix
-    val pattern = """.*armada://(.+)""".r
-
-    val armadactlUrl = armadaUrl match {
-      case pattern(hostPort) => hostPort // e.g. "armada://localhost:30002"
-      case _ =>
-        throw new RuntimeException(
-          s"could not extract valid armadactl URL from armada URL ${armadaUrl}"
-        )
-    }
+    val armadactlUrl =
+      if (armadaUrl.startsWith("armada://")) {
+        armadaUrl.stripPrefix("armada://") // e.g. "localhost:30002"
+      } else {
+        armadaUrl
+      }
 
     Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadactlUrl)
   }
