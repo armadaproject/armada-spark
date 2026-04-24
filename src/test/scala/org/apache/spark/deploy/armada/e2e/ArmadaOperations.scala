@@ -43,9 +43,9 @@ object JobSetStatus {
   *   - Queue creation is idempotent (doesn't fail if queue exists)
   *
   * @param armadaUrl
-  *   Armada server URL (default: "localhost:30002")
+  *   Armada server URL (default: "armada://localhost:30002")
   */
-class ArmadaClient(armadaUrl: String = "localhost:30002") {
+class ArmadaClient(armadaUrl: String = "armada://localhost:30002") {
   private val processTimeout = DefaultProcessTimeout
 
   private val yamlMapper = {
@@ -218,7 +218,7 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     val pattern = """.*armada://(.+)""".r
 
     val armadactlUrl = armadaUrl match {
-      case pattern(hostPort) => hostPort // e.g. "localhost:30002"
+      case pattern(hostPort) => hostPort // e.g. "armada://localhost:30002"
       case _ =>
         throw new RuntimeException(
           s"could not extract valid armadactl URL from armada URL ${armadaUrl}"
