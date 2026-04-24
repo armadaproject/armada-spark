@@ -4,17 +4,21 @@
 #
 # This configuration will allow you to run kubectl and armadactl
 # against the Armada instance on this system. To use this:
-# - Copy your $HOME/.kube/config on this system to the same directory
-#   on your remote client host, then modify that copied file so the
-#   IP address in there (0.0.0.0) is the address of the external interface
-#   mentioned below.
-# - Copy your $HOME/.armadactl.yaml to your $HOME directory on the remote
-#   client host, in that copied file, change the value of the 'armadaUrl'
-#   field from 'localhost' to the hostname (or IP address) of this server,
-#   and below that line a new line (at same indent level), add the entry
-#     forceNoTls: true
-# You should then be able to run `kubectl cluster-info` or
-# `armadactl get queues` without errors on the remote client host.
+# Setup (on each remote client host):
+#   1. Copy $HOME/.kube/config from the server to $HOME/.kube/config on the
+#      client. Edit the client copy: change "server: https://0.0.0.0:6443"
+#      to use the server's external IP.
+#   2. Copy $HOME/.armadactl.yaml from the server to $HOME/.armadactl.yaml
+#      on the client. Edit the client copy:
+#        - Change the 'armadaUrl' value from 'localhost' to the server's
+#          external IP (or hostname).
+#        - Add the following line at the same indent level:
+#            forceNoTls: true
+#
+# Verify:
+#   kubectl cluster-info
+#   armadactl get queues
+#
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
