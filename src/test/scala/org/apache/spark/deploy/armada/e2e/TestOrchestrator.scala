@@ -611,7 +611,7 @@ class TestOrchestrator(
       "run",
       "--rm",
       "--network",
-      "host",
+      "host"
     ) ++ volumeMounts ++ Seq(
       imageName,
       "/opt/spark/bin/spark-class",
