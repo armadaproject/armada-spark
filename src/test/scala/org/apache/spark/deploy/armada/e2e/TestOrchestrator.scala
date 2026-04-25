@@ -612,8 +612,6 @@ class TestOrchestrator(
       "--rm",
       "--network",
       "host",
-      "-p",
-      "7078:7078" // Driver port must be exposed for client deploy-mode
     ) ++ volumeMounts ++ Seq(
       imageName,
       "/opt/spark/bin/spark-class",
