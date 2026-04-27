@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.deploy.armada
+package org.apache.spark.deploy.armada.e2e
 
 import org.apache.spark.deploy.armada.Config
 import io.fabric8.kubernetes.client.{

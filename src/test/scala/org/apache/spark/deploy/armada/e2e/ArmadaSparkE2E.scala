@@ -17,7 +17,7 @@
 
 package org.apache.spark.deploy.armada.e2e
 
-import org.apache.spark.deploy.armada.K8sClient
+import org.apache.spark.deploy.armada.e2e.K8sClient
 
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
