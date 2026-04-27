@@ -96,7 +96,7 @@ in your `armada-operator` repository.
 
 - Run the armada-operator setup commands (usually `make kind-all`) to create and start your Armada instance.
 
-- Copy the `$HOME/.kube/config` and `$HOME/.armadctl.yaml` (that Armada Operator will generate) from the Armada
+- Copy the `$HOME/.kube/config` and `$HOME/.armadactl.yaml` (that Armada Operator will generate) from the Armada
 server host to your `$HOME` directory on the client (local) host. Then edit the local `.kube/config` and on
 the line that has `server: https://0.0.0.0:6443`, change the `0.0.0.0` address to the IP address or hostname
 of the remote Armada server system.
