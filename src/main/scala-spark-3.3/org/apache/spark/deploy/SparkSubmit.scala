@@ -1130,7 +1130,8 @@ private[spark] class SparkSubmit extends Logging {
         throw findCause(t)
     } finally {
       if (
-        args.master.startsWith("k8s") && !isShell(args.primaryResource) &&
+        (args.master.startsWith("k8s") || args.master.startsWith("armada")) &&
+        !isShell(args.primaryResource) &&
         !isSqlShell(args.mainClass) && !isThriftServer(args.mainClass)
       ) {
         try {
