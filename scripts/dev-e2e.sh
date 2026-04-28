@@ -7,7 +7,7 @@ source "$scripts"/init.sh
 
 STATUSFILE="$(mktemp)"
 AOREPO='https://github.com/armadaproject/armada-operator.git'
-AOHOME=$(realpath "$scripts/../../armada-operator")
+AOHOME="$scripts/../../armada-operator"
 ARMADACTL_VERSION='0.20.23'
 
 GREEN='\033[0;32m'
@@ -20,10 +20,9 @@ os=$(uname -s)
 arch=$(uname -m)
 
 if [ "$os" = 'Darwin' ]; then
-
-sed_backup='-I .bak'
+  sed_inplace=(sed -I .bak)
 else
-sed_backup='-i.bak'
+  sed_inplace=(sed -i.bak)
 fi
 
 log() {
@@ -80,7 +79,8 @@ armadactl-retry() {
 
 start-armada() {
   if [ -d "$AOHOME" ]; then
-    echo "Using existing armada-operator repo at $AOHOME"
+    PRINTABLE_AOHOME=$(realpath "$AOHOME")
+    echo "Using existing armada-operator repo at $PRINTABLE_AOHOME"
   else
     if ! git clone "$AOREPO" "$AOHOME"; then
       err "There was a problem cloning the armada-operator repo; exiting now"
@@ -105,7 +105,7 @@ start-armada() {
     exit 1
   fi
 
-  if ! sed "$sed_backup" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
+  if ! "${sed_inplace[@]}" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
     err "There was an error modifying $AOHOME/hack/kind-config.yaml"
     exit 1
   fi
@@ -240,12 +240,12 @@ run-test() {
   cd ".spark-$SPARK_VERSION"
   # Spark 3.3.4 does not compile without this fix
   if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
-    sed "$sed_backup" -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+    "${sed_inplace[@]}" -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
     # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
     spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
     if [ -f "$spark_dockerfile" ]; then
-      sed "$sed_backup" -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
-      sed "$sed_backup" -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+      "${sed_inplace[@]}" -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+      "${sed_inplace[@]}" -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
     fi
   fi
   ./dev/change-scala-version.sh $SCALA_BIN_VERSION
