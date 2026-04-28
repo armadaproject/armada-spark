@@ -19,6 +19,7 @@ package org.apache.spark.deploy.armada.e2e
 
 import org.apache.spark.deploy.armada.Config
 import io.fabric8.kubernetes.client.{
+  Config => KubeConfig,
   ConfigBuilder,
   KubernetesClient,
   KubernetesClientBuilder
@@ -28,8 +29,8 @@ import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 
 import org.yaml.snakeyaml.Yaml
 
-import java.io.FileReader
-import java.io.FileInputStream
+import java.io.{FileReader, FileInputStream}
+import java.nio.file.{Paths, Files}
 import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeoutException
 import java.util.Properties
@@ -42,22 +43,15 @@ class K8sClient(props: Properties) {
   val armadaMaster: String = props.getProperty("armada.master")
   val pattern              = """armada://([^:]+):.*""".r
 
-  // If armadaMaster is local, derive k8sApiURL from ~/.kube/config,
-  // which `kind` will create/update.
-  val yaml      = new Yaml()
-  val home      = System.getProperty("user.home")
-  val data      = yaml.load[java.util.Map[String, Object]](new FileReader(s"$home/.kube/config"))
-  var k8sApiURL = "no-K8S-server-found"
-
-  val activeCluster = data.get("current-context").asInstanceOf[String]
-  val clusters =
-    data.get("clusters").asInstanceOf[java.util.List[java.util.Map[String, Object]]].asScala
-  clusters.foreach { entry =>
-    if (entry.get("name") == activeCluster) {
-      val cluster = entry.get("cluster").asInstanceOf[java.util.Map[String, Object]]
-      k8sApiURL = cluster.get("server").toString()
-    }
+  val home = System.getProperty("user.home")
+  if (!Files.exists(Paths.get(s"$home/.kube/config"))) {
+    throw new RuntimeException(s"ERROR: $home/.kube/config not found")
   }
+
+  // Derive Kubernetes configuration from $HOME/.kube/config; passing
+  // null here instructs it to get the current-context from the file
+  val kubeCfg   = KubeConfig.autoConfigure(null)
+  val k8sApiURL = kubeCfg.getMasterUrl()
 
   val clientCertFile: String = props.getProperty("client_cert_file", "")
   val clientKeyFile: String  = props.getProperty("client_key_file", "")
