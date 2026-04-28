@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONTEXT="kind-armada"
+CONTEXT=$(kubectl config current-context)
 
 E2E_DIR=$(realpath "$0" | xargs dirname)
 
