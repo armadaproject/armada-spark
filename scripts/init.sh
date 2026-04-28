@@ -104,6 +104,7 @@ export INCLUDE_PYTHON="${INCLUDE_PYTHON:-false}"
 export USE_KIND="${USE_KIND:-false}"
 export IMAGE_NAME="${IMAGE_NAME:-spark:armada}"
 export ARMADA_MASTER="${ARMADA_MASTER:-armada://localhost:30002}"
+export ARMADA_LOOKOUT_URL="${ARMADA_LOOKOUT_URL:-http://localhost:30000}"
 export ARMADA_INTERNAL_URL="${ARMADA_INTERNAL_URL:-armada://armada-server.armada:50051}"
 export ARMADA_QUEUE="${ARMADA_QUEUE:-test}"
 export ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-}
@@ -112,8 +113,28 @@ export ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false}
 export SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT:-}
 export SCALA_CLASS="${SCALA_CLASS:-org.apache.spark.examples.SparkPi}"
 export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
+export INIT_CONTAINER_IMAGE="${INIT_CONTAINER_IMAGE:-busybox:latest}"
 export USE_DISTRIBUTED_SHUFFLE_STORAGE="${USE_DISTRIBUTED_SHUFFLE_STORAGE:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
+
+# 'client' deployment mode requires SPARK_LOCAL_IP for Executor connectivity
+# back to the Driver. Attempt to extract that by examining network interface
+# addresses, and use the first one that is not the loopback interface, or a
+# Docker/K8S virtual interface.
+if [ -z "${SPARK_LOCAL_IP:-}" ]; then
+  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | grep -Ev '(127\.0\.0\.1|\<172)' | awk '{print $2}' | sed -n '1p')
+  if [ "$SPARK_LOCAL_IP" = "" ] ; then
+    echo ""
+    echo "ERROR: could not determine external network interface address. In order to run Spark"
+    echo "applications in client deployment mode, you may need to set SPARK_LOCAL_IP in your"
+    echo "scripts/config.sh to the external IP address of this system, for example:"
+    echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
+    echo ""
+    exit 1
+  fi
+
+  export SPARK_LOCAL_IP
+fi
 
 ARMADA_AUTH_ARGS=()
 # Add auth script path if configured

@@ -20,6 +20,7 @@ package org.apache.spark.deploy.armada.e2e
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
+import org.apache.spark.deploy.armada.e2e.K8sClient
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import TestConstants._
@@ -74,7 +75,6 @@ class TestOrchestrator(
     armadaClient: ArmadaClient,
     k8sClient: K8sClient
 )(implicit ec: ExecutionContext) {
-
   private val jobSubmitTimeout = JobSubmitTimeout
   private val jobWatchTimeout  = JobWatchTimeout
 
@@ -253,6 +253,7 @@ class TestOrchestrator(
     println(s"Test ID: ${context.testId}")
     println(s"Namespace: ${context.namespace}")
     println(s"Queue: $queueName")
+    println(s"MasterURL: ${config.masterUrl}")
     println(s"Deployment Mode: $modeType")
 
     val resultFuture = for {
@@ -356,7 +357,7 @@ class TestOrchestrator(
       "spark.submit.deployMode"           -> deployMode
     )
 
-    val dockerCommand = buildDockerCommand(
+    val runTestCommand = buildRunTestCommand(
       config.imageName,
       volumeMounts,
       config.masterUrl,
@@ -384,7 +385,7 @@ class TestOrchestrator(
       println(s"[SUBMIT]     $key = $displayValue")
     }
     // Properly escape command for shell reproduction
-    val escapedCommand = dockerCommand.map { arg =>
+    val escapedCommand = runTestCommand.map { arg =>
       if (arg.contains(" ") || arg.contains("'") || arg.contains("\"")) {
         "'" + arg.replace("'", "'\\''") + "'"
       } else arg
@@ -395,7 +396,7 @@ class TestOrchestrator(
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
       // In client mode, spark-submit runs until application completes, so use longer timeout
       val timeout = if (!modeHelper.isDriverInCluster) jobWatchTimeout else jobSubmitTimeout
-      val result  = ProcessExecutor.executeWithResult(dockerCommand, timeout)
+      val result  = ProcessExecutor.executeWithResult(runTestCommand, timeout)
 
       if (result.exitCode != 0) {
         val allOutput            = result.stdout + "\n" + result.stderr
@@ -588,7 +589,7 @@ class TestOrchestrator(
     TestResult(jobSetId, queueName, finalStatus, assertionResults)
   }
 
-  private def buildDockerCommand(
+  private def buildRunTestCommand(
       imageName: String,
       volumeMounts: Seq[String],
       masterUrl: String,
@@ -654,8 +655,9 @@ class TestOrchestrator(
       // For E2E tests running on kind cluster, the driver host is always 172.18.0.1
       // (the Docker bridge network gateway IP that kind uses)
       Map(
-        "spark.driver.host" -> "172.18.0.1",
-        "spark.driver.port" -> "7078"
+        "spark.driver.host"        -> sys.env.getOrElse("SPARK_LOCAL_IP", "172.18.0.1"),
+        "spark.driver.port"        -> "7078",
+        "spark.driver.bindAddress" -> "0.0.0.0"
       )
     } else {
       // In cluster mode, driver runs in a pod, so use internal URL

@@ -43,9 +43,9 @@ object JobSetStatus {
   *   - Queue creation is idempotent (doesn't fail if queue exists)
   *
   * @param armadaUrl
-  *   Armada server URL (default: "localhost:30002")
+  *   Armada server URL (default: "armada://localhost:30002")
   */
-class ArmadaClient(armadaUrl: String = "localhost:30002") {
+class ArmadaClient(armadaUrl: String = "armada://localhost:30002") {
   private val processTimeout = DefaultProcessTimeout
 
   private val yamlMapper = {
@@ -213,7 +213,16 @@ class ArmadaClient(armadaUrl: String = "localhost:30002") {
     val armadactlCmd = resolveArmadactlPath.getOrElse {
       throw new RuntimeException("armadactl not found in system properties or PATH")
     }
-    Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadaUrl)
+    // armadactl command expects the server address to be of the form
+    // <hostname-or-IP>:<port> with no pseudo-protocol prefix
+    val armadactlUrl =
+      if (armadaUrl.startsWith("armada://")) {
+        armadaUrl.stripPrefix("armada://") // e.g. "localhost:30002"
+      } else {
+        armadaUrl
+      }
+
+    Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadactlUrl)
   }
 
   /** Resolves the path to `armadactl`:

@@ -16,6 +16,15 @@ NC='\033[0m'
 
 trap 'rm -f -- "$STATUSFILE"' EXIT
 
+os=$(uname -s)
+arch=$(uname -m)
+
+if [ "$os" = 'Darwin' ]; then
+  sed_inplace=(sed -I .bak)
+else
+  sed_inplace=(sed -i.bak)
+fi
+
 log() {
   echo -e "${GREEN}$1${NC}"
 }
@@ -32,8 +41,6 @@ log_group() {
 }
 
 fetch-armadactl() {
-  os=$(uname -s)
-  arch=$(uname -m)
   dl_url='https://github.com/armadaproject/armada/releases/download'
 
   if [ "$os" = "Darwin" ]; then
@@ -72,13 +79,13 @@ armadactl-retry() {
 
 start-armada() {
   if [ -d "$AOHOME" ]; then
-    echo "Using existing armada-operator repo at $AOHOME"
+    PRINTABLE_AOHOME=$(realpath "$AOHOME")
+    echo "Using existing armada-operator repo at $PRINTABLE_AOHOME"
   else
     if ! git clone "$AOREPO" "$AOHOME"; then
       err "There was a problem cloning the armada-operator repo; exiting now"
       exit 1
     fi
-
 
     log "Patching armada-operator"
     if ! patch -p1 -d "$AOHOME/" < "$scripts/../e2e/armada-operator.patch"; then
@@ -87,18 +94,48 @@ start-armada() {
     fi
   fi
 
-  echo  "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
+  # Get IP address of the Armada servers first network interface that
+  # is not loopback or a K8S internal network interface and patch it
+  # into the Kind config so that it binds to a valid address instead
+  # of the hardcoded placeholder (192.168.12.135).
+  external_ip=$(ifconfig -a| grep -w 'inet'  | grep -v 'inet 127\.0\.0' | grep -v 'inet 172\.' | awk '{print $2}' | sed -ne '1p')
+
+  if [ -z "$external_ip" ]; then
+    err "Unable to find any IP addresses on an external interface on this system; exiting now"
+    exit 1
+  fi
+
+  if ! "${sed_inplace[@]}" -e "s/192.168.12.135/$external_ip/" "$AOHOME/hack/kind-config.yaml"; then
+    err "There was an error modifying $AOHOME/hack/kind-config.yaml"
+    exit 1
+  fi
+
+  echo "Running 'make kind-all' to install and start Armada; this may take up to 6 minutes"
   if ! (cd "$AOHOME"; make kind-all 2>&1) | tee armada-start.txt; then
     echo ""
     err "There was a problem starting Armada; exiting now"
     exit 1
   fi
+
+  echo "Extracting TLS client certificate files from Kind cluster"
+  if ! e2e/extract-kind-cert.sh; then
+    err "There was a problem extracting the certificates"
+    exit 1
+  fi
 }
 
 init-cluster() {
-  if ! (echo "$IMAGE_NAME" | grep -Eq '^[[:alnum:]_]+:[[:alnum:]_]+$'); then
+  IMG_REGEX='^[[:alnum:]_./-]+:[[:alnum:]_-]+$'
+
+  if ! (echo "$IMAGE_NAME" | grep -Eq "$IMG_REGEX"); then
     err "IMAGE_NAME is not defined. Please set it in $scripts/config.sh, for example:"
     err "IMAGE_NAME=spark:testing"
+    exit 1
+  fi
+
+  if ! (echo "$INIT_CONTAINER_IMAGE" | grep -Eq "$IMG_REGEX"); then
+    err "INIT_CONTAINER_IMAGE is not defined. Please set it in $scripts/config.sh, for example:"
+    err "INIT_CONTAINER_IMAGE=busybox:latest"
     exit 1
   fi
 
@@ -120,6 +157,38 @@ init-cluster() {
     exit 1
   fi
 
+  echo "Checking if image $INIT_CONTAINER_IMAGE is available"
+  if ! docker image inspect "$INIT_CONTAINER_IMAGE" > /dev/null 2>&1; then
+    echo "Image $INIT_CONTAINER_IMAGE not found in local Docker instance; pulling it from Docker Hub."
+
+    # On MacOS systems with arch64 CPUs, we must specify pulling the arm64-specific manifest by
+    # its platform digest (not the multi-arch index), then re-tag it locally as busybox:latest
+    # otherwise the subsequent `kind load docker-image busybox:latest` step fails.
+    ARM64_BUSYBOX_IMG='busybox@sha256:c4e5b27bf840ba1ebd5568b6b914f6926f3559b2ad4f505b1f37aae483b907d6'
+    if [ "$os" = "Darwin" ] && [ "$arch" = 'arm64' ]; then
+      if ! docker pull "$ARM64_BUSYBOX_IMG"; then
+        err "Could not pull $ARM64_BUSYBOX_IMG; please try running"
+        err "  docker pull $ARM64_BUSYBOX_IMG"
+        err "then run this script again"
+        exit 1
+      fi
+
+      if ! docker tag "$ARM64_BUSYBOX_IMG" "$INIT_CONTAINER_IMAGE"; then
+        err "Error running"
+        err "  docker tag $ARM64_BUSYBOX_IMG $INIT_CONTAINER_IMAGE"
+        err "Please try it manually, then run this script again"
+        exit 1
+      fi
+
+    # Linux systems and MacOS systems on amd64 processors
+    elif ! docker pull "$INIT_CONTAINER_IMAGE"; then
+      err "Could not pull $INIT_CONTAINER_IMAGE; please try running"
+      err "  docker pull $INIT_CONTAINER_IMAGE"
+      err "then run this script again"
+      exit 1
+    fi
+  fi
+
   echo "Checking to see if Armada cluster is available ..."
 
   if ! "$scripts"/armadactl get queues > "$STATUSFILE" 2>&1 ; then
@@ -138,20 +207,54 @@ init-cluster() {
     log "Armada is available"
   fi
 
+  log "Armada Cluster Nodes"
+  kubectl get nodes
+
   mkdir -p "$scripts/.tmp"
 
-  TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMAGE_NAME" --name armada 2>&1 \
-   | log_group "Loading Docker image $IMAGE_NAME into Armada cluster";
+  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
+    for IMG in "$IMAGE_NAME" "$INIT_CONTAINER_IMAGE"; do
+      TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMG" --name armada 2>&1 \
+        | log_group "Loading Docker image $IMG into Armada (Kind) cluster";
+    done
+  fi
 
   # configure the defaults for the e2e test
-  cp $scripts/../e2e/spark-defaults.conf $scripts/../conf/spark-defaults.conf
+  cp "$scripts/../e2e/spark-defaults.conf" "$scripts/../conf/spark-defaults.conf"
 
-  log "Waiting 60 seconds for Armada to stabilize ..."
-  sleep 60
+  # If using a remote Armada server, assume it is already running and ready
+  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
+    log "Waiting 60 seconds for Armada to stabilize ..."
+    sleep 60
+  fi
 }
 
 run-test() {
   echo "Running Scala E2E test suite..."
+
+  if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
+    echo "Checking out Spark sources for tag v$SPARK_VERSION."
+    git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+  fi
+
+  cd ".spark-$SPARK_VERSION"
+  # Spark 3.3.4 does not compile without this fix
+  if [[ "$SPARK_VERSION" == "3.3.4" ]]; then
+    "${sed_inplace[@]}" -e "s%<scala.version>2.13.8</scala.version>%<scala.version>2.13.6</scala.version>%" pom.xml
+    # Fix deprecated openjdk base image - use eclipse-temurin:11-jammy instead.
+    spark_dockerfile="resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile"
+    if [ -f "$spark_dockerfile" ]; then
+      "${sed_inplace[@]}" -e 's|FROM openjdk:|FROM eclipse-temurin:|g' "$spark_dockerfile"
+      "${sed_inplace[@]}" -E 's/^ARG java_image_tag=11-jre-slim$/ARG java_image_tag=11-jammy/' "$spark_dockerfile"
+    fi
+  fi
+  ./dev/change-scala-version.sh $SCALA_BIN_VERSION
+  # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
+  # spark-examples jars are not released, so we need to build these from sources
+  ./build/mvn --batch-mode clean
+  ./build/mvn --batch-mode package -pl examples
+  ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+  cd ..
 
   # Add armadactl to PATH so the e2e framework can access it
   PATH="$scripts:$AOHOME/bin/tooling/:$PATH"
@@ -160,23 +263,28 @@ run-test() {
   # Change to armada-spark directory
   cd "$scripts/.."
 
+  tls_args=()
+  test -n "${CLIENT_CERT_FILE:-}" && tls_args+=( -Dclient_cert_file="$CLIENT_CERT_FILE" )
+  test -n "${CLIENT_KEY_FILE:-}" && tls_args+=( -Dclient_key_file="$CLIENT_KEY_FILE" )
+  test -n "${CLUSTER_CA_FILE:-}" && tls_args+=( -Dcluster_ca_file="$CLUSTER_CA_FILE" )
+
   # Run the Scala E2E test suite
-  mvn scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
+  env KUBERNETES_TRUST_CERTIFICATES=true \
+  mvn -e scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
     -Dcontainer.image="$IMAGE_NAME" \
     -Dscala.version="$SCALA_VERSION" \
     -Dscala.binary.version="$SCALA_BIN_VERSION" \
     -Dspark.version="$SPARK_VERSION" \
     -Darmada.queue="$ARMADA_QUEUE" \
-    -Darmada.master="armada://localhost:30002" \
-    -Darmada.lookout.url="http://localhost:30000" \
-    -Darmadactl.path="$scripts/armadactl" 2>&1 | \
-    tee e2e-test.log
-
+    -Darmada.master="$ARMADA_MASTER" \
+    -Darmada.lookout.url="$ARMADA_LOOKOUT_URL" \
+    -Darmadactl.path="$scripts/armadactl" \
+    ${tls_args[@]:-} 2>&1 | tee e2e-test.log
   TEST_EXIT_CODE=${PIPESTATUS[0]}
 
   if [ "$TEST_EXIT_CODE" -ne 0 ]; then
     err "E2E tests failed with exit code $TEST_EXIT_CODE"
-    exit $TEST_EXIT_CODE
+    exit "$TEST_EXIT_CODE"
   fi
 
   log "E2E tests completed successfully"

@@ -18,18 +18,72 @@
 package org.apache.spark.deploy.armada.e2e
 
 import org.apache.spark.deploy.armada.Config
-import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient}
+import io.fabric8.kubernetes.client.{
+  Config => KubeConfig,
+  ConfigBuilder,
+  KubernetesClient,
+  KubernetesClientBuilder
+}
 import io.fabric8.kubernetes.api.model.{NamespaceBuilder, Pod}
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 
+import org.yaml.snakeyaml.Yaml
+
+import java.io.{FileReader, FileInputStream}
+import java.nio.file.{Paths, Files}
+import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeoutException
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 /** Kubernetes client implementation using fabric8 Kubernetes client library. */
-class K8sClient {
-  private val client: KubernetesClient = new DefaultKubernetesClient()
+class K8sClient(props: Properties) {
+  val armadaMaster: String = props.getProperty("armada.master")
+  val pattern              = """armada://([^:]+):.*""".r
+
+  val home = System.getProperty("user.home")
+  if (!Files.exists(Paths.get(s"$home/.kube/config"))) {
+    throw new RuntimeException(s"ERROR: $home/.kube/config not found")
+  }
+
+  // Derive Kubernetes configuration from $HOME/.kube/config; passing
+  // null here instructs it to get the current-context from the file
+  val kubeCfg   = KubeConfig.autoConfigure(null)
+  val k8sApiURL = kubeCfg.getMasterUrl()
+
+  val clientCertFile: String = props.getProperty("client_cert_file", "")
+  val clientKeyFile: String  = props.getProperty("client_key_file", "")
+  val clusterCaFile: String  = props.getProperty("cluster_ca_file", "")
+  var algo: String           = ""
+
+  var cb: ConfigBuilder = new ConfigBuilder()
+    .withMasterUrl(k8sApiURL)
+    .withNamespace("default")
+
+  if (clusterCaFile.nonEmpty) {
+    cb = cb.withCaCertFile(clusterCaFile)
+  }
+
+  if (clientCertFile.nonEmpty) {
+    cb = cb.withClientCertFile(clientCertFile)
+
+    val cf   = CertificateFactory.getInstance("X.509")
+    val cert = cf.generateCertificate(new FileInputStream(clientCertFile))
+    algo = cert.getPublicKey.getAlgorithm // "RSA" or "EC"
+  }
+
+  if (clientKeyFile.nonEmpty) {
+    cb = cb.withClientKeyFile(clientKeyFile)
+  }
+
+  val cfg =
+    if (clientCertFile.nonEmpty) cb.withClientKeyAlgo(algo).build() else cb.build()
+
+  private val client: KubernetesClient = new KubernetesClientBuilder()
+    .withConfig(cfg)
+    .build()
 
   def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = Future {
     val namespace = new NamespaceBuilder()

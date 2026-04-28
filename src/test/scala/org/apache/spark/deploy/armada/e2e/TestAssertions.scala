@@ -20,6 +20,7 @@ package org.apache.spark.deploy.armada.e2e
 import java.util.concurrent.atomic.AtomicInteger
 
 import io.fabric8.kubernetes.api.model.Pod
+import org.apache.spark.deploy.armada.e2e.K8sClient
 import org.apache.spark.deploy.armada.Config
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
