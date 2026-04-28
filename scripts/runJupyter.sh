@@ -3,12 +3,15 @@ set -euo pipefail
 
 # init environment variables
 scripts="$(cd "$(dirname "$0")"; pwd)"
-source "$scripts/init.sh"
 
-# Jupyter-specific defaults
+# Jupyter always runs in client mode; set defaults before sourcing init.sh
+# so that DEPLOY_MODE_ARGS is built with the correct values.
+DEPLOY_MODE=client
 JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 SPARK_BLOCK_MANAGER_PORT="${SPARK_BLOCK_MANAGER_PORT:-10061}"
 SPARK_DRIVER_PORT="${SPARK_DRIVER_PORT:-7078}"
+
+source "$scripts/init.sh"
 
 # SPARK_DRIVER_HOST is required - must be reachable from Kubernetes executors
 if [ -z "${SPARK_DRIVER_HOST:-}" ]; then
@@ -62,18 +65,14 @@ docker run -d \
   -p ${JUPYTER_PORT}:8888 \
   -p ${SPARK_BLOCK_MANAGER_PORT}:${SPARK_BLOCK_MANAGER_PORT} \
   -p ${SPARK_DRIVER_PORT}:${SPARK_DRIVER_PORT} \
-  -e SPARK_DRIVER_HOST=${SPARK_DRIVER_HOST} \
-  -e SPARK_DRIVER_PORT=${SPARK_DRIVER_PORT} \
-  -e SPARK_BLOCK_MANAGER_PORT=${SPARK_BLOCK_MANAGER_PORT} \
   -e ARMADA_MASTER=${ARMADA_MASTER} \
-  -e ARMADA_QUEUE=${ARMADA_QUEUE} \
-  -e ARMADA_NAMESPACE=${ARMADA_NAMESPACE:-default} \
-  -e IMAGE_NAME=${IMAGE_NAME} \
-  -e ARMADA_AUTH_TOKEN=${ARMADA_AUTH_TOKEN:-} \
-  -e ARMADA_AUTH_SCRIPT_PATH=${ARMADA_AUTH_SCRIPT_PATH:-} \
-  -e ARMADA_EVENT_WATCHER_USE_TLS=${ARMADA_EVENT_WATCHER_USE_TLS:-false} \
-  -e ARMADA_NODE_UNIFORMITY_LABEL=${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark} \
+  -e ARMADA_COMMON_CONF="${ARMADA_COMMON_CONF[*]:-}" \
+  -e ARMADA_AUTH_ARGS="${ARMADA_AUTH_ARGS[*]:-}" \
+  -e DEPLOY_MODE_ARGS="${DEPLOY_MODE_ARGS[*]:-}" \
+  -e DYNAMIC_ALLOC_CONF="${DYNAMIC_ALLOC_CONF[*]:-}" \
+  -e STATIC_ALLOC_CONF="${STATIC_ALLOC_CONF[*]:-}" \
   -e FALLBACK_STORAGE_CONF="${FALLBACK_STORAGE_CONF[*]:-}" \
+  -e ALLOCATION_MODE=${ALLOCATION_MODE} \
   -v "$workspace_dir:/home/spark/workspace" \
   -v "$root/conf:/opt/spark/conf:ro" \
   --rm \
