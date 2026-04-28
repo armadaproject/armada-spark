@@ -29,7 +29,8 @@ object ArmadaUtils {
 
   def parseMasterUrl(masterUrl: String): (String, Int) = {
     val startString = "armada://"
-    Some(masterUrl)
+    Option(masterUrl)
+      .filter(_.startsWith(startString))
       .map(_.substring(startString.length).split(":").toSeq)
       .filter(_.length == 2)
       .map { case Seq(host: String, portString: String) =>
