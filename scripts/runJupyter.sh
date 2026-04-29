@@ -71,7 +71,7 @@ docker run -d \
   -e DEPLOY_MODE_ARGS="${DEPLOY_MODE_ARGS[*]:-}" \
   -e DYNAMIC_ALLOC_CONF="${DYNAMIC_ALLOC_CONF[*]:-}" \
   -e STATIC_ALLOC_CONF="${STATIC_ALLOC_CONF[*]:-}" \
-  -e FALLBACK_STORAGE_CONF="${FALLBACK_STORAGE_CONF[*]:-}" \
+  -e DISTRIBUTED_SHUFFLE_STORAGE_CONF="${DISTRIBUTED_SHUFFLE_STORAGE_CONF[*]:-}" \
   -e ALLOCATION_MODE=${ALLOCATION_MODE} \
   -v "$workspace_dir:/home/spark/workspace" \
   -v "$root/conf:/opt/spark/conf:ro" \

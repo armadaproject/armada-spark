@@ -58,7 +58,7 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     "${ARMADA_COMMON_CONF[@]}" \
     "${K8S_CONF[@]}" \
     "${DYNAMIC_ALLOC_CONF[@]}" \
-    "${FALLBACK_STORAGE_CONF[@]}" \
+    "${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]}" \
     --conf spark.armada.executor.limit.memory=60Gi \
     --conf spark.armada.executor.request.memory=60Gi \
     --conf spark.armada.driver.limit.memory=60Gi \

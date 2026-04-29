@@ -252,14 +252,15 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
         echo distributed shuffle storage currently only supported for spark 3.5.3/scala 2.12
         echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
+        echo EXITING
         exit 1
     fi
 fi
 
 # Distributed shuffle storage / fallback storage conf args
-FALLBACK_STORAGE_CONF=()
+DISTRIBUTED_SHUFFLE_STORAGE_CONF=()
 if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
-    FALLBACK_STORAGE_CONF=(
+    DISTRIBUTED_SHUFFLE_STORAGE_CONF=(
         --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
         --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
         --conf spark.storage.decommission.fallbackStorage.cleanUp=true

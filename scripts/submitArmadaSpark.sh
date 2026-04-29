@@ -60,7 +60,7 @@ SPARK_SUBMIT_ARGS=(
 )
 
 # Add fallback storage / decommission conf if enabled
-SPARK_SUBMIT_ARGS+=("${FALLBACK_STORAGE_CONF[@]}")
+SPARK_SUBMIT_ARGS+=("${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]}")
 
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
