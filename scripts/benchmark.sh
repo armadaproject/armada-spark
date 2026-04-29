@@ -55,11 +55,20 @@ docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../benchmark:/opt/spark/conf --rm
     --class $ARMADA_BENCHMARK_CLASS \
     "${S3_CONF[@]}" \
     "${ARMADA_AUTH_ARGS[@]}" \
+    "${ARMADA_COMMON_CONF[@]}" \
     "${K8S_CONF[@]}" \
-    --conf spark.armada.container.image=$IMAGE_NAME \
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/ \
-    --conf spark.hadoop.fs.s3a.bucket.$ARMADA_S3_BUCKET_NAME.endpoint=$ARMADA_S3_BUCKET_ENDPOINT \
-    --conf spark.armada.queue=$ARMADA_QUEUE \
+    "${DYNAMIC_ALLOC_CONF[@]}" \
+    "${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]}" \
+    --conf spark.armada.executor.limit.memory=60Gi \
+    --conf spark.armada.executor.request.memory=60Gi \
+    --conf spark.armada.driver.limit.memory=60Gi \
+    --conf spark.armada.driver.request.memory=60Gi \
+    --conf spark.sql.shuffle.partitions=1000 \
+    --conf spark.dynamicAllocation.executorIdleTimeout=60 \
+    --conf spark.dynamicAllocation.schedulerBacklogTimeout=1 \
+    --conf spark.dynamicAllocation.cachedExecutorIdleTimeout=240 \
+    --conf spark.dynamicAllocation.minExecutors=1 \
+    --conf spark.dynamicAllocation.maxExecutors=40 \
     --conf spark.armada.internalUrl=$ARMADA_INTERNAL_URL \
     $ARMADA_BENCHMARK_JAR \
     $ARMADA_BENCHMARK_DATA \

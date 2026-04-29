@@ -1,0 +1,36 @@
+# Copy this file to config.sh and edit to match your environment.
+# config.sh is sourced by init.sh; values can also be set via
+# environment variables or command-line flags (see init.sh -h).
+
+# ── Required ─────────────────────────────────────────────────────
+ARMADA_MASTER=armada://localhost:30002
+ARMADA_QUEUE=test
+
+# ── Image ────────────────────────────────────────────────────────
+#IMAGE_NAME=spark:armada
+
+# ── Kind (local dev cluster) ─────────────────────────────────────
+#USE_KIND=true
+
+# ── Deploy mode (cluster | client) ──────────────────────────────
+#DEPLOY_MODE=cluster
+# Client mode requires driver host/port:
+#SPARK_DRIVER_HOST=172.18.0.1
+#SPARK_DRIVER_PORT=7078
+
+# ── Allocation mode (dynamic | static) ──────────────────────────
+#ALLOCATION_MODE=dynamic
+
+# ── S3 / object storage ─────────────────────────────────────────
+#AWS_ACCESS_KEY_ID=xxx
+#AWS_SECRET_ACCESS_KEY=xxx
+#ARMADA_S3_BUCKET_NAME=s3-bucket
+#ARMADA_S3_BUCKET_ENDPOINT=http://192.168.0.2
+
+# ── Distributed shuffle storage ─────────────────────────────────
+#USE_DISTRIBUTED_SHUFFLE_STORAGE=true
+
+# ── Auth ─────────────────────────────────────────────────────────
+#ARMADA_AUTH_TOKEN=
+#ARMADA_AUTH_SCRIPT_PATH=/opt/spark/extraFiles/getAuthToken.sh
+#ARMADA_EVENT_WATCHER_USE_TLS=true

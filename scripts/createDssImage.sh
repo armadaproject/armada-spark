@@ -73,6 +73,7 @@ else
     IMPORT_CERT_COMMANDS=""
 fi
 
+git -C ../$repo_dir rev-parse HEAD > BUILD-COMMIT
 cat <<EOF > Dockerfile
 FROM spark-py:spark.dss.img
 
@@ -82,6 +83,7 @@ USER 0
 RUN mkdir /opt/tools
 COPY tpcds-kit /opt/tools/tpcds-kit
 COPY jars/* /opt/spark/jars
+COPY BUILD-COMMIT /opt/spark/BUILD-COMMIT
 $IMPORT_CERT_COMMANDS
 EOF
 
