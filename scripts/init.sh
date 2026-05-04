@@ -115,6 +115,16 @@ export RUNNING_E2E_TESTS="${RUNNING_E2E_TESTS:-false}"
 export USE_DISTRIBUTED_SHUFFLE_STORAGE="${USE_DISTRIBUTED_SHUFFLE_STORAGE:-false}"
 export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 
+# Common Armada spark-submit conf args shared across all scripts
+ARMADA_COMMON_CONF=(
+    --conf spark.home=/opt/spark
+    --conf spark.local.dir=/tmp
+    --conf spark.armada.container.image=$IMAGE_NAME
+    --conf spark.armada.queue=$ARMADA_QUEUE
+    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
+    --conf spark.kubernetes.executor.disableConfigMap=true
+)
+
 ARMADA_AUTH_ARGS=()
 # Add auth script path if configured
 if [ "$ARMADA_AUTH_SCRIPT_PATH" != "" ]; then
@@ -173,6 +183,42 @@ else
 fi
 export STATIC_MODE
 
+# Memory limits (overridable via config.sh or env)
+EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
+DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
+ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
+
+# Allocation-mode conf args
+STATIC_ALLOC_CONF=(
+    --conf spark.executor.instances=2
+    --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+)
+
+DYNAMIC_ALLOC_CONF=(
+    --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
+    --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
+    --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
+    --conf spark.default.parallelism=10
+    --conf spark.executor.instances=1
+    --conf spark.sql.shuffle.partitions=5
+    --conf spark.dynamicAllocation.enabled=true
+    --conf spark.dynamicAllocation.minExecutors=2
+    --conf spark.dynamicAllocation.maxExecutors=10
+    --conf spark.dynamicAllocation.initialExecutors=2
+    --conf spark.dynamicAllocation.executorIdleTimeout=5
+    --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
+    --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
+    --conf spark.armada.allocation.batchSize=4
+    --conf spark.decommission.enabled=true
+    --conf spark.storage.decommission.enabled=true
+    --conf spark.storage.decommission.shuffleBlocks.enabled=true
+)
+
 if [ -z "${PYTHON_SCRIPT:-}" ]; then
     PYTHON_SCRIPT="/opt/spark/examples/src/main/python/pi.py"
 else
@@ -206,8 +252,23 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
         echo distributed shuffle storage currently only supported for spark 3.5.3/scala 2.12
         echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
+        echo EXITING
         exit 1
     fi
+fi
+
+# Distributed shuffle storage / fallback storage conf args
+DISTRIBUTED_SHUFFLE_STORAGE_CONF=()
+if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
+    DISTRIBUTED_SHUFFLE_STORAGE_CONF=(
+        --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
+        --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
+        --conf spark.storage.decommission.fallbackStorage.cleanUp=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.enabled=true
+        --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
+        --conf spark.shuffle.io.connectionCreationTimeout=10s
+        --conf spark.shuffle.netty.connect.maxThreads=10
+    )
 fi
 
 shift $((OPTIND - 1))
