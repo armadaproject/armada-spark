@@ -215,12 +215,7 @@ class ArmadaClient(armadaUrl: String = "armada://localhost:30002") {
     }
     // armadactl command expects the server address to be of the form
     // <hostname-or-IP>:<port> with no pseudo-protocol prefix
-    val armadactlUrl =
-      if (armadaUrl.startsWith("armada://")) {
-        armadaUrl.stripPrefix("armada://") // e.g. "localhost:30002"
-      } else {
-        armadaUrl
-      }
+    val armadactlUrl = armadaUrl.stripPrefix("armada://")
 
     Seq(armadactlCmd) ++ subCommand.split(" ") ++ Seq("--armadaUrl", armadactlUrl)
   }
