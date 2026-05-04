@@ -36,53 +36,17 @@ if [ "${USE_KIND}" == "true" ]; then
     mkdir -p "$TMPDIR"
     kind load docker-image $IMAGE_NAME --name armada
 fi
-# Disable config maps until this is fixed: https://github.com/G-Research/spark/issues/109
-DISABLE_CONFIG_MAP=true
-
-# Set memory limits
-EXECUTOR_MEMORY_LIMIT="${EXECUTOR_MEMORY_LIMIT:-1Gi}"
-DRIVER_MEMORY_LIMIT="${DRIVER_MEMORY_LIMIT:-1Gi}"
-ARMADA_NODE_UNIFORMITY_LABEL="${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}"
-
 # Build configuration based on allocation mode
+EXTRA_CONF=(
+    --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+    --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+)
 if [ "$STATIC_MODE" = true ]; then
     echo running static mode
-    # Static mode: fixed executor count
-    EXTRA_CONF=(
-        --conf spark.executor.instances=2
-        --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
-        --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
-        --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-        --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-    )
+    EXTRA_CONF+=("${STATIC_ALLOC_CONF[@]}")
 else
     echo running dynamic mode
-    # Dynamic mode: dynamic allocation with debug options
-    EXTRA_CONF=(
-        --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-        --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-        --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
-        --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
-        --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
-        --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.default.parallelism=10
-        --conf spark.executor.instances=1
-        --conf spark.sql.shuffle.partitions=5
-        --conf spark.dynamicAllocation.enabled=true
-        --conf spark.dynamicAllocation.minExecutors=2
-        --conf spark.dynamicAllocation.maxExecutors=10
-        --conf spark.dynamicAllocation.initialExecutors=2
-        --conf spark.dynamicAllocation.executorIdleTimeout=5
-        --conf spark.dynamicAllocation.schedulerBacklogTimeout=5
-        --conf spark.decommission.enabled=true
-        --conf spark.storage.decommission.enabled=true
-        --conf spark.storage.decommission.shuffleBlocks.enabled=true
-        --conf spark.armada.scheduling.nodeUniformity=$ARMADA_NODE_UNIFORMITY_LABEL
-        --conf spark.armada.allocation.batchSize=4
-    )
+    EXTRA_CONF+=("${DYNAMIC_ALLOC_CONF[@]}")
 fi
 
 # Run Armada Spark via docker image
@@ -92,14 +56,11 @@ SPARK_SUBMIT_ARGS=(
     --name $NAME
     $CLASS_PROMPT $CLASS_ARG
     "${S3_CONF[@]}" \
-    --conf spark.home=/opt/spark
-    --conf spark.armada.container.image=$IMAGE_NAME
-    --conf spark.armada.queue=$ARMADA_QUEUE
-    --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
-    --conf spark.kubernetes.executor.disableConfigMap=$DISABLE_CONFIG_MAP
-    --conf spark.local.dir=/tmp
-    --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
+    "${ARMADA_COMMON_CONF[@]}" \
 )
+
+# Add fallback storage / decommission conf if enabled
+SPARK_SUBMIT_ARGS+=("${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]}")
 
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
