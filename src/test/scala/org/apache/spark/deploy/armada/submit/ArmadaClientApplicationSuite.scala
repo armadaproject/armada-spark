@@ -61,7 +61,6 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
   private val SPARK_DRIVER_URL  = "SPARK_DRIVER_URL"
 
   // Constants for paths
-  private val PYTHON_EXAMPLE_PATH = "/opt/spark/examples/src/main/python/pi.py"
   private val clientArguments = ClientArguments(
     mainAppResource = JavaMainAppResource(Some("app.jar")),
     mainClass = "org.example.SparkApp",

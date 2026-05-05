@@ -1,0 +1,57 @@
+# A kind configuration for running an Armada server that can be accessed
+# outside the host system, for working/developing with remote clients,
+# such as Armada-Spark clients.
+#
+# This configuration will allow you to run kubectl and armadactl
+# against the Armada instance on this system. To use this:
+# Setup (on each remote client host):
+#   1. Copy $HOME/.kube/config from the server to $HOME/.kube/config on the
+#      client. Edit the client copy: change "server: https://0.0.0.0:6443"
+#      to use the server's external IP.
+#   2. Copy $HOME/.armadactl.yaml from the server to $HOME/.armadactl.yaml
+#      on the client. Edit the client copy:
+#        - Change the 'armadaUrl' value from 'localhost' to the server's
+#          external IP (or hostname).
+#        - Add the following line at the same indent level:
+#            forceNoTls: true
+#
+# Verify:
+#   kubectl cluster-info
+#   armadactl get queues
+#
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+      - localhost
+      - 127.0.0.1
+      # replace the following line with the IP address
+      # of the external interface on this system
+      - 192.168.12.135
+      - 0.0.0.0
+  extraPortMappings:
+  # Lookout UI
+  - containerPort: 30000
+    hostPort: 30000
+    protocol: TCP
+  # Armada Server REST API
+  - containerPort: 30001
+    hostPort: 30001
+    protocol: TCP
+  # Armada Server gRPC API
+  - containerPort: 30002
+    hostPort: 30002
+    protocol: TCP
+  # Kubernetes API
+  - containerPort: 6443
+    hostPort: 6443
+    protocol: TCP
+- role: worker
+- role: worker
+  labels:
+    armada-spark: true
