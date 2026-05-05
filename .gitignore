@@ -82,6 +82,7 @@ scripts/armadactl
 *~
 e2e-test.log
 extraJars/*.jar
+benchmark/kubeconfig
 scripts/.tmp/
 
 # Jupyter

@@ -34,7 +34,7 @@ cd $repo_dir
 git checkout $branch
 
 export SPARK_HOME=`pwd`
-./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Pscala-2.12
+./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Phadoop-cloud -Pscala-2.12
 ./bin/docker-image-tool.sh -u 185 -t "spark.dss.img"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
