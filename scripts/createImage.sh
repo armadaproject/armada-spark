@@ -48,7 +48,7 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
             # spark-examples jars are not released, so we need to build these from sources
             ./build/mvn --batch-mode clean
             ./build/mvn --batch-mode package -pl examples
-            ./build/mvn --batch-mode package -Pkubernetes -Pscala-$SCALA_BIN_VERSION -pl assembly
+            ./build/mvn --batch-mode package -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION -pl assembly
             ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
             cd ..
         fi
