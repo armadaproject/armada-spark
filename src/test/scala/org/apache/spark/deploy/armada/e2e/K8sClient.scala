@@ -27,9 +27,7 @@ import io.fabric8.kubernetes.client.{
 import io.fabric8.kubernetes.api.model.{NamespaceBuilder, Pod}
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 
-import org.yaml.snakeyaml.Yaml
-
-import java.io.{FileReader, FileInputStream}
+import java.io.FileInputStream
 import java.nio.file.{Paths, Files}
 import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeoutException
@@ -40,9 +38,6 @@ import scala.concurrent.{ExecutionContext, Future}
 
 /** Kubernetes client implementation using fabric8 Kubernetes client library. */
 class K8sClient(props: Properties) {
-  val armadaMaster: String = props.getProperty("armada.master")
-  val pattern              = """armada://([^:]+):.*""".r
-
   val home = System.getProperty("user.home")
   if (!Files.exists(Paths.get(s"$home/.kube/config"))) {
     throw new RuntimeException(s"ERROR: $home/.kube/config not found")

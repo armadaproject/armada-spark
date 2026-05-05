@@ -122,7 +122,7 @@ export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 # addresses, and use the first one that is not the loopback interface, or a
 # Docker/K8S virtual interface.
 if [ -z "${SPARK_LOCAL_IP:-}" ]; then
-  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | grep -Ev '(127\.0\.0\.1|\<172)' | awk '{print $2}' | sed -n '1p')
+  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | awk '{print $2}' | grep -Ev '^(127\.0\.0\.1|172\.)' | sed -n '1p')
   if [ "$SPARK_LOCAL_IP" = "" ] ; then
     echo ""
     echo "ERROR: could not determine external network interface address. In order to run Spark"

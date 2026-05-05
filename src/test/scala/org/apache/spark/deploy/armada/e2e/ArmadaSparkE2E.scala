@@ -182,6 +182,11 @@ class ArmadaSparkE2E
     set("scala.binary.version", "SCALA_BIN_VERSION")
     set("spark.binary.version", "SPARK_BIN_VERSION")
 
+    // Optionally-set TLS certs for using remote Armada cluster
+    set("client_cert_file", "CLIENT_CERT_FILE")
+    set("client_key_file", "CLIENT_KEY_FILE")
+    set("cluster_ca_file", "CLUSTER_CA_FILE")
+
     props
   }
 

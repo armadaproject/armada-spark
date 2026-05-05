@@ -4,7 +4,7 @@ CONTEXT=$(kubectl config current-context)
 
 E2E_DIR=$(realpath "$0" | xargs dirname)
 
-cd "$E2E_DIR" || (echo "Error: could not cd to $E2E_DIR"; exit 1)
+cd "$E2E_DIR" || { echo "Error: could not cd to $E2E_DIR"; exit 1; }
 
 # What These Files Are
 #  -  client.crt: Your user (client) certificate

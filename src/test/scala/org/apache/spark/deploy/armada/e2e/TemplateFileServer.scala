@@ -30,11 +30,14 @@ import com.sun.net.httpserver.{HttpExchange, HttpServer}
   */
 class TemplateFileServer(baseDir: File) {
 
-  // On macOS, host.docker.internal resolves inside Docker containers but NOT inside
-  // Kind pods (which use CoreDNS and don't inherit Docker's host alias). SPARK_LOCAL_IP
-  // is the host machine's LAN IP, reachable from both Docker containers (via --network host)
-  // and Kind pods (confirmed: executor pods already connect to this IP in client mode).
-  // On Linux, 172.18.0.1 is the Docker bridge gateway, accessible from both.
+  // These defaults are chosen for the e2e environments used by this test code and may
+  // need to be overridden elsewhere via TEMPLATE_SERVER_HOST.
+  // On macOS, host.docker.internal typically resolves inside Docker containers but not
+  // inside Kind pods (which use CoreDNS and do not inherit Docker's host alias), so
+  // SPARK_LOCAL_IP can be used when it is set to a host IP that is reachable from the
+  // relevant containers and pods.
+  // On Linux, 172.18.0.1 is a common Docker bridge gateway in local test setups, but
+  // it is runtime-specific rather than a universal Docker default.
   private val defaultHost: String = {
     val isMac = sys.props.getOrElse("os.name", "").toLowerCase.contains("mac")
     if (isMac) sys.env.getOrElse("SPARK_LOCAL_IP", "host.docker.internal")
