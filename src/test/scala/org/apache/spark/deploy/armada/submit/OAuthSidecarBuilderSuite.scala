@@ -121,4 +121,18 @@ class OAuthSidecarBuilderSuite extends AnyFunSuite with Matchers {
     clientSecretEnv shouldBe defined
     clientSecretEnv.get.valueFrom shouldBe defined
   }
+
+  test("boolean OAuth configs are emitted as --flag=true|false") {
+    val argsFalse = OAuthSidecarBuilder
+      .buildOAuthSidecar(baseOAuthConf().set(ARMADA_OAUTH_COOKIE_SECURE.key, "false"))
+      .get
+      .args
+    argsFalse should contain("--cookie-secure=false")
+
+    val argsTrue = OAuthSidecarBuilder
+      .buildOAuthSidecar(baseOAuthConf().set(ARMADA_OAUTH_COOKIE_SECURE.key, "true"))
+      .get
+      .args
+    argsTrue should contain("--cookie-secure=true")
+  }
 }
