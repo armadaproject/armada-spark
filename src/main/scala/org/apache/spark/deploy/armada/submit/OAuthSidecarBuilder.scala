@@ -230,13 +230,13 @@ private[spark] object OAuthSidecarBuilder {
     }
   }
 
-  /** Builds boolean flags that require "true" as explicit value. */
+  /** Builds boolean flags as `--flag=true|false`. */
   private def buildBooleanArgsWithValue(
       conf: SparkConf,
       configs: Seq[(ConfigEntry[Boolean], String)]
   ): Seq[String] = {
-    configs.flatMap { case (configEntry, argName) =>
-      if (conf.get(configEntry)) Seq(argName, "true") else Seq.empty
+    configs.map { case (configEntry, argName) =>
+      s"$argName=${conf.get(configEntry)}"
     }
   }
 
