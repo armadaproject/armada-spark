@@ -29,7 +29,7 @@ sequenceDiagram
 
 
 
-- `OAUTH2_PROXY_COOKIE_SECRET` is generated fresh per submission (16 random bytes, hex-encoded). See `[generateCookieSecret`
+- `OAUTH2_PROXY_COOKIE_SECRET` is generated fresh per submission (16 random bytes, hex-encoded). See [`generateCookieSecret`](../../src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala#L324).
 - `OAUTH2_PROXY_CLIENT_SECRET` is sourced inline or via `secretKeyRef` from the K8s secret named in `clientSecretK8s`.
 - Discovery + JWKS fetch are skipped if `skipProviderDiscovery=true`; you must supply explicit endpoints instead.
 - Liveness probe is `GET /ping` every 10s, fails after 3.

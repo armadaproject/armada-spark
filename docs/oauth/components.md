@@ -4,7 +4,7 @@ Code-level walkthrough of the OAuth implementation.
 
 ## `OAuthSidecarBuilder`
 
-File: `[src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala](../../src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala)` (358 lines).
+File: [`src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala`](../../src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala) (358 lines).
 
 A `private[spark] object` with two public methods.
 
@@ -109,7 +109,7 @@ Same map for `requests` and `limits` (Armada requirement). Defaults: `100m` CPU,
 
 ## Integration points in `ArmadaClientApplication`
 
-File: `[src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala](../../src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala)`. Four touchpoints; see [Networking](networking.md) for port routing details.
+File: [`src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala`](../../src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala). Four touchpoints; see [Networking](networking.md) for port routing details.
 
 ### `getEffectiveUIPort` (lines 162-167)
 
@@ -138,6 +138,6 @@ Both use `getEffectiveUIPort`. Ingress precedence: CLI > Job Template > Default.
 
 ## Tests
 
-File: `[OAuthSidecarBuilderSuite.scala](../../src/test/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilderSuite.scala)` (8 tests).
+File: [`OAuthSidecarBuilderSuite.scala`](../../src/test/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilderSuite.scala) (8 tests).
 
 Coverage is limited to container-shape and validation. **Coverage gap**: no end-to-end test runs against a real OIDC provider; that requires standing up Dex/Keycloak in the kind cluster and submitting a long-running job manually.

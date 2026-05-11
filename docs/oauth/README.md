@@ -1,6 +1,6 @@
 # OAuth2 Authentication for the Spark Driver UI
 
-Technical documentation for the OAuth2-proxy integration that provides secure communication with the Spark UI when a spark job is submmited on Armada using **armada-spark** plugin.
+Technical documentation for the OAuth2-proxy integration that provides secure communication with the Spark UI when a spark job is submitted on Armada using **armada-spark** plugin.
 
 ## Audience
 
@@ -71,10 +71,10 @@ Implemented via [PR #77](https://github.com/armadaproject/armada-spark/pull/77).
 
 Core source files:
 
-- `[OAuthSidecarBuilder.scala](../../src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala)`: sidecar container construction (358 lines, self-contained).
-- `[ArmadaClientApplication.scala](../../src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala)`: integration points (`getEffectiveUIPort`, `buildDriverContainerPorts`, `buildServiceConfig`, `resolveIngressConfig`, and the call site at line 999).
-- `[Config.scala](../../src/main/scala/org/apache/spark/deploy/armada/Config.scala)` (lines 477–710): all 35 `spark.armada.oauth.*` config entries.
-- `[OAuthSidecarBuilderSuite.scala](../../src/test/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilderSuite.scala)`: unit tests for the builder.
+- [`OAuthSidecarBuilder.scala`](../../src/main/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilder.scala): sidecar container construction (358 lines, self-contained).
+- [`ArmadaClientApplication.scala`](../../src/main/scala/org/apache/spark/deploy/armada/submit/ArmadaClientApplication.scala): integration points (`getEffectiveUIPort`, `buildDriverContainerPorts`, `buildServiceConfig`, `resolveIngressConfig`, and the call site at line 999).
+- [`Config.scala`](../../src/main/scala/org/apache/spark/deploy/armada/Config.scala) (lines 477–710): all 35 `spark.armada.oauth.*` config entries.
+- [`OAuthSidecarBuilderSuite.scala`](../../src/test/scala/org/apache/spark/deploy/armada/submit/OAuthSidecarBuilderSuite.scala): unit tests for the builder.
 
 ## Recommended reading order
 
