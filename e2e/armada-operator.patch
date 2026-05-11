@@ -32,7 +32,21 @@ diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
 index a8d45c3..4a72570 100644
 --- a/hack/kind-config.yaml
 +++ b/hack/kind-config.yaml
-@@ -16,3 +16,6 @@ nodes:
+@@ -4,3 +4,13 @@ nodes:
+ - role: control-plane
++  kubeadmConfigPatches:
++  - |
++    kind: InitConfiguration
++    nodeRegistration:
++      kubeletExtraArgs:
++        node-labels: "ingress-ready=true"
+   extraPortMappings:
++  # nginx ingress HTTP (host 9999 -> container 80) for OAuth Spark UI testing
++  - containerPort: 80
++    hostPort: 9999
++    protocol: TCP
+   # Lookout UI
+@@ -16,3 +26,6 @@ nodes:
      hostPort: 30002
      protocol: TCP
  - role: worker
