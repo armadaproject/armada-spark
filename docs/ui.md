@@ -24,6 +24,8 @@ Then open: `http://localhost:4040`
 
 ## OAuth2-Protected Access
 
+For OAuth2-protected UI access (setup, configuration, security model, runtime flow, troubleshooting), see [`docs/oauth/`](./oauth/README.md). It is the source of truth for the OAuth integration.
+
 Uses [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) as a native sidecar for authentication.
 
 ### Quick Start
@@ -135,6 +137,7 @@ kubectl get ingress -n <namespace>
 
 ## Resources
 
+- [OAuth2-protected UI access](./oauth/README.md)
 - [OAuth2 Configuration Reference](./architecture.md#oauth2-authentication-configuration)
 - [oauth2-proxy docs](https://oauth2-proxy.github.io/oauth2-proxy/)
 - [Spark UI docs](https://spark.apache.org/docs/latest/web-ui.html)

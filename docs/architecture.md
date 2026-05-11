@@ -241,8 +241,7 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 
 ### OAuth2 Authentication Configuration
 
-`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI using OAuth2-Proxy as a native sidecar.
-For detailed setup instructions and examples, see [UI Access Documentation](./ui.md).
+`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI via an oauth2-proxy native sidecar. The full configuration reference (all `spark.armada.oauth.*` keys, defaults, examples) lives in [`docs/oauth/configuration.md`](./oauth/configuration.md). For setup, runtime flow, security model, and troubleshooting, start at [`docs/oauth/`](./oauth/README.md).
 
 - `spark.armada.oauth.enabled` - Enable OAuth2 authentication for Spark UI.
 - `spark.armada.oauth.clientId` - OAuth2 client ID.
