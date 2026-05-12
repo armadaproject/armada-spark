@@ -31,6 +31,8 @@ The browser only ever sees the Ingress. oauth2-proxy is the only component that 
 
 ## Component responsibilities
 
+The sidecar starts before the driver (native sidecar ordering) and terminates with the pod; there is no auth surface that outlives the driver.
+
 ### oauth2-proxy sidecar
 
 A long-running init container with `restartPolicy: Always` (Kubernetes 1.28+ "native sidecar" pattern). It:
@@ -57,50 +59,6 @@ Created by Armada from the `IngressConfig` armada-spark builds in [`resolveIngre
 
 Any OIDC-compliant provider. Either supply `issuerUrl` for discovery, or set explicit endpoints via `skipProviderDiscovery=true`.
 
-## Deployment view (pod-level)
-
-```mermaid
-flowchart TB
-    subgraph pod[Driver Pod]
-        direction TB
-
-        subgraph initContainers[initContainers]
-            oauth["oauth (always restarts)<br/>image: oauth2-proxy:v7.5.1<br/>port: 4180<br/>upstream: 127.0.0.1:4040"]
-            templates["user-supplied init containers<br/>(if any, from job template)"]
-        end
-
-        subgraph containers[containers]
-            driver["spark-driver<br/>image: spark<br/>port: 7078 driver RPC<br/>port: 4040 UI bound to all but only used via loopback"]
-            usersidecars["user-supplied sidecars<br/>(if any, from job template)"]
-        end
-
-        subgraph volumes[Volumes]
-            tlsvol1["ca-certificates<br/>(optional)"]
-            tlsvol2["ca-bundle<br/>(optional)"]
-        end
-    end
-
-    oauth -.->|reads from secret| secrets[(K8s Secret<br/>client-secret)]
-```
-
-The OAuth sidecar is in `initContainers` with `restartPolicy: Always`, so it starts before the driver and runs alongside it. TLS volumes are added only when `caCertPath` or `caBundlePath` is configured. The K8s secret is referenced only when `clientSecretK8s` is set; otherwise the secret value is inlined.
-
-## Lifecycle
-
-```mermaid
-stateDiagram-v2
-    [*] --> PodScheduled: spark-submit
-    PodScheduled --> InitContainersStarting: pod admitted
-    InitContainersStarting --> ProxyReady: oauth2-proxy ping OK
-    ProxyReady --> DriverStarting: native sidecar continues
-    DriverStarting --> DriverRunning: Spark UI up on port 4040
-    DriverRunning --> AcceptingTraffic: ingress healthy
-    AcceptingTraffic --> DriverComplete: job finishes
-    DriverComplete --> ProxyShutdown: pod terminating
-    ProxyShutdown --> [*]: pod deleted
-```
-
-The proxy starts before the driver and terminates with the pod. There is no surface that outlives the driver.
 
 ## Constraints
 
