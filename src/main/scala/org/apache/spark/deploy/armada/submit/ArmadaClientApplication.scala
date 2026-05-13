@@ -994,8 +994,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       conf
     )
 
-    val currentPodSpec    = PodSpecConverter.fabric8PodToProtobufPodSpec(afterCLIVolumes)
-    val sidecars          = extractSidecarContainers(Some(currentPodSpec))
+    val currentPodSpec = PodSpecConverter.fabric8PodToProtobufPodSpec(afterCLIVolumes)
+    val sidecars       = extractSidecarContainers(Some(currentPodSpec))
+    // Append OAuth sidecar after user-supplied init containers so templates cannot override it
     val oauthSidecar      = OAuthSidecarBuilder.buildOAuthSidecar(conf)
     val allInitContainers = currentPodSpec.initContainers ++ oauthSidecar.toSeq
 
