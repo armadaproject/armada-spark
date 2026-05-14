@@ -4,12 +4,13 @@ Where ports go, how requests flow, and what changes when OAuth is enabled.
 
 ## The ports involved
 
-| Port  | Owner          | Purpose                                         | Visibility                       |
-|-------|----------------|-------------------------------------------------|----------------------------------|
-| 4040  | Spark driver   | Spark UI (Jetty servlet, `spark.ui.port`)       | Loopback only when OAuth on      |
-| 4180  | oauth2-proxy   | Proxy listen port (`spark.armada.oauth.proxy.port`) | Exposed via Service+Ingress  |
-| 7078  | Spark driver   | Driver RPC port (executors connect here)        | Service only (cluster-internal)  |
-| 7079  | Spark driver   | Block manager port                              | Internal                         |
+| Port  | Owner          | Purpose                                                             | Visibility                       |
+|-------|----------------|---------------------------------------------------------------------|----------------------------------|
+| 4040  | Spark driver   | Spark UI (Jetty servlet, `spark.ui.port`)                           | Loopback only when OAuth on      |
+| 4180  | oauth2-proxy   | Proxy listen port (`spark.armada.oauth.proxy.port`)                 | Exposed via Service+Ingress      |
+| —     | Ingress        | Port for driver ingress (`spark.armada.driver.ingress.port`)        | Exposed via Service+Ingress      |
+| 7078  | Spark driver   | Driver RPC port (executors connect here)                            | Service only (cluster-internal)  |
+| 7079  | Spark driver   | Block manager port                                                  | Internal                         |
 
 ## Effective UI port
 

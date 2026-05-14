@@ -93,7 +93,7 @@ The volumes must already exist on the pod (typically supplied via a job template
 
 `requests == limits` is enforced by Armada.
 
-## Worked examples
+## Examples
 
 ### Quick start with OIDC discovery
 
