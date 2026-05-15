@@ -156,6 +156,24 @@ if [ "$ARMADA_EVENT_WATCHER_USE_TLS" != "" ]; then
     ARMADA_AUTH_ARGS+=("--conf" "spark.armada.eventWatcher.useTls=$ARMADA_EVENT_WATCHER_USE_TLS")
 fi
 
+# OAuth proxy for the Spark UI. Requires cluster deploy mode + ingress.
+OAUTH_CONF=()
+if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
+    OAUTH_CONF=(
+        --conf spark.armada.driver.ingress.enabled=true
+        --conf spark.armada.driver.ingress.tls.enabled=false
+        --conf "spark.armada.driver.ingress.annotations=nginx.ingress.kubernetes.io/server-alias=${OAUTH_INGRESS_HOST:-spark-ui.test}"
+        --conf spark.armada.oauth.enabled=true
+        --conf spark.armada.oauth.clientId="${OAUTH_CLIENT_ID:-spark-ui}"
+        --conf spark.armada.oauth.clientSecret="${OAUTH_CLIENT_SECRET:-dex-spark-ui-secret}"
+        --conf spark.armada.oauth.issuerUrl="${OAUTH_ISSUER_URL:-http://10.0.0.109:5556/dex}"
+        --conf spark.armada.oauth.redirectUrl="${OAUTH_REDIRECT_URL:-http://spark-ui.test:9999/oauth2/callback}"
+        --conf spark.armada.oauth.emailDomain="${OAUTH_EMAIL_DOMAIN:-*}"
+        --conf spark.armada.oauth.cookieSecure="${OAUTH_COOKIE_SECURE:-false}"
+        --conf spark.armada.oauth.passHostHeader="${OAUTH_PASS_HOST_HEADER:-true}"
+    )
+fi
+
 # Build deploy-mode specific arguments array
 DEPLOY_MODE_ARGS=()
 if [ "$DEPLOY_MODE" = "client" ]; then

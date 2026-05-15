@@ -32,8 +32,8 @@ import java.security.SecureRandom
   * native sidecar (initContainer with restartPolicy=Always), terminating with the driver.
   *
   * Configuration: See Config.scala for all spark.armada.oauth.* properties and defaults.
-  * Documentation: See docs/ui.md for setup examples and docs/architecture.md for parameter
-  * reference.
+  * Documentation: See docs/oauth/ for architecture, runtime flow, configuration reference, and
+  * troubleshooting.
   */
 private[spark] object OAuthSidecarBuilder {
 

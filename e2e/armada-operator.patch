@@ -32,7 +32,26 @@ diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
 index a8d45c3..4a72570 100644
 --- a/hack/kind-config.yaml
 +++ b/hack/kind-config.yaml
-@@ -16,3 +16,6 @@ nodes:
+@@ -4,3 +4,18 @@ nodes:
+ - role: control-plane
++  kubeadmConfigPatches:
++  - |
++    kind: InitConfiguration
++    nodeRegistration:
++      kubeletExtraArgs:
++        # ingress-nginx controller's kind manifest pins itself to the node
++        # labeled `ingress-ready=true` via nodeSelector. We label only the
++        # control-plane node so the controller lands here, which is also the
++        # node that gets the host 9999 -> container 80 port mapping below.
++        # Ref: https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
++        node-labels: "ingress-ready=true"
+   extraPortMappings:
++  # nginx ingress HTTP (host 9999 -> container 80) for OAuth Spark UI testing
++  - containerPort: 80
++    hostPort: 9999
++    protocol: TCP
+   # Lookout UI
+@@ -16,3 +31,6 @@ nodes:
      hostPort: 30002
      protocol: TCP
  - role: worker

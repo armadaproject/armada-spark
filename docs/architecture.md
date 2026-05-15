@@ -230,7 +230,6 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 - `spark.armada.driver.ingress.enabled` - If set to true, the driver will be
     exposed via an Ingress resource. This is useful for accessing the Spark UI
     and other services running on the driver pod.
-- `spark.armada.driver.ingress.port` - Port for driver ingress
 - `spark.armada.driver.ingress.tls.enabled` - If set to true, the Ingress resource
     for the driver will be configured to use TLS.
 - `spark.armada.driver.ingress.annotations` - A comma-separated list of annotations to apply to the Ingress resource for the driver.
@@ -241,46 +240,16 @@ They can be set in the [conf](../conf/spark-defaults.conf) file.
 
 ### OAuth2 Authentication Configuration
 
-`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI using OAuth2-Proxy as a native sidecar.
-For detailed setup instructions and examples, see [UI Access Documentation](./ui.md).
+`armada-spark` supports OAuth2-based authentication for the Spark Driver WebUI via an oauth2-proxy native sidecar. The full configuration reference (all `spark.armada.oauth.*` keys, defaults, examples) lives in [`docs/oauth/configuration.md`](./oauth/configuration.md). For setup, runtime flow, security model, and troubleshooting, start at [`docs/oauth/`](./oauth/README.md).
+
+Key settings:
 
 - `spark.armada.oauth.enabled` - Enable OAuth2 authentication for Spark UI.
 - `spark.armada.oauth.clientId` - OAuth2 client ID.
-- `spark.armada.oauth.clientSecret` - OAuth2 client secret.
-- `spark.armada.oauth.clientSecretK8s` - Name of Kubernetes secret containing client secret.
-- `spark.armada.oauth.issuerUrl` - OIDC issuer URL.
-- `spark.armada.oauth.redirectUrl` - OAuth redirect URL.
-- `spark.armada.oauth.proxy.image` - OAuth2-proxy Docker image.
-- `spark.armada.oauth.proxy.port` - Port for OAuth2-proxy to listen on.
-- `spark.armada.oauth.providerDisplayName` - Provider name shown in OAuth UI.
-- `spark.armada.oauth.skipProviderDiscovery` - Skip OIDC discovery and use explicit endpoints.
-- `spark.armada.oauth.loginUrl` - OIDC authorization endpoint.
-- `spark.armada.oauth.redeemUrl` - OIDC token endpoint.
-- `spark.armada.oauth.validateUrl` - OIDC userinfo endpoint.
-- `spark.armada.oauth.jwksUrl` - OIDC JWKS endpoint.
-- `spark.armada.oauth.extraAudiences` - Comma-separated list of additional OIDC audiences.
-- `spark.armada.oauth.emailDomain` - Allowed email domains.
-- `spark.armada.oauth.skipJwtBearerTokens` - Skip JWT bearer token validation.
-- `spark.armada.oauth.skipProviderButton` - Skip provider selection button.
-- `spark.armada.oauth.skipAuthPreflight` - Skip authentication for OPTIONS requests.
-- `spark.armada.oauth.passHostHeader` - Pass Host header to upstream.
-- `spark.armada.oauth.whitelistDomain` - Whitelist redirect domains.
-- `spark.armada.oauth.cookieName` - OAuth session cookie name.
-- `spark.armada.oauth.cookiePath` - Cookie path.
-- `spark.armada.oauth.cookieSecure` - Require HTTPS for cookies.
-- `spark.armada.oauth.cookieSamesite` - SameSite cookie attribute.
-- `spark.armada.oauth.cookieCsrfPerRequest` - Enable CSRF per request.
-- `spark.armada.oauth.cookieCsrfExpire` - CSRF cookie expiration duration.
-- `spark.armada.oauth.tls.caCertPath` - Path to CA certificate for custom TLS validation.
-- `spark.armada.oauth.tls.caBundlePath` - Path to CA bundle for custom TLS validation.
-- `spark.armada.oauth.skipVerify` - Skip TLS certificate verification.
-- `spark.armada.oauth.insecureSkipIssuerVerification` - Skip OIDC issuer verification.
-- `spark.armada.oauth.insecureAllowUnverifiedEmail` - Allow unverified email addresses.
-- `spark.armada.oauth.codeChallengeMethod` - PKCE code challenge method.
-- `spark.armada.oauth.resources.cpu` - CPU resource limit/request for OAuth proxy.
-- `spark.armada.oauth.resources.memory` - Memory resource limit/request for OAuth proxy.
-
-See [UI Access Documentation](./ui.md) for examples and troubleshooting.
+- `spark.armada.oauth.clientSecret` / `clientSecretK8s` - Client secret (inline or K8s secret reference).
+- `spark.armada.oauth.issuerUrl` - OIDC issuer URL (for discovery).
+- `spark.armada.oauth.proxy.port` - Port for oauth2-proxy to listen on (default 4180).
+- `spark.armada.oauth.proxy.image` - oauth2-proxy container image.
 
 # Building `armada-spark`
 

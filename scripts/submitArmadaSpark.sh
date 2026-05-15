@@ -68,6 +68,11 @@ SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
 # Add auth args
 SPARK_SUBMIT_ARGS+=("${ARMADA_AUTH_ARGS[@]}")
 
+# Add OAuth conf (when OAUTH_ENABLED=true)
+if [ "${#OAUTH_CONF[@]}" -gt 0 ]; then
+    SPARK_SUBMIT_ARGS+=("${OAUTH_CONF[@]}")
+fi
+
 # Add event log conf
 SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]}")
 
