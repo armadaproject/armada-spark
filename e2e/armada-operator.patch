@@ -32,7 +32,7 @@ diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
 index a8d45c3..4a72570 100644
 --- a/hack/kind-config.yaml
 +++ b/hack/kind-config.yaml
-@@ -4,3 +4,13 @@ nodes:
+@@ -4,3 +4,18 @@ nodes:
  - role: control-plane
 +  kubeadmConfigPatches:
 +  - |
@@ -51,7 +51,7 @@ index a8d45c3..4a72570 100644
 +    hostPort: 9999
 +    protocol: TCP
    # Lookout UI
-@@ -16,3 +26,6 @@ nodes:
+@@ -16,3 +31,6 @@ nodes:
      hostPort: 30002
      protocol: TCP
  - role: worker
