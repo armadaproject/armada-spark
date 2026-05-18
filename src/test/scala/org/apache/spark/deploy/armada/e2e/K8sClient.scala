@@ -21,8 +21,8 @@ import org.apache.spark.deploy.armada.Config
 import io.fabric8.kubernetes.client.{
   Config => KubeConfig,
   ConfigBuilder,
-  KubernetesClient,
-  KubernetesClientBuilder
+  DefaultKubernetesClient,
+  KubernetesClient
 }
 import io.fabric8.kubernetes.api.model.{NamespaceBuilder, Pod}
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress
@@ -76,9 +76,7 @@ class K8sClient(props: Properties) {
   val cfg =
     if (clientCertFile.nonEmpty) cb.withClientKeyAlgo(algo).build() else cb.build()
 
-  private val client: KubernetesClient = new KubernetesClientBuilder()
-    .withConfig(cfg)
-    .build()
+  private val client: KubernetesClient = new DefaultKubernetesClient(cfg)
 
   def createNamespace(name: String)(implicit ec: ExecutionContext): Future[Unit] = Future {
     val namespace = new NamespaceBuilder()
