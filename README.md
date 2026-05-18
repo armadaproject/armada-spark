@@ -1,4 +1,6 @@
 # Armada-spark
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Farmadaproject%2Farmada-spark.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Farmadaproject%2Farmada-spark?ref=badge_shield)
+
 
 **Run Apache Spark workloads on [Armada](https://github.com/armadaproject/armada), a multi-cluster Kubernetes batch scheduler.**
 
@@ -265,3 +267,7 @@ mvn spotless:check       # Check formatting
 mvn spotless:apply       # Auto-fix formatting
 scripts/dev-e2e.sh       # Run E2E tests (requires a running Armada cluster)
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Farmadaproject%2Farmada-spark.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Farmadaproject%2Farmada-spark?ref=badge_large)
