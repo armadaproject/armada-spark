@@ -212,7 +212,7 @@ init-cluster() {
 
   mkdir -p "$scripts/.tmp"
 
-  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
+  if [[ "$ARMADA_MASTER" == *"//localhost"* || "$ARMADA_MASTER" == *"//host.docker.internal"* ]] ; then
     for IMG in "$IMAGE_NAME" "$INIT_CONTAINER_IMAGE"; do
       TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMG" --name armada 2>&1 \
         | log_group "Loading Docker image $IMG into Armada (Kind) cluster";
@@ -223,7 +223,7 @@ init-cluster() {
   cp "$scripts/../e2e/spark-defaults.conf" "$scripts/../conf/spark-defaults.conf"
 
   # If using a remote Armada server, assume it is already running and ready
-  if [[ "$ARMADA_MASTER" == *"//localhost"* ]] ; then
+  if [[ "$ARMADA_MASTER" == *"//localhost"* || "$ARMADA_MASTER" == *"//host.docker.internal"* ]] ; then
     log "Waiting 60 seconds for Armada to stabilize ..."
     sleep 60
   fi

@@ -41,13 +41,16 @@ then
         if [ "$spark_minor" == "3" ]; then
             kubernetes_client_version=5.12.2
             jackson_version=2.13.4
+            java_version=11
         else
             kubernetes_client_version=6.7.2
             jackson_version=2.15.2
+            java_version=17
         fi
     else
         kubernetes_client_version=7.1.0
         jackson_version=2.15.2
+        java_version=17
     fi
 
     echo "setting spark=$spark and scala=$scala"
@@ -61,6 +64,8 @@ then
         -e "s%^(        <spark.patch.version>).+(</spark.patch.version>)$%\1${spark_patch}\2%" \
         -e "s%^(        <kubernetes-client.version>).+(</kubernetes-client.version>)$%\1${kubernetes_client_version}\2%" \
         -e "s%^(        <jackson.version>).+(</jackson.version>)$%\1${jackson_version}\2%" \
+        -e "s%^(        <maven.compiler.source>).+(</maven.compiler.source>)$%\1${java_version}\2%" \
+        -e "s%^(        <maven.compiler.target>).+(</maven.compiler.target>)$%\1${java_version}\2%" \
         "$root/pom.xml"
 else
     echo "Provide the Spark and Scala version to set; for example:"
