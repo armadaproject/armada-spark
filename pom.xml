@@ -335,6 +335,7 @@
                                     <include>com.google.j2objc:j2objc-annotations</include>
                                     <include>com.google.protobuf:protobuf-java</include>
                                     <include>com.thesamet.scalapb:*</include>
+                                    <include>org.scala-lang.modules:scala-collection-compat_${scala.binary.version}</include>
                                     <include>io.grpc:*</include>
                                     <include>io.netty:*</include>
                                     <include>io.perfmark:perfmark-api</include>
@@ -404,6 +405,10 @@
                                 <relocation>
                                     <pattern>scalapb.</pattern>
                                     <shadedPattern>io.armadaproject.shaded.scalapb.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>scala.collection.compat.</pattern>
+                                    <shadedPattern>io.armadaproject.shaded.scala.collection.compat.</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
