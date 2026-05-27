@@ -105,26 +105,24 @@ if [ "$USE_SPARK_CONNECT" = true ]; then
 
     echo "Submitting Spark Connect server to Armada (cluster mode, $ALLOCATION_MODE allocation)..."
 
-    # Build spark-submit args (same pattern as submitArmadaSpark.sh)
+    # Build spark-submit args (same pattern as submitArmadaSpark.sh).
+    # ARMADA_COMMON_CONF (from init.sh) supplies spark.home, spark.local.dir,
+    # container image, queue, lookout URL, and disableConfigMap; only the
+    # connect-specific confs are listed explicitly here.
     SPARK_SUBMIT_ARGS=(
         --master $ARMADA_MASTER
         --deploy-mode cluster
         --name spark-connect-server
         --class org.apache.spark.sql.connect.service.SparkConnectServer
         ${S3_CONF[@]+"${S3_CONF[@]}"}
+        ${ARMADA_COMMON_CONF[@]+"${ARMADA_COMMON_CONF[@]}"}
         --conf spark.connect.grpc.binding.port=$CONNECT_PORT
-        --conf spark.home=/opt/spark
-        --conf spark.armada.container.image=$IMAGE_NAME
-        --conf spark.armada.queue=$ARMADA_QUEUE
-        --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
         --conf spark.armada.scheduling.namespace=${ARMADA_NAMESPACE:-default}
         --conf spark.armada.scheduling.nodeUniformity=${ARMADA_NODE_UNIFORMITY_LABEL:-armada-spark}
         --conf spark.armada.executor.limit.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.executor.request.memory=$EXECUTOR_MEMORY_LIMIT
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
-        --conf spark.kubernetes.executor.disableConfigMap=true
-        --conf spark.local.dir=/tmp
         --conf spark.jars.ivy=/tmp/.ivy
     )
 
@@ -163,12 +161,12 @@ if [ "$USE_SPARK_CONNECT" = true ]; then
     # Add primary resource
     SPARK_SUBMIT_ARGS+=($CONNECT_JAR_REMOTE)
 
-    # Cluster-mode submit: submits the job and exits (non-zero exit is OK)
+    # Cluster-mode submit: submits the driver + executor jobs to Armada and exits
     docker run \
       --rm --network host \
       "${DOCKER_ENV_ARGS[@]}" \
       $IMAGE_NAME \
-      /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}" || true
+      /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
 
     echo ""
     echo "Spark Connect server submitted."
