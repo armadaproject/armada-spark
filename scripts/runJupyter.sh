@@ -161,10 +161,11 @@ if [ "$USE_SPARK_CONNECT" = true ]; then
     # Add primary resource
     SPARK_SUBMIT_ARGS+=($CONNECT_JAR_REMOTE)
 
-    # Cluster-mode submit: submits the driver + executor jobs to Armada and exits
+    # Cluster-mode submit: submits the driver + executor jobs to Armada and exits.
     docker run \
       --rm --network host \
       "${DOCKER_ENV_ARGS[@]}" \
+      -v "$root/conf:/opt/spark/conf" \
       $IMAGE_NAME \
       /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
 
