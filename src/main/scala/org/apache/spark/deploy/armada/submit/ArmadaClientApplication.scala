@@ -1062,6 +1062,35 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(PodSpec().withNodeSelector(Map.empty))
   }
 
+  /*
+    hadoop config will create configmaps which are not supported in armada.
+    the code below strips them out.
+   */
+  private val HADOOP_CONF_VOLUME = "hadoop-properties"
+
+  private def stripHadoopConfVolume(
+      pod: io.fabric8.kubernetes.api.model.Pod
+  ): io.fabric8.kubernetes.api.model.Pod = {
+    val spec = pod.getSpec
+    if (spec == null) return pod
+    val volumes  = Option(spec.getVolumes).map(_.asScala).getOrElse(Nil)
+    val filtered = volumes.filterNot(_.getName == HADOOP_CONF_VOLUME).asJava
+    spec.setVolumes(filtered)
+    pod
+  }
+
+  private def stripHadoopConfMount(
+      container: io.fabric8.kubernetes.api.model.Container
+  ): io.fabric8.kubernetes.api.model.Container = {
+    val mounts   = Option(container.getVolumeMounts).map(_.asScala).getOrElse(Nil)
+    val filtered = mounts.filterNot(_.getName == HADOOP_CONF_VOLUME).asJava
+    container.setVolumeMounts(filtered)
+    val envVars     = Option(container.getEnv).map(_.asScala).getOrElse(Nil)
+    val filteredEnv = envVars.filterNot(_.getName == "HADOOP_CONF_DIR").asJava
+    container.setEnv(filteredEnv)
+    container
+  }
+
   /** Converts a fabric8 Kubernetes Pod to an Armada JobSubmitRequestItem.
     *
     * Extracts metadata (labels, annotations) and converts the PodSpec to protobuf format.
@@ -1150,8 +1179,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           new DefaultKubernetesClient()
         )
 
-        val jobItem   = fabric8PodToJobItem(driverSpec.pod.pod)
-        val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
+        val cleanedPod       = stripHadoopConfVolume(driverSpec.pod.pod)
+        val cleanedContainer = stripHadoopConfMount(driverSpec.pod.container)
+
+        val jobItem   = fabric8PodToJobItem(cleanedPod)
+        val container = PodSpecConverter.convertContainer(cleanedContainer)
 
         (Some(jobItem), Some(container), driverSpec.systemProperties)
     }
@@ -1192,8 +1224,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       ResourceProfile.getOrCreateDefaultProfile(clonedConf)
     )
 
-    val jobItem   = fabric8PodToJobItem(executorSpec.pod.pod)
-    val container = PodSpecConverter.convertContainer(executorSpec.pod.container)
+    val cleanedPod       = stripHadoopConfVolume(executorSpec.pod.pod)
+    val cleanedContainer = stripHadoopConfMount(executorSpec.pod.container)
+
+    val jobItem   = fabric8PodToJobItem(cleanedPod)
+    val container = PodSpecConverter.convertContainer(cleanedContainer)
 
     (Some(jobItem), Some(container))
   }
