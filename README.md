@@ -11,7 +11,7 @@ It provides preconfigured Docker images, tooling for efficient image management,
 
 - **Java** 11 or 17
 - **Apache Maven** 3.9.6+
-- _(Optional)_ [kind](https://kind.sigs.k8s.io/) for local clusters
+- *(Optional)* [kind](https://kind.sigs.k8s.io/) for local clusters
 - An accessible Armada server and Lookout endpoint — see the [Armada Operator Quickstart](https://github.com/armadaproject/armada-operator) to set one up
 
 ### Build
@@ -31,17 +31,21 @@ mvn clean package
 
 ### Supported Version Matrix
 
-| Spark   | Scala  | Java |
-|---------|--------|------|
-| 3.5.5   | 2.12.18 | 17  |
-| 3.5.5   | 2.13.8  | 17  |
+
+| Spark | Scala   | Java |
+| ----- | ------- | ---- |
+| 3.5.5 | 2.12.18 | 17   |
+| 3.5.5 | 2.13.8  | 17   |
+
 
 ### Planned Future Version Support
 
-| Spark   | Scala  | Java |
-|---------|--------|------|
-| 3.3.4   | 2.12.15 | 11  |
-| 3.3.4   | 2.13.8  | 11  |
+
+| Spark | Scala   | Java |
+| ----- | ------- | ---- |
+| 3.3.4 | 2.12.15 | 11   |
+| 3.3.4 | 2.13.8  | 11   |
+
 
 ### Build Docker Images
 
@@ -49,14 +53,16 @@ mvn clean package
 ./scripts/createImage.sh [-i image-name] [-m armada-master-url] [-q armada-queue] [-l armada-lookout-url]
 ```
 
+
 | Flag | Description        | Example                    |
-|------|--------------------|----------------------------|
+| ---- | ------------------ | -------------------------- |
 | `-i` | Docker image name  | `spark:armada`             |
 | `-m` | Armada master URL  | `armada://localhost:30002` |
 | `-q` | Armada queue       | `default`                  |
 | `-l` | Armada Lookout URL | `http://localhost:30000`   |
 | `-p` | Include Python     |                            |
 | `-h` | Display help       |                            |
+
 
 You can store defaults in `scripts/config.sh`:
 
@@ -85,48 +91,47 @@ kind load docker-image $IMAGE_NAME --name armada
 ```
 
 ### Running a remote Armada server using Armada Operator
+
 The default Armada Operator setup allows only localhost access.  You can quickly set up a local Armada server
 configured to allow external access from other hosts, useful for client development and testing. For this
 configuration:
 
 - Copy the file `e2e/kind-config-external-access.yaml` in this repository to `hack/kind-config.yaml`
 in your `armada-operator` repository.
-
 - Edit the newly-copied `hack/kind-config.yaml` as noted in the beginning comments of that file.
-
 - Run the armada-operator setup commands (usually `make kind-all`) to create and start your Armada instance.
-
 - Copy the `$HOME/.kube/config` and `$HOME/.armadactl.yaml` (that Armada Operator will generate) from the Armada
 server host to your `$HOME` directory on the client (local) host. Then edit the local `.kube/config` and on
 the line that has `server: https://0.0.0.0:6443`, change the `0.0.0.0` address to the IP address or hostname
 of the remote Armada server system.
-
 - Generate a copy of the client TLS key, cert, and CA-cert files: (1) go into the `e2e` subdirectory, and
 run `./extract-kind-cert.sh` - it will generate `client.crt`, `client.key`, and `ca.crt`, from the output
 of `kubectl config view`. These files can be left in this directory.
-
 - Copy the `$HOME/.armadactl.yaml` from the Armada server host to your home directory on your client system.
-
 - You should then be able to run `kubectl get pods -A` and see a list of the running pods on the remote
 Armada server, as well as running `armadactl get queues`.
-
 - Verify the functionality of your setup by editing `scripts/config.sh` and changing the following line:
+
 ```
 ARMADA_MASTER=armada://192.168.12.135:30002
 ```
+
 to the IP address or hostname of your Armada server. You should not need to change the port number.
 
 Also, set the location of the three TLS certificate files by adding/setting:
+
 ```
 export CLIENT_CERT_FILE=e2e/client.crt
 export CLIENT_KEY_FILE=e2e/client.key
 export CLUSTER_CA_FILE=e2e/ca.crt
 ```
 
--  You should be able to now verify the armada-spark configuration by running the E2E tests:
+- You should be able to now verify the armada-spark configuration by running the E2E tests:
+
 ```
 $ ./scripts/dev-e2e.sh
 ```
+
 This will save its output to `e2e-test.log` for further debugging.
 
 ---
@@ -148,6 +153,7 @@ To run the E2E tests, run Armada using the [Operator Quickstart](https://github.
 ```bash
 scripts/test-e2e.sh
 ```
+
 ### Linting
 
 To check the code for linting issues, use the following command:
@@ -197,6 +203,18 @@ The Docker image includes Jupyter support (requires `INCLUDE_PYTHON=true`):
 ```
 
 Opens at `http://localhost:8888`. Override the port with `JUPYTER_PORT` in `scripts/config.sh`. Example notebooks from `example/jupyter/notebooks` are mounted at `/home/spark/workspace/notebooks`.
+
+#### Spark Connect
+
+Pass `-C` to run in Spark Connect mode (experimental). The Spark Connect server runs in the cluster (Armada cluster mode) and Jupyter connects to it as a thin gRPC client:
+
+```bash
+./scripts/runJupyter.sh -C
+```
+
+Use `kubectl port-forward` command for the connect port (`15002`). Allocation follows `-A static|dynamic` (default dynamic); in static mode set `EXECUTOR_INSTANCES` to choose the executor count. 
+
+See [`spark_connect_demo.ipynb`](example/jupyter/notebooks/spark_connect_demo.ipynb).
 
 ### Spark History Server
 
@@ -265,3 +283,4 @@ mvn spotless:check       # Check formatting
 mvn spotless:apply       # Auto-fix formatting
 scripts/dev-e2e.sh       # Run E2E tests (requires a running Armada cluster)
 ```
+
