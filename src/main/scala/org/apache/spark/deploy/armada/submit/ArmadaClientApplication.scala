@@ -171,6 +171,8 @@ private[spark] object ArmadaClientApplication {
   }
 }
 
+private[submit] class DriverWatchException(msg: String) extends Exception(msg)
+
 private[submit] sealed trait DriverTerminalState
 private[submit] object DriverTerminalState {
   case object Succeeded                extends DriverTerminalState
@@ -259,30 +261,24 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val startTime             = System.currentTimeMillis()
     var watching              = true
 
-    while (watching) {
-      timeout.foreach { t =>
-        val elapsed = System.currentTimeMillis() - startTime
-        if (elapsed > t.toMillis) {
-          throw new RuntimeException(
-            s"Timed out after $t waiting for driver job $driverJobId " +
-              "to reach a terminal state"
-          )
-        }
+    def checkTimeout(): Unit = timeout.foreach { t =>
+      val elapsed = System.currentTimeMillis() - startTime
+      if (elapsed > t.toMillis) {
+        throw new DriverWatchException(
+          s"Timed out after $t waiting for driver job $driverJobId " +
+            "to reach a terminal state"
+        )
       }
+    }
+
+    while (watching) {
+      checkTimeout()
 
       try {
         val watcher = armadaClient.jobWatcher(queue, jobSetId, lastMessageId)
 
         while (watching && watcher.hasNext) {
-          timeout.foreach { t =>
-            val elapsed = System.currentTimeMillis() - startTime
-            if (elapsed > t.toMillis) {
-              throw new RuntimeException(
-                s"Timed out after $t waiting for driver job $driverJobId " +
-                  "to reach a terminal state"
-              )
-            }
-          }
+          checkTimeout()
 
           try {
             val streamMessage = watcher.next()
@@ -295,17 +291,17 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
                     watching = false
 
                   case Some(DriverTerminalState.Failed(reason)) =>
-                    throw new RuntimeException(
+                    throw new DriverWatchException(
                       s"Driver job $driverJobId FAILED: $reason"
                     )
 
                   case Some(DriverTerminalState.Cancelled(reason)) =>
-                    throw new RuntimeException(
+                    throw new DriverWatchException(
                       s"Driver job $driverJobId CANCELLED: $reason"
                     )
 
                   case Some(DriverTerminalState.Preempted) =>
-                    throw new RuntimeException(
+                    throw new DriverWatchException(
                       s"Driver job $driverJobId was PREEMPTED"
                     )
 
@@ -314,7 +310,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
               }
             }
           } catch {
-            case e: RuntimeException => throw e
+            case e: DriverWatchException => throw e
             case NonFatal(e) =>
               log(s"Error processing event: ${e.getMessage}")
           }
@@ -325,7 +321,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           Thread.sleep(1000)
         }
       } catch {
-        case e: RuntimeException => throw e
+        case e: DriverWatchException => throw e
         case NonFatal(e) =>
           log(s"Error in event stream: ${e.getMessage}, reconnecting...")
           Thread.sleep(5000)

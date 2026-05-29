@@ -261,35 +261,26 @@ class TestOrchestrator(
       _ <- armadaClient.ensureQueueExists(queueName).recoverWith { case ex =>
         throw new RuntimeException(s"Failed to ensure queue $queueName", ex)
       }
-      result <-
-        if (isClientMode) {
-          // In client mode, spark-submit blocks until the job completes.
-          // armadactl watch --exit-if-inactive would exit immediately because
-          // the job set doesn't exist yet, so we use submitFuture.isCompleted
-          // as the job-completion signal instead.
-          val submitFuture =
-            submitJob(testJobSetId, queueName, name, config, context, modeHelper)
-          val watchFuture =
-            watchJob(
-              queueName,
-              testJobSetId,
-              config,
-              context,
-              isClientMode,
-              clientSubmitFuture = Some(submitFuture)
-            )
-          for {
-            _      <- submitFuture
-            result <- watchFuture
-          } yield result
-        } else {
-          // In cluster mode, spark-submit returns immediately after submission,
-          // so sequential order is fine.
-          for {
-            _      <- submitJob(testJobSetId, queueName, name, config, context, modeHelper)
-            result <- watchJob(queueName, testJobSetId, config, context, isClientMode)
-          } yield result
-        }
+      result <- {
+        // spark-submit blocks until completion in both client and cluster mode.
+        // Run submit and watch concurrently so pod assertions can run while
+        // the job is active.
+        val submitFuture =
+          submitJob(testJobSetId, queueName, name, config, context, modeHelper)
+        val watchFuture =
+          watchJob(
+            queueName,
+            testJobSetId,
+            config,
+            context,
+            isClientMode,
+            clientSubmitFuture = Some(submitFuture)
+          )
+        for {
+          _      <- submitFuture
+          result <- watchFuture
+        } yield result
+      }
     } yield result
 
     resultFuture
@@ -394,8 +385,9 @@ class TestOrchestrator(
 
     @tailrec
     def attemptSubmit(attempt: Int = 1): ProcessResult = {
-      // In client mode, spark-submit runs until application completes, so use longer timeout
-      val timeout = if (!modeHelper.isDriverInCluster) jobWatchTimeout else jobSubmitTimeout
+      // spark-submit blocks until completion in both client and cluster mode
+      // (cluster mode watches the driver job internally before exiting)
+      val timeout = jobWatchTimeout
       val result  = ProcessExecutor.executeWithResult(runTestCommand, timeout)
 
       if (result.exitCode != 0) {
