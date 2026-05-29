@@ -2937,5 +2937,4 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envNames should have size 1
   }
 
-  
 }
