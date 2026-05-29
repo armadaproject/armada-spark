@@ -2880,4 +2880,62 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     }
   }
 
+  test("stripHadoopConfVolume removes hadoop-properties volume") {
+    import io.fabric8.kubernetes.api.model.{PodBuilder, VolumeBuilder}
+
+    val pod = new PodBuilder()
+      .withNewMetadata()
+      .withName("test-pod")
+      .endMetadata()
+      .withNewSpec()
+      .withVolumes(
+        new VolumeBuilder().withName("hadoop-properties").withNewEmptyDir().endEmptyDir().build(),
+        new VolumeBuilder().withName("spark-conf").withNewEmptyDir().endEmptyDir().build(),
+        new VolumeBuilder().withName("data-vol").withNewEmptyDir().endEmptyDir().build()
+      )
+      .endSpec()
+      .build()
+
+    val result      = armadaClientApp.stripHadoopConfVolume(pod)
+    val volumeNames = result.getSpec.getVolumes.asScala.map(_.getName)
+    volumeNames should contain("spark-conf")
+    volumeNames should contain("data-vol")
+    volumeNames should not contain "hadoop-properties"
+    volumeNames should have size 2
+  }
+
+  test("stripHadoopConfMount removes hadoop-properties mount and HADOOP_CONF_DIR env") {
+    import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVarBuilder, VolumeMountBuilder}
+
+    val container = new ContainerBuilder()
+      .withName("driver")
+      .withVolumeMounts(
+        new VolumeMountBuilder()
+          .withName("hadoop-properties")
+          .withMountPath("/etc/hadoop")
+          .build(),
+        new VolumeMountBuilder()
+          .withName("spark-conf")
+          .withMountPath("/opt/spark/conf")
+          .build()
+      )
+      .withEnv(
+        new EnvVarBuilder().withName("HADOOP_CONF_DIR").withValue("/etc/hadoop").build(),
+        new EnvVarBuilder().withName("SPARK_HOME").withValue("/opt/spark").build()
+      )
+      .build()
+
+    val result     = armadaClientApp.stripHadoopConfMount(container)
+    val mountNames = result.getVolumeMounts.asScala.map(_.getName)
+    mountNames should contain("spark-conf")
+    mountNames should not contain "hadoop-properties"
+    mountNames should have size 1
+
+    val envNames = result.getEnv.asScala.map(_.getName)
+    envNames should contain("SPARK_HOME")
+    envNames should not contain "HADOOP_CONF_DIR"
+    envNames should have size 1
+  }
+
+  
 }

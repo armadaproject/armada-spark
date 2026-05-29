@@ -1213,7 +1213,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
    */
   private val HADOOP_CONF_VOLUME = "hadoop-properties"
 
-  private def stripHadoopConfVolume(
+  private[submit] def stripHadoopConfVolume(
       pod: io.fabric8.kubernetes.api.model.Pod
   ): io.fabric8.kubernetes.api.model.Pod = {
     val spec = pod.getSpec
@@ -1224,7 +1224,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     pod
   }
 
-  private def stripHadoopConfMount(
+  private[submit] def stripHadoopConfMount(
       container: io.fabric8.kubernetes.api.model.Container
   ): io.fabric8.kubernetes.api.model.Container = {
     val mounts   = Option(container.getVolumeMounts).map(_.asScala).getOrElse(Nil)

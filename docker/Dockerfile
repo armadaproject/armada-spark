@@ -87,6 +87,8 @@ ENV PYSPARK_PYTHON=python3
 ENV PYSPARK_DRIVER_PYTHON=python3
 ENV PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-*src.zip
 ENV JUPYTER_RUNTIME_DIR=/home/spark/.local/share/jupyter/runtime
+
+# Prevent config maps from being created
 ENV HADOOP_CONF_DIR=
 
 # Use Armada entrypoint wrapper that forwards ARMADA_GANG* env vars as
