@@ -17,6 +17,17 @@
 
 package org.apache.spark.deploy.armada.submit
 
+import api.event.{
+  EventMessage,
+  JobCancelledEvent,
+  JobFailedEvent,
+  JobPendingEvent,
+  JobPreemptedEvent,
+  JobQueuedEvent,
+  JobRunningEvent,
+  JobSubmittedEvent,
+  JobSucceededEvent
+}
 import api.submit.{IngressConfig, JobSubmitRequestItem}
 import k8s.io.api.core.v1.generated.{
   Container,
@@ -2771,6 +2782,102 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     )
 
     result.podSpec.get.priorityClassName shouldBe Some("config-priority")
+  }
+
+  // -- processDriverEvent tests --
+
+  private val DRIVER_JOB_ID   = "driver-job-123"
+  private val EXECUTOR_JOB_ID = "executor-job-456"
+
+  test("processDriverEvent returns Succeeded for matching driver job") {
+    val event = EventMessage(
+      events = EventMessage.Events.Succeeded(
+        JobSucceededEvent(jobId = DRIVER_JOB_ID)
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe Some(DriverTerminalState.Succeeded)
+  }
+
+  test("processDriverEvent returns Failed with reason for matching driver job") {
+    val event = EventMessage(
+      events = EventMessage.Events.Failed(
+        JobFailedEvent(jobId = DRIVER_JOB_ID, reason = "OOMKilled")
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe Some(DriverTerminalState.Failed("OOMKilled"))
+  }
+
+  test("processDriverEvent returns Failed with default reason when empty") {
+    val event = EventMessage(
+      events = EventMessage.Events.Failed(
+        JobFailedEvent(jobId = DRIVER_JOB_ID, reason = "")
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe Some(DriverTerminalState.Failed("Unknown failure"))
+  }
+
+  test("processDriverEvent returns Cancelled for matching driver job") {
+    val event = EventMessage(
+      events = EventMessage.Events.Cancelled(
+        JobCancelledEvent(jobId = DRIVER_JOB_ID)
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe Some(DriverTerminalState.Cancelled("Job cancelled"))
+  }
+
+  test("processDriverEvent returns Preempted for matching driver job") {
+    val event = EventMessage(
+      events = EventMessage.Events.Preempted(
+        JobPreemptedEvent(jobId = DRIVER_JOB_ID)
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe Some(DriverTerminalState.Preempted)
+  }
+
+  test("processDriverEvent returns None for non-driver succeeded event") {
+    val event = EventMessage(
+      events = EventMessage.Events.Succeeded(
+        JobSucceededEvent(jobId = EXECUTOR_JOB_ID)
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe None
+  }
+
+  test("processDriverEvent returns None for non-driver failed event") {
+    val event = EventMessage(
+      events = EventMessage.Events.Failed(
+        JobFailedEvent(jobId = EXECUTOR_JOB_ID, reason = "OOMKilled")
+      )
+    )
+    val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+    result shouldBe None
+  }
+
+  test("processDriverEvent returns None for driver progress events") {
+    val progressEvents = Seq(
+      EventMessage(
+        events = EventMessage.Events.Submitted(JobSubmittedEvent(jobId = DRIVER_JOB_ID))
+      ),
+      EventMessage(
+        events = EventMessage.Events.Queued(JobQueuedEvent(jobId = DRIVER_JOB_ID))
+      ),
+      EventMessage(
+        events = EventMessage.Events.Pending(JobPendingEvent(jobId = DRIVER_JOB_ID))
+      ),
+      EventMessage(
+        events = EventMessage.Events.Running(JobRunningEvent(jobId = DRIVER_JOB_ID))
+      )
+    )
+    progressEvents.foreach { event =>
+      val result = armadaClientApp.processDriverEvent(event, DRIVER_JOB_ID)
+      result shouldBe None
+    }
   }
 
 }
