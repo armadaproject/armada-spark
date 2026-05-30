@@ -210,6 +210,26 @@ private[spark] object Config {
       .checkValue(_ > 0, s"Timeout must be a positive time value.")
       .createWithDefaultString("5")
 
+  val ARMADA_DRIVER_WATCH_ENABLED: ConfigEntry[Boolean] =
+    ConfigBuilder("spark.armada.driver.watchEnabled")
+      .doc(
+        "Whether to watch the driver job event stream after cluster-mode submission " +
+          "and block until it reaches a terminal state. When true, the process exits " +
+          "with code 0 on success and non-zero on failure/cancellation."
+      )
+      .booleanConf
+      .createWithDefault(true)
+
+  val ARMADA_DRIVER_WATCH_TIMEOUT: ConfigEntry[Long] =
+    ConfigBuilder("spark.armada.driver.watchTimeout")
+      .doc(
+        "Maximum time in seconds to wait for the driver job to reach a terminal state. " +
+          "A value of 0 means wait indefinitely."
+      )
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0, "Watch timeout must be non-negative.")
+      .createWithDefaultString("0s")
+
   val ARMADA_JOB_NODE_SELECTORS: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.scheduling.nodeSelectors")
       .doc(

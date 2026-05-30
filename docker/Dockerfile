@@ -36,6 +36,10 @@ USER 0
 RUN mkdir -p /opt/spark/coreJars && \
     mv /opt/spark/jars/spark-core_*.jar /opt/spark/coreJars/
 
+# Create a stable name for the examples jar
+RUN rm -f /opt/spark/examples/jars/spark-examples.jar
+RUN cp /opt/spark/examples/jars/spark-examples_*.jar /opt/spark/examples/jars/spark-examples.jar
+
 ENV SPARK_DIST_CLASSPATH=/opt/spark/coreJars/*
 
 # Install Jupyter, PySpark, and Python dependencies (only if include_python is true)
@@ -83,6 +87,9 @@ ENV PYSPARK_PYTHON=python3
 ENV PYSPARK_DRIVER_PYTHON=python3
 ENV PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-*src.zip
 ENV JUPYTER_RUNTIME_DIR=/home/spark/.local/share/jupyter/runtime
+
+# Prevent config maps from being created
+ENV HADOOP_CONF_DIR=
 
 # Use Armada entrypoint wrapper that forwards ARMADA_GANG* env vars as
 # SPARK_EXECUTOR_ATTRIBUTE_* for dynamic client mode, then delegates to

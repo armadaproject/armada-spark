@@ -16,6 +16,7 @@
  */
 package org.apache.spark.deploy.armada.submit
 
+import api.event.EventMessage
 import api.submit.JobSubmitRequestItem
 import org.apache.spark.deploy.armada.Config.{
   ARMADA_DRIVER_JOB_ITEM_TEMPLATE,
@@ -33,6 +34,8 @@ import org.apache.spark.deploy.armada.Config.{
   ARMADA_EXECUTOR_PREEMPTION_GRACE_PERIOD,
   ARMADA_EXECUTOR_REQUEST_CORES,
   ARMADA_EXECUTOR_REQUEST_MEMORY,
+  ARMADA_DRIVER_WATCH_ENABLED,
+  ARMADA_DRIVER_WATCH_TIMEOUT,
   ARMADA_HEALTH_CHECK_TIMEOUT,
   ARMADA_JOB_GANG_SCHEDULING_NODE_UNIFORMITY,
   ARMADA_JOB_NODE_SELECTORS,
@@ -90,6 +93,7 @@ import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
+import scala.util.control.NonFatal
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.Await
@@ -167,6 +171,16 @@ private[spark] object ArmadaClientApplication {
   }
 }
 
+private[submit] class DriverWatchException(msg: String) extends Exception(msg)
+
+private[submit] sealed trait DriverTerminalState
+private[submit] object DriverTerminalState {
+  case object Succeeded                extends DriverTerminalState
+  case class Failed(reason: String)    extends DriverTerminalState
+  case class Cancelled(reason: String) extends DriverTerminalState
+  case object Preempted                extends DriverTerminalState
+}
+
 /** Main class and entry point of application submission in KUBERNETES mode.
   */
 private[spark] class ArmadaClientApplication extends SparkApplication {
@@ -212,6 +226,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       )
     }
 
+    val modeHelper = DeploymentModeHelper(sparkConf)
     val (driverJobId, _) =
       submitArmadaJob(armadaClient, clientArguments, armadaJobConfig, sparkConf)
 
@@ -221,7 +236,137 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         s"ps=50&sb=$driverJobId&active=false&refresh=true"
     log(s"Lookout URL for the driver job is $lookoutURL")
 
-    ()
+    if (modeHelper.isDriverInCluster && sparkConf.get(ARMADA_DRIVER_WATCH_ENABLED)) {
+      val timeout = sparkConf.get(ARMADA_DRIVER_WATCH_TIMEOUT)
+      watchDriverJob(
+        armadaClient,
+        armadaJobConfig.queue,
+        armadaJobConfig.jobSetId,
+        driverJobId,
+        if (timeout > 0) Some(Duration(timeout, SECONDS)) else None
+      )
+    }
+  }
+
+  private[submit] def watchDriverJob(
+      armadaClient: ArmadaClient,
+      queue: String,
+      jobSetId: String,
+      driverJobId: String,
+      timeout: Option[Duration]
+  ): Unit = {
+    log(s"Watching driver job $driverJobId in job set $jobSetId...")
+
+    var lastMessageId: String = ""
+    val startTime             = System.currentTimeMillis()
+    var watching              = true
+
+    def checkTimeout(): Unit = timeout.foreach { t =>
+      val elapsed = System.currentTimeMillis() - startTime
+      if (elapsed > t.toMillis) {
+        throw new DriverWatchException(
+          s"Timed out after $t waiting for driver job $driverJobId " +
+            "to reach a terminal state"
+        )
+      }
+    }
+
+    while (watching) {
+      checkTimeout()
+
+      try {
+        val watcher = armadaClient.jobWatcher(queue, jobSetId, lastMessageId)
+
+        while (watching && watcher.hasNext) {
+          checkTimeout()
+
+          try {
+            val streamMessage = watcher.next()
+            if (streamMessage != null) {
+              lastMessageId = streamMessage.id
+              streamMessage.message.foreach { eventMessage =>
+                processDriverEvent(eventMessage, driverJobId) match {
+                  case Some(DriverTerminalState.Succeeded) =>
+                    log(s"Driver job $driverJobId SUCCEEDED")
+                    watching = false
+
+                  case Some(DriverTerminalState.Failed(reason)) =>
+                    throw new DriverWatchException(
+                      s"Driver job $driverJobId FAILED: $reason"
+                    )
+
+                  case Some(DriverTerminalState.Cancelled(reason)) =>
+                    throw new DriverWatchException(
+                      s"Driver job $driverJobId CANCELLED: $reason"
+                    )
+
+                  case Some(DriverTerminalState.Preempted) =>
+                    throw new DriverWatchException(
+                      s"Driver job $driverJobId was PREEMPTED"
+                    )
+
+                  case None => // Non-terminal or non-driver event
+                }
+              }
+            }
+          } catch {
+            case e: DriverWatchException => throw e
+            case NonFatal(e) =>
+              log(s"Error processing event: ${e.getMessage}")
+          }
+        }
+
+        if (watching) {
+          log("Event stream ended, reconnecting...")
+          Thread.sleep(1000)
+        }
+      } catch {
+        case e: DriverWatchException => throw e
+        case NonFatal(e) =>
+          log(s"Error in event stream: ${e.getMessage}, reconnecting...")
+          Thread.sleep(5000)
+      }
+    }
+  }
+
+  private[submit] def processDriverEvent(
+      eventMessage: EventMessage,
+      driverJobId: String
+  ): Option[DriverTerminalState] = {
+    eventMessage.events match {
+      case EventMessage.Events.Submitted(event) if event.jobId == driverJobId =>
+        log(s"Driver job submitted")
+        None
+
+      case EventMessage.Events.Queued(event) if event.jobId == driverJobId =>
+        log(s"Driver job queued")
+        None
+
+      case EventMessage.Events.Pending(event) if event.jobId == driverJobId =>
+        log(s"Driver job pending")
+        None
+
+      case EventMessage.Events.Running(event) if event.jobId == driverJobId =>
+        log(s"Driver job running")
+        None
+
+      case EventMessage.Events.Succeeded(event) if event.jobId == driverJobId =>
+        Some(DriverTerminalState.Succeeded)
+
+      case EventMessage.Events.Failed(event) if event.jobId == driverJobId =>
+        val reason = Option(event.reason)
+          .filter(_.nonEmpty)
+          .getOrElse("Unknown failure")
+        Some(DriverTerminalState.Failed(reason))
+
+      case EventMessage.Events.Cancelled(event) if event.jobId == driverJobId =>
+        Some(DriverTerminalState.Cancelled("Job cancelled"))
+
+      case EventMessage.Events.Preempted(event) if event.jobId == driverJobId =>
+        Some(DriverTerminalState.Preempted)
+
+      case _ => None
+    }
   }
 
   private[spark] def validateArmadaJobConfig(
@@ -1062,6 +1207,35 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       .withPodSpec(PodSpec().withNodeSelector(Map.empty))
   }
 
+  /*
+    hadoop config will create configmaps which are not supported in armada.
+    the code below strips them out.
+   */
+  private val HADOOP_CONF_VOLUME = "hadoop-properties"
+
+  private[submit] def stripHadoopConfVolume(
+      pod: io.fabric8.kubernetes.api.model.Pod
+  ): io.fabric8.kubernetes.api.model.Pod = {
+    val spec = pod.getSpec
+    if (spec == null) return pod
+    val volumes  = Option(spec.getVolumes).map(_.asScala).getOrElse(Nil)
+    val filtered = volumes.filterNot(_.getName == HADOOP_CONF_VOLUME).asJava
+    spec.setVolumes(filtered)
+    pod
+  }
+
+  private[submit] def stripHadoopConfMount(
+      container: io.fabric8.kubernetes.api.model.Container
+  ): io.fabric8.kubernetes.api.model.Container = {
+    val mounts   = Option(container.getVolumeMounts).map(_.asScala).getOrElse(Nil)
+    val filtered = mounts.filterNot(_.getName == HADOOP_CONF_VOLUME).asJava
+    container.setVolumeMounts(filtered)
+    val envVars     = Option(container.getEnv).map(_.asScala).getOrElse(Nil)
+    val filteredEnv = envVars.filterNot(_.getName == "HADOOP_CONF_DIR").asJava
+    container.setEnv(filteredEnv)
+    container
+  }
+
   /** Converts a fabric8 Kubernetes Pod to an Armada JobSubmitRequestItem.
     *
     * Extracts metadata (labels, annotations) and converts the PodSpec to protobuf format.
@@ -1150,8 +1324,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
           new DefaultKubernetesClient()
         )
 
-        val jobItem   = fabric8PodToJobItem(driverSpec.pod.pod)
-        val container = PodSpecConverter.convertContainer(driverSpec.pod.container)
+        val cleanedPod       = stripHadoopConfVolume(driverSpec.pod.pod)
+        val cleanedContainer = stripHadoopConfMount(driverSpec.pod.container)
+
+        val jobItem   = fabric8PodToJobItem(cleanedPod)
+        val container = PodSpecConverter.convertContainer(cleanedContainer)
 
         (Some(jobItem), Some(container), driverSpec.systemProperties)
     }
@@ -1192,8 +1369,11 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       ResourceProfile.getOrCreateDefaultProfile(clonedConf)
     )
 
-    val jobItem   = fabric8PodToJobItem(executorSpec.pod.pod)
-    val container = PodSpecConverter.convertContainer(executorSpec.pod.container)
+    val cleanedPod       = stripHadoopConfVolume(executorSpec.pod.pod)
+    val cleanedContainer = stripHadoopConfMount(executorSpec.pod.container)
+
+    val jobItem   = fabric8PodToJobItem(cleanedPod)
+    val container = PodSpecConverter.convertContainer(cleanedContainer)
 
     (Some(jobItem), Some(container))
   }

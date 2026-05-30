@@ -144,6 +144,7 @@ ARMADA_COMMON_CONF=(
     --conf spark.armada.queue=$ARMADA_QUEUE
     --conf spark.armada.lookouturl=${ARMADA_LOOKOUT_URL:-http://localhost:30000}
     --conf spark.kubernetes.executor.disableConfigMap=true
+    --conf spark.kubernetes.driver.disableConfigMap=true
 )
 
 ARMADA_AUTH_ARGS=()
@@ -274,26 +275,12 @@ if [[ -z "${SPARK_VERSION:-}" ]]; then
   export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version -q -DforceStdout)
 fi
 
-if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
-    # Dss jars have a different suffix
-    export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}-gr-6.jar}"
-else
-    export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples_${SCALA_BIN_VERSION}-${SPARK_VERSION}.jar}"
-fi
+export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples.jar}"
 
 # check the Spark version is supported
 if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     echo "This tool does not support Spark version ${SPARK_VERSION}."
     exit 1
-fi
-
-if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
-    if [[ "$SPARK_VERSION" != "3.5.3" || "$SCALA_BIN_VERSION" != "2.12" ]]; then
-        echo distributed shuffle storage currently only supported for spark 3.5.3/scala 2.12
-        echo current version is $SPARK_VERSION $SCALA_BIN_VERSION
-        echo EXITING
-        exit 1
-    fi
 fi
 
 # Distributed shuffle storage / fallback storage conf args
@@ -308,6 +295,14 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
         --conf spark.shuffle.io.connectionCreationTimeout=10s
         --conf spark.shuffle.netty.connect.maxThreads=10
     )
+fi
+
+# DSS + client mode requires spark.app.id to be pre-set, otherwise
+# FallbackStorage's `require(conf.contains("spark.app.id"))` fails before
+# SparkContext gets a chance to assign it. See FallbackStorage.scala:53.
+APP_ID_CONF=()
+if  [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ] && [ "$DEPLOY_MODE" = "client" ]; then
+    APP_ID_CONF=(--conf "spark.app.id=armada-spark-job-$(uuidgen)")
 fi
 
 shift $((OPTIND - 1))

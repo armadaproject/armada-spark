@@ -40,6 +40,7 @@ fi
 EXTRA_CONF=(
     --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+    "${APP_ID_CONF[@]}"
 )
 if [ "$STATIC_MODE" = true ]; then
     echo running static mode
@@ -82,5 +83,7 @@ SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
 
+# Run spark-submit via docker. In cluster mode, the Scala application watches
+# the driver job internally and exits with the appropriate code.
 docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
