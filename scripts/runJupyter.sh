@@ -124,6 +124,7 @@ if [ "$USE_SPARK_CONNECT" = true ]; then
         --conf spark.armada.driver.limit.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.armada.driver.request.memory=$DRIVER_MEMORY_LIMIT
         --conf spark.jars.ivy=/tmp/.ivy
+        --conf spark.armada.driver.watchEnabled=false
     )
 
     # Allocation mode (-A static|dynamic, same contract as submitArmadaSpark.sh).
