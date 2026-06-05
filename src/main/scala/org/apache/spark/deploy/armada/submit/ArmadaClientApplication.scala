@@ -233,7 +233,9 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
     val lookoutBaseURL = sparkConf.get(ARMADA_LOOKOUTURL)
     val lookoutURL =
       s"$lookoutBaseURL/?page=0&sort[id]=jobId&sort[desc]=true&" +
-        s"ps=50&sb=$driverJobId&active=false&refresh=true"
+        s"ps=50&active=false&refresh=true&" +
+        s"f[0][id]=queue&f[0][value][0]=${armadaJobConfig.queue}&f[0][match]=anyOf&" +
+        s"f[1][id]=jobSet&f[1][value]=${armadaJobConfig.jobSetId}&f[1][match]=startsWith"
     log(s"Lookout URL for the driver job is $lookoutURL")
 
     if (modeHelper.isDriverInCluster && sparkConf.get(ARMADA_DRIVER_WATCH_ENABLED)) {
