@@ -40,7 +40,7 @@ fi
 EXTRA_CONF=(
     --conf spark.driver.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     --conf spark.executor.extraJavaOptions="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-    "${APP_ID_CONF[@]}"
+    "${APP_ID_CONF[@]-}"
 )
 if [ "$STATIC_MODE" = true ]; then
     echo running static mode
@@ -56,12 +56,12 @@ SPARK_SUBMIT_ARGS=(
     --deploy-mode $DEPLOY_MODE
     --name $NAME
     $CLASS_PROMPT $CLASS_ARG
-    "${S3_CONF[@]}" \
+    "${S3_CONF[@]-}" \
     "${ARMADA_COMMON_CONF[@]}" \
 )
 
 # Add fallback storage / decommission conf if enabled
-SPARK_SUBMIT_ARGS+=("${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]}")
+SPARK_SUBMIT_ARGS+=("${DISTRIBUTED_SHUFFLE_STORAGE_CONF[@]-}")
 
 # Add deploy mode args
 SPARK_SUBMIT_ARGS+=("${DEPLOY_MODE_ARGS[@]}")
@@ -75,13 +75,23 @@ if [ "${#OAUTH_CONF[@]}" -gt 0 ]; then
 fi
 
 # Add event log conf
-SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]}")
+SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]-}")
 
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
+
+# On bash 3.2 (macOS), "${empty_arr[@]-}" expands to "" rather than nothing.
+# Filter out any empty strings so spark-submit never receives a bare "" argument
+# (which resolves to the CWD and causes "Is a directory" errors).
+_filtered_args=()
+for _arg in "${SPARK_SUBMIT_ARGS[@]}"; do
+    [ -n "$_arg" ] && _filtered_args+=("$_arg")
+done
+SPARK_SUBMIT_ARGS=("${_filtered_args[@]}")
+unset _filtered_args _arg
 
 # Run spark-submit via docker. In cluster mode, the Scala application watches
 # the driver job internally and exits with the appropriate code.
