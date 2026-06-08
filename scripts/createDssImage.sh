@@ -8,6 +8,7 @@ set -e
 
 
 scripts="$(cd "$(dirname "$0")"; pwd)"
+USE_DISTRIBUTED_SHUFFLE_STORAGE=true
 source "$scripts/init.sh"
 
 # these utilities are needed to build benchmarking tools
@@ -84,7 +85,7 @@ if [[ $ARMADA_SKIP_CERT != "true" ]]; then
     echo copying $1
     cp $1 ca.crt
     IMPORT_CERT_COMMANDS="COPY ca.crt /tmp/ca.crt
-RUN keytool -importcert -file /tmp/ca.crt -keystore \$(find / -name cacerts -type f 2>/dev/null | head -1) -alias mycert -storepass changeit -noprompt"
+RUN keytool -importcert -file /tmp/ca.crt -keystore \$(find /usr /opt -name cacerts -type f 2>/dev/null | head -1) -alias mycert -storepass changeit -noprompt"
 else
     IMPORT_CERT_COMMANDS=""
 fi

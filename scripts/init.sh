@@ -304,6 +304,7 @@ if [[ "$SPARK_VERSION" == "4."* ]]; then
     ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/armada-eks-spark-benchmark-assembly-411-1.0.jar}
     ARMADA_BENCHMARK_JAR_ID=${ARMADA_BENCHMARK_JAR_ID:-1fxbOFli52VQQyK2IX2WxEW1XAjWRU4XX}
 else
+    # The 353 benchmark jar works for 334 as well
     ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/armada-eks-spark-benchmark-assembly-353-1.0.jar}
     ARMADA_BENCHMARK_JAR_ID=${ARMADA_BENCHMARK_JAR_ID:-1fjGRrLmbLygqdP-ugoTHLUbNMkTTxvcO}
 fi
