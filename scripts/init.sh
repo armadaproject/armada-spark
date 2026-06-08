@@ -19,7 +19,6 @@ ARMADA_S3_BUCKET_ENDPOINT=${ARMADA_S3_BUCKET_ENDPOINT:-http://192.168.59.6}
 ARMADA_S3_USER_DIR=${ARMADA_USER_DIR:-s3a://$ARMADA_S3_BUCKET_NAME/$USER}
 
 # benchmark
-ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/armada-eks-spark-benchmark-assembly-1.0.jar}
 ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/data/10t}
 ARMADA_BENCHMARK_CLASS=${ARMADA_BENCHMARK_CLASS:-com.amazonaws.eks.tpcds.BenchmarkSQL}
 ARMADA_BENCHMARK_TOOLS=${ARMADA_BENCHMARK_TOOLS:-/opt/tools/tpcds-kit/tools}
@@ -275,6 +274,37 @@ if [[ -z "${SPARK_VERSION:-}" ]]; then
   export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version -q -DforceStdout)
 fi
 
+# When using DSS, validate Spark version + Scala version against known DSS base
+# images and set DSS_PREFIX/DSS_TAG defaults
+if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
+    case "${SPARK_VERSION}:${SCALA_BIN_VERSION}" in
+        3.3.4:2.12)
+            DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-334-1}
+            ;;
+        3.5.3:2.12)
+            DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-353-1}
+            ;;
+        4.1.1:2.13)
+            DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-411-1}
+            ;;
+        *)
+            echo "Error: unsupported Spark/Scala combination for DSS: ${SPARK_VERSION} / ${SCALA_BIN_VERSION}"
+            exit 1
+            ;;
+    esac
+    DSS_TAG=${DSS_TAG:-latest}
+    export DSS_PREFIX DSS_TAG
+fi
+
+# Benchmark jar and download ID, keyed by Spark major version
+if [[ "$SPARK_VERSION" == "4."* ]]; then
+    ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/armada-eks-spark-benchmark-assembly-411-1.0.jar}
+    ARMADA_BENCHMARK_JAR_ID=${ARMADA_BENCHMARK_JAR_ID:-1fxbOFli52VQQyK2IX2WxEW1XAjWRU4XX}
+else
+    ARMADA_BENCHMARK_JAR=${ARMADA_BENCHMARK_JAR:-local:///opt/spark/jars/armada-eks-spark-benchmark-assembly-353-1.0.jar}
+    ARMADA_BENCHMARK_JAR_ID=${ARMADA_BENCHMARK_JAR_ID:-1fjGRrLmbLygqdP-ugoTHLUbNMkTTxvcO}
+fi
+export ARMADA_BENCHMARK_JAR ARMADA_BENCHMARK_JAR_ID
 export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples.jar}"
 
 # check the Spark version is supported
@@ -284,11 +314,12 @@ if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
 fi
 
 # Distributed shuffle storage / fallback storage conf args
+ARMADA_DSS_PATH="${ARMADA_DSS_PATH:-${ARMADA_S3_USER_DIR}/shuffle/}"
 DISTRIBUTED_SHUFFLE_STORAGE_CONF=()
 if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     DISTRIBUTED_SHUFFLE_STORAGE_CONF=(
         --conf spark.storage.decommission.shuffleBlocks.maxDiskSize=0
-        --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_S3_USER_DIR/shuffle/
+        --conf spark.storage.decommission.fallbackStorage.path=$ARMADA_DSS_PATH
         --conf spark.storage.decommission.fallbackStorage.cleanUp=true
         --conf spark.storage.decommission.fallbackStorage.proactive.enabled=true
         --conf spark.storage.decommission.fallbackStorage.proactive.reliable=true
