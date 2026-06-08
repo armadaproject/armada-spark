@@ -26,12 +26,15 @@ cd $tmp_dir
 
 repo=${ARMADA_DSS_REPO:-https://github.com/G-Research/spark}
 repo_dir=`basename $repo`
-branch=${ARMADA_DSS_BRANCH:-armada/push-task-result-to-driver-bm-v${SPARK_VERSION}}
+branch=${DSS_BRANCH}
 
 # create the spark image with distributed shuffle storage support
 git clone $repo
 cd $repo_dir
 git checkout $branch
+
+# Suppress unused-imports warning
+sed -i 's|<arg>-Ywarn-unused:imports</arg>|<!-- <arg>-Ywarn-unused:imports</arg> -->|' pom.xml
 
 export SPARK_HOME=`pwd`
 DSS_IMAGE_TAG="spark.dss${SPARK_VERSION}.img"

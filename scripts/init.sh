@@ -280,12 +280,15 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
     case "${SPARK_VERSION}:${SCALA_BIN_VERSION}" in
         3.3.4:2.12)
             DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-334-1}
+            DSS_BRANCH=${DSS_BRANCH:-fallback-storage-multithread-read-v3.3.4}
             ;;
         3.5.3:2.12)
             DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-353-1}
+            DSS_BRANCH=${DSS_BRANCH:-fallback-storage-retry-from-fallback-v3.5.3}
             ;;
         4.1.1:2.13)
             DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-411-1}
+            DSS_BRANCH=${DSS_BRANCH:-fallback-storage-proactive}
             ;;
         *)
             echo "Error: unsupported Spark/Scala combination for DSS: ${SPARK_VERSION} / ${SCALA_BIN_VERSION}"
