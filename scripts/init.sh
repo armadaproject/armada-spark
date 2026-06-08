@@ -284,7 +284,7 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
             ;;
         3.5.3:2.12)
             DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-353-1}
-            DSS_BRANCH=${DSS_BRANCH:-fallback-storage-retry-from-fallback-v3.5.3}
+            DSS_BRANCH=${DSS_BRANCH:-armada/push-task-result-to-driver-bm-v3.5.3}
             ;;
         4.1.1:2.13)
             DSS_PREFIX=${DSS_PREFIX:-gbj262/dss-411-1}
