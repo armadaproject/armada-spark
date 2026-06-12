@@ -17,7 +17,10 @@
 ARG spark_base_image_prefix=apache/spark
 ARG spark_base_image_tag=3.3.3-scala2.12-java11-ubuntu
 
-# TARGETARCH is auto-populated by BuildKit (amd64 or arm64) to match the build platform.
+# TARGETARCH is auto-populated by BuildKit (amd64 or arm64) to match the
+# target platform; plain `docker build` uses BuildKit on all recent Docker
+# versions (default since 20.10).
+# On the legacy, non-BuildKit builder, pass --build-arg TARGETARCH=<amd64|arm64> explicitly.
 ARG TARGETARCH
 
 FROM ${spark_base_image_prefix}:${spark_base_image_tag}-${TARGETARCH}
