@@ -92,15 +92,41 @@ done
 
 source "$scripts/prepExtraFiles.sh"
 
-echo "using spark image: $image_prefix:$image_tag-<arch> for ${TARGET_PLATFORMS[*]}"
-docker buildx build \
-  --platform "$(IFS=,; echo "${TARGET_PLATFORMS[*]}")" \
-  --tag $IMAGE_NAME \
-  --build-arg spark_base_image_prefix=$image_prefix \
-  --build-arg spark_base_image_tag=$image_tag \
-  --build-arg scala_binary_version=$SCALA_BIN_VERSION \
-  --build-arg spark_version=$SPARK_VERSION \
-  --build-arg include_python=$INCLUDE_PYTHON \
-  -f "$root/docker/Dockerfile" \
-  $([ "${PUSH:-false}" = "true" ] && echo "--push" || echo "--load") \
-  "$root"
+build_args=(
+  --build-arg spark_base_image_prefix=$image_prefix
+  --build-arg spark_base_image_tag=$image_tag
+  --build-arg scala_binary_version=$SCALA_BIN_VERSION
+  --build-arg spark_version=$SPARK_VERSION
+  --build-arg include_python=$INCLUDE_PYTHON
+  -f "$root/docker/Dockerfile"
+)
+
+# Each platform is built separately with plain `docker build`, which always
+# resolves FROM against the daemon's local image store. This keeps the
+# locally-tagged base images visible regardless of buildx builder type or
+# image store (classic or containerd); a single multi-platform buildx build
+# would require a builder that cannot see local images. 
+# BuildKit is needed for TARGETARCH and --platform.
+export DOCKER_BUILDKIT=1
+
+if [ "${PUSH:-false}" = "true" ]; then
+    # Build and push one image per arch, then assemble them into a multi-arch
+    # manifest list under the bare $IMAGE_NAME. imagetools talks to the
+    # registry directly, so this works with any builder configuration.
+    ARCH_TAGS=()
+    for plat in "${TARGET_PLATFORMS[@]}"; do
+        arch="${plat##*/}"
+        case "$IMAGE_NAME" in
+            *:*) arch_tag="$IMAGE_NAME-$arch" ;;
+            *)   arch_tag="$IMAGE_NAME:$arch" ;;
+        esac
+        echo "Building $arch_tag from base $image_prefix:$image_tag-$arch..."
+        docker build --platform "$plat" --tag "$arch_tag" "${build_args[@]}" "$root"
+        docker push "$arch_tag"
+        ARCH_TAGS+=("$arch_tag")
+    done
+    docker buildx imagetools create --tag "$IMAGE_NAME" "${ARCH_TAGS[@]}"
+else
+    echo "using spark image: $image_prefix:$image_tag-$HOST_ARCH"
+    docker build --platform "linux/$HOST_ARCH" --tag "$IMAGE_NAME" "${build_args[@]}" "$root"
+fi
