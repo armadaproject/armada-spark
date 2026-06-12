@@ -16,12 +16,8 @@
 #
 ARG spark_base_image_prefix=apache/spark
 ARG spark_base_image_tag=3.3.3-scala2.12-java11-ubuntu
-# TARGETARCH is auto-populated by BuildKit (amd64 or arm64) to match the
-# build platform; scripts/createImage.sh tags the per-platform base as
-# `<prefix>:<tag>-<arch>`. Deliberately declared WITHOUT a default: a declared
-# default would override BuildKit's auto-injected value and pin every build to
-# one arch. Legacy-builder invocations outside createImage.sh must pass
-# --build-arg TARGETARCH=<amd64|arm64> explicitly.
+
+# TARGETARCH is auto-populated by BuildKit (amd64 or arm64) to match the build platform.
 ARG TARGETARCH
 
 FROM ${spark_base_image_prefix}:${spark_base_image_tag}-${TARGETARCH}
