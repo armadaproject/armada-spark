@@ -37,13 +37,15 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
         fi
         # Build base image per target platform, tagging with -$arch suffix.
         # The app Dockerfile picks the right one via $TARGETARCH in FROM.
+        missing_platforms=()
         for plat in "${TARGET_PLATFORMS[@]}"; do
             arch="${plat##*/}"
-            if docker image inspect "$image_prefix:$image_tag-$arch" >/dev/null 2>/dev/null; then
-                continue
+            if ! docker image inspect "$image_prefix:$image_tag-$arch" >/dev/null 2>&1; then
+                missing_platforms+=("$plat")
             fi
+        done
+        if [ "${#missing_platforms[@]}" -gt 0 ]; then
             echo "There are no Docker images released for Spark $SPARK_VERSION and Scala $SCALA_BIN_VERSION."
-            echo "Building Spark Docker image $image_prefix:$image_tag-$arch for $plat from source."
             if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
                 echo "Checking out Spark sources for tag v$SPARK_VERSION."
                 git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
@@ -61,18 +63,23 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
             fi
             ./dev/change-scala-version.sh $SCALA_BIN_VERSION
             # by packaging the assembly project specifically, jars of all depending Spark projects are fetch from Maven
-            # spark-examples jars are not released, so we need to build these from sources
+            # spark-examples jars are not released, so we need to build these from sources.
+            # The jars are platform agnostic, so a single Maven build serves every
+            # target platform; only the docker image build below runs per arch.
             ./build/mvn --batch-mode clean
             ./build/mvn --batch-mode package -pl examples
             ./build/mvn --batch-mode package -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION -pl assembly
-            DOCKER_DEFAULT_PLATFORM="$plat" ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
+            for plat in "${missing_platforms[@]}"; do
+                arch="${plat##*/}"
+                echo "Building Spark Docker image $image_prefix:$image_tag-$arch for $plat from source."
+                DOCKER_DEFAULT_PLATFORM="$plat" ./bin/docker-image-tool.sh -t "$image_tag" $extra_build_params build
+                # docker-image-tool.sh tags as `$image_prefix:$image_tag`; rename to the
+                # arch-suffixed tag so each platform keeps a distinct base image.
+                docker tag "$image_prefix:$image_tag" "$image_prefix:$image_tag-$arch"
+                docker rmi "$image_prefix:$image_tag" 2>/dev/null || true
+            done
             cd ..
-            # docker-image-tool.sh tags as `$image_prefix:$image_tag`; rename to
-            # the arch-suffixed tag so the next iteration's bare-tag inspect
-            # doesn't match the wrong arch.
-            docker tag "$image_prefix:$image_tag" "$image_prefix:$image_tag-$arch"
-            docker rmi "$image_prefix:$image_tag" 2>/dev/null || true
-        done
+        fi
 fi
 
 
