@@ -242,12 +242,12 @@
             </properties>
         </profile>
         <profile>
-            <id>spark4.1.0</id>
+            <id>spark4.1.1</id>
             <properties>
                 <spark.profile.selected>true</spark.profile.selected>
                 <spark.major.version>4</spark.major.version>
                 <spark.minor.version>1</spark.minor.version>
-                <spark.patch.version>0</spark.patch.version>
+                <spark.patch.version>1</spark.patch.version>
                 <java.version>17</java.version>
                 <kubernetes-client.version>7.1.0</kubernetes-client.version>
                 <jackson.version>2.15.2</jackson.version>
