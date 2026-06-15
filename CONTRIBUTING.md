@@ -12,7 +12,7 @@ mvn spotless:apply         # Auto-fix formatting
 scripts/dev-e2e.sh         # Run E2E tests (requires a running Armada cluster)
 
 # Target a different Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.15)
-./scripts/set-version.sh 3.3.4 2.12.15
+mvn -Pscala2.12,spark3.3.4 clean package
 ```
 
 ## Commit Conventions
