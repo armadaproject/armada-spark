@@ -356,7 +356,7 @@
                           </or>
                         </and>
                       </condition>
-                      <fail message="Unsupported or missing Spark/Scala profile combination. Use -Pscala2.13,spark3.5.5 or one of these supported tuples: scala2.12 + spark3.3.4, scala2.12 + spark3.5.5, scala2.13 + spark3.3.4, scala2.13 + spark3.5.5, scala2.13 + spark4.1.1.">
+                      <fail message="Unsupported or missing Spark/Scala profile combination. Supported tuples: scala2.12 + spark3.3.4, scala2.12 + spark3.5.5, scala2.13.8 + spark3.3.4, scala2.13.8 + spark3.5.5, scala2.13.17 + spark4.1.1.">
                         <condition>
                           <not>
                             <isset property="combo.valid" />
