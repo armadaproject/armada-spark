@@ -342,6 +342,7 @@
                             </and>
                             <and>
                                 <equals arg1="${scala.binary.version}" arg2="2.13" />
+                                <equals arg1="${scala.patch.version}" arg2="8" />
                               <or>
                                 <equals arg1="${spark.version}" arg2="3.3.4" />
                                 <equals arg1="${spark.version}" arg2="3.5.5" />
