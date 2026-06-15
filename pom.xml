@@ -21,9 +21,6 @@
     <!-- Global Properties -->
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Set your desired Java version -->
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
         <!-- Require explicit Scala/Spark profile activation for supported builds -->
         <scala.profile.selected>false</scala.profile.selected>
         <spark.profile.selected>false</spark.profile.selected>
@@ -209,12 +206,21 @@
             </properties>
         </profile>
         <profile>
-            <id>scala2.13</id>
+            <id>scala2.13.8</id>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
                 <scala.minor.version>13</scala.minor.version>
                 <scala.patch.version>8</scala.patch.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>scala2.13.17</id>
+            <properties>
+                <scala.profile.selected>true</scala.profile.selected>
+                <scala.major.version>2</scala.major.version>
+                <scala.minor.version>13</scala.minor.version>
+                <scala.patch.version>17</scala.patch.version>
             </properties>
         </profile>
         <profile>
@@ -335,17 +341,22 @@
                               </or>
                             </and>
                             <and>
-                              <equals arg1="${scala.binary.version}" arg2="2.13" />
+                                <equals arg1="${scala.binary.version}" arg2="2.13" />
                               <or>
                                 <equals arg1="${spark.version}" arg2="3.3.4" />
                                 <equals arg1="${spark.version}" arg2="3.5.5" />
-                                <equals arg1="${spark.version}" arg2="4.1.0" />
                               </or>
+                            </and>
+                                <!-- separate case for Spark 4 -->
+                            <and>
+                                <equals arg1="${scala.binary.version}" arg2="2.13" />
+                                <equals arg1="${spark.version}" arg2="4.1.1" />
+                                <equals arg1="${scala.patch.version}" arg2="17" />
                             </and>
                           </or>
                         </and>
                       </condition>
-                      <fail message="Unsupported or missing Spark/Scala profile combination. Use -Pscala2.13,spark3.5.5 or one of these supported tuples: scala2.12 + spark3.3.4, scala2.12 + spark3.5.5, scala2.13 + spark3.3.4, scala2.13 + spark3.5.5, scala2.13 + spark4.1.0.">
+                      <fail message="Unsupported or missing Spark/Scala profile combination. Use -Pscala2.13,spark3.5.5 or one of these supported tuples: scala2.12 + spark3.3.4, scala2.12 + spark3.5.5, scala2.13 + spark3.3.4, scala2.13 + spark3.5.5, scala2.13 + spark4.1.1.">
                         <condition>
                           <not>
                             <isset property="combo.valid" />
