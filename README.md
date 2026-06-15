@@ -63,6 +63,18 @@ mvn clean package
 | `-p` | Include Python     |                            |
 | `-h` | Display help       |                            |
 
+By default the image is built for the host architecture only and loaded into
+the local docker daemon. Set `PUSH=true` to build a multi-arch image
+(`linux/amd64` + `linux/arm64`) and push it as a manifest list to the registry
+named by `IMAGE_NAME`:
+
+```bash
+PUSH=true ./scripts/createImage.sh
+```
+
+This lets a single image name serve mixed environments, for example building
+on an Apple Silicon Mac (native arm64, no emulation) while amd64 cluster nodes
+pull the amd64 variant of the same tag.
 
 You can store defaults in `scripts/config.sh`:
 
