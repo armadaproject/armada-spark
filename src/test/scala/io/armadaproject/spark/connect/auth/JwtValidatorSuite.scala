@@ -93,6 +93,10 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
     an[IllegalStateException] should be thrownBy JwtValidator.parseJwksUri(body)
   }
 
+  test("parseJwksUri throws on malformed discovery JSON") {
+    an[IllegalStateException] should be thrownBy JwtValidator.parseJwksUri("not json")
+  }
+
   test("accepts a token whose aud matches the configured audience") {
     val token = JWT
       .create()
