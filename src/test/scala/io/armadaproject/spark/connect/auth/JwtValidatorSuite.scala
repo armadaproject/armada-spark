@@ -23,6 +23,7 @@ import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
 import java.util.Date
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
@@ -43,7 +44,7 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
   private val issuer = "https://idp.test/"
 
   private def buildVerifier(audience: String = null) = {
-    val b = JWT.require(alg).withIssuer(issuer)
+    val b = JWT.require(alg).withIssuer(issuer).withClaimPresence(RegisteredClaims.EXPIRES_AT)
     if (audience != null) b.withAudience(audience)
     b.build()
   }
@@ -79,6 +80,17 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
       .withIssuer(issuer)
       .withSubject("alice@example.com")
       .withExpiresAt(new Date(System.currentTimeMillis() - 60000))
+      .sign(alg)
+
+    val validator = new JwtValidator(buildVerifier(), issuer, null)
+    a[JWTVerificationException] should be thrownBy validator.verify(token)
+  }
+
+  test("rejects a token with no exp claim") {
+    val token = JWT
+      .create()
+      .withIssuer(issuer)
+      .withSubject("alice@example.com")
       .sign(alg)
 
     val validator = new JwtValidator(buildVerifier(), issuer, null)
@@ -166,6 +178,13 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
 
   test("SparkConf constructor rejects a non-https issuer when discovery is used") {
     val conf = new SparkConf(false).set("spark.armada.connect.oidc.issuerUrl", "http://idp.test/")
+    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  }
+
+  test("SparkConf constructor rejects a non-https issuer even with an explicit jwksUrl override") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.connect.oidc.issuerUrl", "http://idp.test/")
+      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
     an[IllegalStateException] should be thrownBy new JwtValidator(conf)
   }
 

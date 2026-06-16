@@ -250,15 +250,19 @@ Conf reference:
 | Conf | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `spark.armada.connect.owner` | yes | none | The `sub` value the bearer token must carry to be accepted. Driver fails to start if unset. |
-| `spark.armada.connect.oidc.issuerUrl` | yes | none | OIDC issuer used for `iss` validation and JWKS discovery at `<issuer>/.well-known/openid-configuration`. |
+| `spark.armada.connect.oidc.issuerUrl` | yes | none | OIDC issuer used for `iss` validation and JWKS discovery at `<issuer>/.well-known/openid-configuration`. Must be `https`. |
 | `spark.armada.connect.oidc.audience` | no | none | If set, the `aud` claim is enforced. |
-| `spark.armada.connect.oidc.jwksUrl` | no | discovered | Skip OIDC discovery and use this JWKS URL directly. |
+| `spark.armada.connect.oidc.jwksUrl` | no | discovered | Skip OIDC discovery and use this JWKS URL directly. Must be `https`. |
 
 At runtime the interceptor:
 
 - requires a bearer JWT on every gRPC call,
-- validates signature (RS256 against the IdP's JWKS), issuer, expiry, and (when set) audience,
+- validates signature, issuer, expiry, and (when set) audience,
 - compares the token's `sub` claim against `spark.armada.connect.owner`, rejecting non-matches with `PERMISSION_DENIED`.
+
+Only RS256-signed tokens are supported; tokens signed with other algorithms (e.g. ES256) are
+rejected. A token must carry an `exp` claim: one without an expiry is rejected rather than treated
+as non-expiring.
 
 Obtain a JWT from your OIDC provider and pass it from the client:
 

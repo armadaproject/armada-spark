@@ -20,6 +20,7 @@ import com.auth0.jwk.JwkProvider;
 import com.auth0.jwk.JwkProviderBuilder;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
+import com.auth0.jwt.RegisteredClaims;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
@@ -33,12 +34,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
@@ -53,6 +56,9 @@ public class JwtValidator {
     private final String audience;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** Upper bound on an OIDC discovery document; real docs are a few KB. */
+    private static final long MAX_DISCOVERY_BYTES = 1_048_576L; // 1 MiB
 
     /** Package-private constructor for tests: pass a fully-built verifier. */
     JwtValidator(JWTVerifier verifier, String issuerUrl, String audience) {
@@ -72,6 +78,9 @@ public class JwtValidator {
             throw new IllegalStateException(CONF_ISSUER + " must be set");
         }
         issuer = issuer.trim(); // tolerate stray whitespace from CLI/YAML templating
+        // The issuer is the trust anchor (matched against the token's `iss`); require https
+        // regardless of how the JWKS URL is sourced, so an http issuer can never pass silently.
+        requireHttps(issuer, "OIDC issuer URL");
         String jwksOverride = conf.get(CONF_JWKS, null);
         if (jwksOverride != null) {
             jwksOverride = jwksOverride.trim();
@@ -99,7 +108,10 @@ public class JwtValidator {
         }
 
         Algorithm algorithm = Algorithm.RSA256(new RSAKeyProviderFromJwks(jwkProvider));
-        Verification builder = JWT.require(algorithm).withIssuer(issuer);
+        // Require `exp` to be present: java-jwt only enforces expiry when the claim exists, so
+        // a token minted without `exp` would otherwise be accepted forever.
+        Verification builder =
+                JWT.require(algorithm).withIssuer(issuer).withClaimPresence(RegisteredClaims.EXPIRES_AT);
         if (aud != null && !aud.isBlank()) {
             builder.withAudience(aud);
         }
@@ -127,8 +139,7 @@ public class JwtValidator {
         if (overrideJwksUrl != null && !overrideJwksUrl.isBlank()) {
             return overrideJwksUrl;
         }
-        // Discovery fetches over the network, so the issuer itself must be tamper-resistant.
-        requireHttps(issuerUrl, "OIDC issuer URL");
+        // Issuer https is enforced unconditionally by the constructor before we get here.
         String discoveryUrl = trimTrailingSlash(issuerUrl) + "/.well-known/openid-configuration";
         return fetchJwksUri(discoveryUrl);
     }
@@ -149,12 +160,22 @@ public class JwtValidator {
                     .header("Accept", "application/json")
                     .GET()
                     .build();
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<InputStream> resp = client.send(req, HttpResponse.BodyHandlers.ofInputStream());
             if (resp.statusCode() / 100 != 2) {
                 throw new IllegalStateException(
                         "OIDC discovery returned HTTP " + resp.statusCode() + " from " + discoveryUrl);
             }
-            return parseJwksUri(resp.body());
+            // Cap the body so a hostile/misconfigured endpoint can't OOM us during startup.
+            String body;
+            try (InputStream in = resp.body()) {
+                byte[] bytes = in.readNBytes((int) MAX_DISCOVERY_BYTES + 1);
+                if (bytes.length > MAX_DISCOVERY_BYTES) {
+                    throw new IllegalStateException("OIDC discovery document from " + discoveryUrl
+                            + " exceeds " + MAX_DISCOVERY_BYTES + " bytes");
+                }
+                body = new String(bytes, StandardCharsets.UTF_8);
+            }
+            return parseJwksUri(body);
         } catch (IOException e) {
             throw new IllegalStateException("OIDC discovery failed for " + discoveryUrl, e);
         } catch (InterruptedException e) {
