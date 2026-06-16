@@ -175,6 +175,7 @@ if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
         --conf spark.armada.oauth.sslUpstreamInsecureSkipVerify="${OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY:-false}"
         --conf spark.armada.oauth.cookieCsrfPerRequest="${OAUTH_COOKIE_CSRF_PER_REQUEST:-false}"
         --conf spark.armada.oauth.skipVerify="${OAUTH_SKIP_VERIFY:-false}"
+        --conf spark.armada.oauth.cookieSecure="${OAUTH_COOKIE_SECURE:-false}"
     )
     # Optional entries: only emit when caller explicitly sets the env var so we
     # don't ship inappropriate defaults (e.g. dex example issuer or fake cert).
@@ -186,9 +187,6 @@ if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
     fi
     if [ -n "${OAUTH_REDIRECT_URL:-}" ]; then
         OAUTH_CONF+=(--conf "spark.armada.oauth.redirectUrl=$OAUTH_REDIRECT_URL")
-    fi
-    if [ -n "${OAUTH_COOKIE_SECURE:-}" ]; then
-        OAUTH_CONF+=(--conf "spark.armada.oauth.cookieSecure=$OAUTH_COOKIE_SECURE")
     fi
     if [ -n "${OAUTH_COOKIE_CSRF_EXPIRE:-}" ]; then
         OAUTH_CONF+=(--conf "spark.armada.oauth.cookieCsrfExpire=$OAUTH_COOKIE_CSRF_EXPIRE")
