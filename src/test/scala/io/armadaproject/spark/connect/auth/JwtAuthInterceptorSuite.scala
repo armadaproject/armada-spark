@@ -108,6 +108,16 @@ class JwtAuthInterceptorSuite extends AnyFunSuite with Matchers {
     verify(handler, never()).startCall(any(), any())
   }
 
+  test("rejects with UNAUTHENTICATED when the bearer token is empty") {
+    val interceptor     = new JwtAuthInterceptor(validatorFor(), "alice@example.com")
+    val (call, handler) = runInterceptor(interceptor, Some("Bearer   "))
+
+    val statusCap = ArgumentCaptor.forClass(classOf[Status])
+    verify(call).close(statusCap.capture(), any(classOf[Metadata]))
+    statusCap.getValue.getCode shouldBe Status.UNAUTHENTICATED.getCode
+    verify(handler, never()).startCall(any(), any())
+  }
+
   test("rejects with UNAUTHENTICATED when JWT signature is invalid") {
     val wrongKeyPair = {
       val gen = KeyPairGenerator.getInstance("RSA"); gen.initialize(2048); gen.generateKeyPair()
