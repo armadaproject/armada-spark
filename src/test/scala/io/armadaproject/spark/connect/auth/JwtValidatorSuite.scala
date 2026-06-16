@@ -16,6 +16,8 @@
  */
 package io.armadaproject.spark.connect.auth
 
+import java.net.InetSocketAddress
+import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
 import java.util.Date
@@ -23,6 +25,7 @@ import java.util.Date
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
+import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -159,5 +162,68 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
       .set("spark.armada.connect.oidc.issuerUrl", issuer)
       .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
     noException should be thrownBy new JwtValidator(conf)
+  }
+
+  test("SparkConf constructor rejects a non-https issuer when discovery is used") {
+    val conf = new SparkConf(false).set("spark.armada.connect.oidc.issuerUrl", "http://idp.test/")
+    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  }
+
+  // --- networked discovery (fetchJwksUri) against a local HTTP server ---
+
+  /** Start a throwaway loopback HTTP server, run `body` with its base URL, then stop it. */
+  private def withServer(routes: PartialFunction[String, (Int, Map[String, String], String)])(
+      body: String => Unit
+  ): Unit = {
+    val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext(
+      "/",
+      new HttpHandler {
+        override def handle(ex: HttpExchange): Unit = {
+          val (code, headers, payload) =
+            routes.applyOrElse(
+              ex.getRequestURI.getPath,
+              (_: String) => (404, Map.empty[String, String], "")
+            )
+          headers.foreach { case (k, v) => ex.getResponseHeaders.add(k, v) }
+          val bytes = payload.getBytes(StandardCharsets.UTF_8)
+          // -1 length for redirects/empty bodies so no content is written.
+          ex.sendResponseHeaders(code, if (bytes.isEmpty) -1 else bytes.length.toLong)
+          if (bytes.nonEmpty) {
+            val os = ex.getResponseBody
+            os.write(bytes)
+            os.close()
+          }
+          ex.close()
+        }
+      }
+    )
+    server.start()
+    try body(s"http://127.0.0.1:${server.getAddress.getPort}")
+    finally server.stop(0)
+  }
+
+  private val discoveryPath = "/.well-known/openid-configuration"
+  private val discoveryDoc = """{"issuer":"https://idp.test/","jwks_uri":"https://idp.test/jwks"}"""
+
+  test("fetchJwksUri returns jwks_uri from a 200 discovery response") {
+    withServer({ case `discoveryPath` => (200, Map.empty, discoveryDoc) }) { base =>
+      JwtValidator.fetchJwksUri(base + discoveryPath) shouldBe "https://idp.test/jwks"
+    }
+  }
+
+  test("fetchJwksUri throws on a non-2xx discovery response") {
+    withServer({ case `discoveryPath` => (500, Map.empty, "boom") }) { base =>
+      an[IllegalStateException] should be thrownBy JwtValidator.fetchJwksUri(base + discoveryPath)
+    }
+  }
+
+  test("fetchJwksUri follows redirects during discovery") {
+    withServer({
+      case `discoveryPath`   => (302, Map("Location" -> "/real-discovery"), "")
+      case "/real-discovery" => (200, Map.empty, discoveryDoc)
+    }) { base =>
+      JwtValidator.fetchJwksUri(base + discoveryPath) shouldBe "https://idp.test/jwks"
+    }
   }
 }

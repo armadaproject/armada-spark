@@ -85,7 +85,7 @@ public class JwtValidator {
         }
 
         String jwksUrl = resolveJwksUrl(issuer, jwksOverride);
-        requireHttps(jwksUrl);
+        requireHttps(jwksUrl, "JWKS URL");
 
         JwkProvider jwkProvider;
         try {
@@ -127,7 +127,18 @@ public class JwtValidator {
         if (overrideJwksUrl != null && !overrideJwksUrl.isBlank()) {
             return overrideJwksUrl;
         }
+        // Discovery fetches over the network, so the issuer itself must be tamper-resistant.
+        requireHttps(issuerUrl, "OIDC issuer URL");
         String discoveryUrl = trimTrailingSlash(issuerUrl) + "/.well-known/openid-configuration";
+        return fetchJwksUri(discoveryUrl);
+    }
+
+    /**
+     * Fetch an OIDC discovery document and return its {@code jwks_uri}. Package-private so the
+     * networked behavior (redirects, non-2xx, malformed body) can be exercised against a local
+     * HTTP server in tests; scheme enforcement lives in the callers.
+     */
+    static String fetchJwksUri(String discoveryUrl) {
         try {
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(5))
@@ -170,19 +181,19 @@ public class JwtValidator {
     }
 
     /**
-     * Reject non-HTTPS JWKS URLs. Fetching signing keys over plaintext would let a
-     * man-in-the-middle substitute keys and forge tokens, defeating verification.
+     * Reject non-HTTPS URLs. Fetching discovery docs or signing keys over plaintext would
+     * let a man-in-the-middle substitute keys and forge tokens, defeating verification.
      */
-    private static void requireHttps(String jwksUrl) {
+    private static void requireHttps(String url, String label) {
         String scheme;
         try {
-            scheme = URI.create(jwksUrl).getScheme();
+            scheme = URI.create(url).getScheme();
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Invalid jwks URL: " + jwksUrl, e);
+            throw new IllegalStateException("Invalid " + label + ": " + url, e);
         }
         if (!"https".equalsIgnoreCase(scheme)) {
             throw new IllegalStateException(
-                    "JWKS URL must use https to prevent key-substitution attacks: " + jwksUrl);
+                    label + " must use https to prevent key-substitution attacks: " + url);
         }
     }
 
