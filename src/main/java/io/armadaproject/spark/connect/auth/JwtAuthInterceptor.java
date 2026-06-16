@@ -24,6 +24,7 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkEnv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,25 @@ public class JwtAuthInterceptor implements ServerInterceptor {
 
     static final String CONF_OWNER = "spark.armada.connect.owner";
 
-    /** Reflection-friendly constructor. Reads the owner from the SparkConf. */
+    /**
+     * No-arg constructor used by Spark Connect's interceptor registry: it instantiates
+     * {@code spark.connect.grpc.interceptor.classes} via the default constructor only, so config
+     * is read from the active {@link SparkConf} obtained from {@link SparkEnv}.
+     */
+    public JwtAuthInterceptor() {
+        this(activeConf());
+    }
+
+    private static SparkConf activeConf() {
+        SparkEnv env = SparkEnv.get();
+        if (env == null) {
+            throw new IllegalStateException(
+                    "SparkEnv is not initialized; cannot read " + CONF_OWNER);
+        }
+        return env.conf();
+    }
+
+    /** Reads the owner from an explicit SparkConf (used by the no-arg ctor and tests). */
     public JwtAuthInterceptor(SparkConf conf) {
         String configuredOwner = conf.get(CONF_OWNER, null);
         if (configuredOwner == null || configuredOwner.isBlank()) {

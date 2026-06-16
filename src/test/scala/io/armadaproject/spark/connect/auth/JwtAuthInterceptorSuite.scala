@@ -184,6 +184,14 @@ class JwtAuthInterceptorSuite extends AnyFunSuite with Matchers {
     an[IllegalStateException] should be thrownBy new JwtAuthInterceptor(validatorFor(), "  ")
   }
 
+  test("exposes a public no-arg constructor for Spark Connect's interceptor registry") {
+    // Spark Connect instantiates spark.connect.grpc.interceptor.classes by finding a
+    // zero-arg constructor; a SparkConf-only constructor is not used. Guard that contract.
+    val ctor = classOf[JwtAuthInterceptor].getConstructors.find(_.getParameterCount == 0)
+    ctor.isDefined shouldBe true
+    java.lang.reflect.Modifier.isPublic(ctor.get.getModifiers) shouldBe true
+  }
+
   test("SparkConf constructor throws when owner is missing") {
     val conf = new SparkConf(false)
       .set("spark.armada.connect.oidc.issuerUrl", issuer)
