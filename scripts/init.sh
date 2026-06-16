@@ -161,17 +161,38 @@ OAUTH_CONF=()
 if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
     OAUTH_CONF=(
         --conf spark.armada.driver.ingress.enabled=true
-        --conf spark.armada.driver.ingress.tls.enabled=false
-        --conf "spark.armada.driver.ingress.annotations=nginx.ingress.kubernetes.io/server-alias=${OAUTH_INGRESS_HOST:-spark-ui.test}"
+        --conf spark.armada.driver.ingress.tls.enabled=${OAUTH_INGRESS_TLS_ENABLED:-false}
         --conf spark.armada.oauth.enabled=true
         --conf spark.armada.oauth.clientId="${OAUTH_CLIENT_ID:-spark-ui}"
         --conf spark.armada.oauth.clientSecret="${OAUTH_CLIENT_SECRET:-dex-spark-ui-secret}"
         --conf spark.armada.oauth.issuerUrl="${OAUTH_ISSUER_URL:-http://10.0.0.109:5556/dex}"
-        --conf spark.armada.oauth.redirectUrl="${OAUTH_REDIRECT_URL:-http://spark-ui.test:9999/oauth2/callback}"
         --conf spark.armada.oauth.emailDomain="${OAUTH_EMAIL_DOMAIN:-*}"
-        --conf spark.armada.oauth.cookieSecure="${OAUTH_COOKIE_SECURE:-false}"
         --conf spark.armada.oauth.passHostHeader="${OAUTH_PASS_HOST_HEADER:-true}"
+        --conf spark.armada.oauth.proxy.image="${OAUTH_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.5.1}"
+        --conf spark.armada.oauth.providerDisplayName="${OAUTH_PROVIDER_DISPLAY_NAME:-OAuth Provider}"
+        --conf spark.armada.oauth.skipJwtBearerTokens=${OAUTH_SKIP_JWT_BEARER_TOKENS:-false}
+        --conf spark.armada.oauth.skipProviderButton=${OAUTH_SKIP_PROVIDER_BUTTON:-false}
+        --conf spark.armada.oauth.sslUpstreamInsecureSkipVerify=${OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY:-false}
+        --conf spark.armada.oauth.cookieCsrfPerRequest=${OAUTH_COOKIE_CSRF_PER_REQUEST:-false}
+        --conf spark.armada.oauth.skipVerify=${OAUTH_SKIP_VERIFY:-false}
     )
+    # Optional entries: only emit when caller explicitly sets the env var so we
+    # don't ship inappropriate defaults (e.g. dex example issuer or fake cert).
+    if [ -n "${OAUTH_INGRESS_CERT_NAME:-}" ]; then
+        OAUTH_CONF+=(--conf "spark.armada.driver.ingress.certName=$OAUTH_INGRESS_CERT_NAME")
+    fi
+    if [ -n "${OAUTH_INGRESS_HOST:-}" ]; then
+        OAUTH_CONF+=(--conf "spark.armada.driver.ingress.annotations=nginx.ingress.kubernetes.io/server-alias=$OAUTH_INGRESS_HOST")
+    fi
+    if [ -n "${OAUTH_REDIRECT_URL:-}" ]; then
+        OAUTH_CONF+=(--conf "spark.armada.oauth.redirectUrl=$OAUTH_REDIRECT_URL")
+    fi
+    if [ -n "${OAUTH_COOKIE_SECURE:-}" ]; then
+        OAUTH_CONF+=(--conf "spark.armada.oauth.cookieSecure=$OAUTH_COOKIE_SECURE")
+    fi
+    if [ -n "${OAUTH_COOKIE_CSRF_EXPIRE:-}" ]; then
+        OAUTH_CONF+=(--conf "spark.armada.oauth.cookieCsrfExpire=$OAUTH_COOKIE_CSRF_EXPIRE")
+    fi
 fi
 
 # Build deploy-mode specific arguments array
