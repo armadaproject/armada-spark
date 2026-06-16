@@ -147,6 +147,13 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
     an[IllegalStateException] should be thrownBy new JwtValidator(conf)
   }
 
+  test("SparkConf constructor rejects a non-https jwksUrl") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.connect.oidc.issuerUrl", issuer)
+      .set("spark.armada.connect.oidc.jwksUrl", "http://idp.test/jwks")
+    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  }
+
   test("SparkConf constructor builds with an explicit jwksUrl (no discovery)") {
     val conf = new SparkConf(false)
       .set("spark.armada.connect.oidc.issuerUrl", issuer)

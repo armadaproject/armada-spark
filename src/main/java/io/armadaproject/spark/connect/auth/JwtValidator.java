@@ -85,6 +85,7 @@ public class JwtValidator {
         }
 
         String jwksUrl = resolveJwksUrl(issuer, jwksOverride);
+        requireHttps(jwksUrl);
 
         JwkProvider jwkProvider;
         try {
@@ -130,6 +131,7 @@ public class JwtValidator {
         try {
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(5))
+                    .followRedirects(HttpClient.Redirect.NORMAL) // follow http->https & aliases, never downgrade
                     .build();
             HttpRequest req = HttpRequest.newBuilder(URI.create(discoveryUrl))
                     .timeout(Duration.ofSeconds(10))
@@ -165,6 +167,23 @@ public class JwtValidator {
 
     private static String trimTrailingSlash(String s) {
         return (s != null && s.endsWith("/")) ? s.substring(0, s.length() - 1) : s;
+    }
+
+    /**
+     * Reject non-HTTPS JWKS URLs. Fetching signing keys over plaintext would let a
+     * man-in-the-middle substitute keys and forge tokens, defeating verification.
+     */
+    private static void requireHttps(String jwksUrl) {
+        String scheme;
+        try {
+            scheme = URI.create(jwksUrl).getScheme();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid jwks URL: " + jwksUrl, e);
+        }
+        if (!"https".equalsIgnoreCase(scheme)) {
+            throw new IllegalStateException(
+                    "JWKS URL must use https to prevent key-substitution attacks: " + jwksUrl);
+        }
     }
 
     private static final class RSAKeyProviderFromJwks implements RSAKeyProvider {
