@@ -16,7 +16,7 @@ ALLOCATION_MODE="${ALLOCATION_MODE:-dynamic}"
 # s3
 ARMADA_S3_BUCKET_NAME=${ARMADA_S3_BUCKET_NAME:-kafka-s3}
 ARMADA_S3_BUCKET_ENDPOINT=${ARMADA_S3_BUCKET_ENDPOINT:-http://192.168.59.6}
-ARMADA_S3_USER_DIR=${ARMADA_USER_DIR:-s3a://$ARMADA_S3_BUCKET_NAME/$USER}
+ARMADA_S3_USER_DIR=${ARMADA_S3_USER_DIR:-s3a://$ARMADA_S3_BUCKET_NAME/$USER}
 
 # benchmark
 ARMADA_BENCHMARK_DATA=${ARMADA_BENCHMARK_DATA:-s3a://kafka-s3/data/benchmark/data/10t}
@@ -161,7 +161,7 @@ OAUTH_CONF=()
 if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
     OAUTH_CONF=(
         --conf spark.armada.driver.ingress.enabled=true
-        --conf spark.armada.driver.ingress.tls.enabled=${OAUTH_INGRESS_TLS_ENABLED:-false}
+        --conf spark.armada.driver.ingress.tls.enabled="${OAUTH_INGRESS_TLS_ENABLED:-false}"
         --conf spark.armada.oauth.enabled=true
         --conf spark.armada.oauth.clientId="${OAUTH_CLIENT_ID:-spark-ui}"
         --conf spark.armada.oauth.clientSecret="${OAUTH_CLIENT_SECRET:-dex-spark-ui-secret}"
@@ -170,11 +170,11 @@ if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
         --conf spark.armada.oauth.passHostHeader="${OAUTH_PASS_HOST_HEADER:-true}"
         --conf spark.armada.oauth.proxy.image="${OAUTH_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.5.1}"
         --conf spark.armada.oauth.providerDisplayName="${OAUTH_PROVIDER_DISPLAY_NAME:-OAuth Provider}"
-        --conf spark.armada.oauth.skipJwtBearerTokens=${OAUTH_SKIP_JWT_BEARER_TOKENS:-false}
-        --conf spark.armada.oauth.skipProviderButton=${OAUTH_SKIP_PROVIDER_BUTTON:-false}
-        --conf spark.armada.oauth.sslUpstreamInsecureSkipVerify=${OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY:-false}
-        --conf spark.armada.oauth.cookieCsrfPerRequest=${OAUTH_COOKIE_CSRF_PER_REQUEST:-false}
-        --conf spark.armada.oauth.skipVerify=${OAUTH_SKIP_VERIFY:-false}
+        --conf spark.armada.oauth.skipJwtBearerTokens="${OAUTH_SKIP_JWT_BEARER_TOKENS:-false}"
+        --conf spark.armada.oauth.skipProviderButton="${OAUTH_SKIP_PROVIDER_BUTTON:-false}"
+        --conf spark.armada.oauth.sslUpstreamInsecureSkipVerify="${OAUTH_SSL_UPSTREAM_INSECURE_SKIP_VERIFY:-false}"
+        --conf spark.armada.oauth.cookieCsrfPerRequest="${OAUTH_COOKIE_CSRF_PER_REQUEST:-false}"
+        --conf spark.armada.oauth.skipVerify="${OAUTH_SKIP_VERIFY:-false}"
     )
     # Optional entries: only emit when caller explicitly sets the env var so we
     # don't ship inappropriate defaults (e.g. dex example issuer or fake cert).
