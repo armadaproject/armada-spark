@@ -439,6 +439,17 @@
                                     </excludes>
                                 </filter>
                                 <filter>
+                                    <!-- The Spark Connect auth interceptor lives ONLY in the
+                                         connect-auth jar, where gRPC is relocated to Spark Connect's
+                                         namespace. Exclude it here so this jar's copy (with the main
+                                         io.armadaproject.shaded relocation) can't shadow it on the
+                                         classpath and break the interceptor-registry cast. -->
+                                    <artifact>${project.groupId}:${project.artifactId}</artifact>
+                                    <excludes>
+                                        <exclude>io/armadaproject/spark/connect/auth/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
                                     <artifact>*:*</artifact>
                                     <excludes>
                                         <exclude>META-INF/io.netty.versions.properties</exclude>

@@ -73,6 +73,9 @@ public class JwtValidator {
         }
         String jwksOverride = conf.get(CONF_JWKS, null);
         String aud          = conf.get(CONF_AUDIENCE, null);
+        if (aud != null && aud.isBlank()) {
+            aud = null; // treat blank as unset, so audience() and logs match enforcement
+        }
 
         String jwksUrl = resolveJwksUrl(issuer, jwksOverride);
 

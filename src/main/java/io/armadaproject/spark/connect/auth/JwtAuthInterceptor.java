@@ -87,7 +87,7 @@ public class JwtAuthInterceptor implements ServerInterceptor {
 
         // Identity is the IdP-assigned `sub` claim (immutable, not self-assertable).
         String identity = jwt.getSubject();
-        if (identity == null) {
+        if (identity == null || identity.isBlank()) {
             return reject(call, Status.UNAUTHENTICATED, "Token has no subject claim");
         }
         if (!owner.equals(identity)) {
@@ -104,7 +104,8 @@ public class JwtAuthInterceptor implements ServerInterceptor {
         if (header.length() < BEARER_PREFIX.length()) return null;
         String prefix = header.substring(0, BEARER_PREFIX.length());
         if (!prefix.equalsIgnoreCase(BEARER_PREFIX)) return null;
-        return header.substring(BEARER_PREFIX.length()).trim();
+        String token = header.substring(BEARER_PREFIX.length()).trim();
+        return token.isEmpty() ? null : token;
     }
 
     private static <ReqT, RespT> ServerCall.Listener<ReqT> reject(

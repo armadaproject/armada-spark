@@ -23,6 +23,7 @@ import java.util.Date
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
+import org.apache.spark.SparkConf
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
@@ -131,5 +132,21 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
     val verifier  = JWT.require(alg).withIssuer(issuer).withAudience("spark-connect").build()
     val validator = new JwtValidator(verifier, issuer, "spark-connect")
     a[JWTVerificationException] should be thrownBy validator.verify(token)
+  }
+
+  test("SparkConf constructor throws when issuer is missing") {
+    an[IllegalStateException] should be thrownBy new JwtValidator(new SparkConf(false))
+  }
+
+  test("SparkConf constructor throws when issuer is blank") {
+    val conf = new SparkConf(false).set("spark.armada.connect.oidc.issuerUrl", "  ")
+    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  }
+
+  test("SparkConf constructor builds with an explicit jwksUrl (no discovery)") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.connect.oidc.issuerUrl", issuer)
+      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
+    noException should be thrownBy new JwtValidator(conf)
   }
 }

@@ -23,6 +23,7 @@ import java.util.Date
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
+import org.apache.spark.SparkConf
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, never, verify}
@@ -162,5 +163,20 @@ class JwtAuthInterceptorSuite extends AnyFunSuite with Matchers {
 
   test("throws when owner is blank") {
     an[IllegalStateException] should be thrownBy new JwtAuthInterceptor(validatorFor(), "  ")
+  }
+
+  test("SparkConf constructor throws when owner is missing") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.connect.oidc.issuerUrl", issuer)
+      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
+    an[IllegalStateException] should be thrownBy new JwtAuthInterceptor(conf)
+  }
+
+  test("SparkConf constructor builds when owner and issuer are set") {
+    val conf = new SparkConf(false)
+      .set("spark.armada.connect.owner", "alice@example.com")
+      .set("spark.armada.connect.oidc.issuerUrl", issuer)
+      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
+    noException should be thrownBy new JwtAuthInterceptor(conf)
   }
 }
