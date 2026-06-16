@@ -87,6 +87,15 @@ class JwtAuthInterceptorSuite extends AnyFunSuite with Matchers {
     verify(handler).startCall(any(), any())
   }
 
+  test("trims surrounding whitespace from the configured owner") {
+    val interceptor = new JwtAuthInterceptor(validatorFor(), "  alice@example.com  ")
+    val (call, handler) =
+      runInterceptor(interceptor, Some("Bearer " + tokenFor("alice@example.com")))
+
+    verify(call, never()).close(any(), any())
+    verify(handler).startCall(any(), any())
+  }
+
   test("rejects with PERMISSION_DENIED when the JWT subject does not match the owner") {
     val interceptor = new JwtAuthInterceptor(validatorFor(), "alice@example.com")
     val (call, handler) =

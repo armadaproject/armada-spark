@@ -47,7 +47,7 @@ public class JwtAuthInterceptor implements ServerInterceptor {
             throw new IllegalStateException(
                     CONF_OWNER + " must be set to use JwtAuthInterceptor");
         }
-        this.owner = configuredOwner;
+        this.owner = configuredOwner.trim();
         this.validator = new JwtValidator(conf);
         LOG.info("JwtAuthInterceptor initialized: owner={}", owner);
     }
@@ -59,7 +59,7 @@ public class JwtAuthInterceptor implements ServerInterceptor {
                     "owner must not be null or blank; set " + CONF_OWNER);
         }
         this.validator = validator;
-        this.owner = owner;
+        this.owner = owner.trim();
     }
 
     @Override

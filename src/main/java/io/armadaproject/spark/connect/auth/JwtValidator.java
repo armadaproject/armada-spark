@@ -71,10 +71,17 @@ public class JwtValidator {
         if (issuer == null || issuer.isBlank()) {
             throw new IllegalStateException(CONF_ISSUER + " must be set");
         }
+        issuer = issuer.trim(); // tolerate stray whitespace from CLI/YAML templating
         String jwksOverride = conf.get(CONF_JWKS, null);
-        String aud          = conf.get(CONF_AUDIENCE, null);
-        if (aud != null && aud.isBlank()) {
-            aud = null; // treat blank as unset, so audience() and logs match enforcement
+        if (jwksOverride != null) {
+            jwksOverride = jwksOverride.trim();
+        }
+        String aud = conf.get(CONF_AUDIENCE, null);
+        if (aud != null) {
+            aud = aud.trim();
+            if (aud.isBlank()) {
+                aud = null; // treat blank as unset, so audience() and logs match enforcement
+            }
         }
 
         String jwksUrl = resolveJwksUrl(issuer, jwksOverride);
