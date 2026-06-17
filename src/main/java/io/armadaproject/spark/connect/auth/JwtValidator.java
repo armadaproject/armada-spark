@@ -29,7 +29,6 @@ import com.auth0.jwt.interfaces.Verification;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.apache.spark.SparkConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,33 +66,14 @@ public class JwtValidator {
         this.audience  = audience;
     }
 
-    static final String CONF_ISSUER   = "spark.armada.connect.oidc.issuerUrl";
-    static final String CONF_JWKS     = "spark.armada.connect.oidc.jwksUrl";
-    static final String CONF_AUDIENCE = "spark.armada.connect.oidc.audience";
-
-    /** Reflection-friendly constructor. Reads all configuration from the SparkConf. */
-    public JwtValidator(SparkConf conf) {
-        String issuer = conf.get(CONF_ISSUER, null);
-        if (issuer == null || issuer.isBlank()) {
-            throw new IllegalStateException(CONF_ISSUER + " must be set");
-        }
-        issuer = issuer.trim(); // tolerate stray whitespace from CLI/YAML templating
+    /** Builds the verifier from already-parsed {@link AuthConfig} (issuer/jwks/audience). */
+    JwtValidator(AuthConfig cfg) {
+        String issuer = cfg.issuerUrl();
         // The issuer is the trust anchor (matched against the token's `iss`); require https
         // regardless of how the JWKS URL is sourced, so an http issuer can never pass silently.
         requireHttps(issuer, "OIDC issuer URL");
-        String jwksOverride = conf.get(CONF_JWKS, null);
-        if (jwksOverride != null) {
-            jwksOverride = jwksOverride.trim();
-        }
-        String aud = conf.get(CONF_AUDIENCE, null);
-        if (aud != null) {
-            aud = aud.trim();
-            if (aud.isBlank()) {
-                aud = null; // treat blank as unset, so audience() and logs match enforcement
-            }
-        }
 
-        String jwksUrl = resolveJwksUrl(issuer, jwksOverride);
+        String jwksUrl = resolveJwksUrl(issuer, cfg.jwksUrl());
         requireHttps(jwksUrl, "JWKS URL");
 
         JwkProvider jwkProvider;
@@ -112,7 +92,8 @@ public class JwtValidator {
         // a token minted without `exp` would otherwise be accepted forever.
         Verification builder =
                 JWT.require(algorithm).withIssuer(issuer).withClaimPresence(RegisteredClaims.EXPIRES_AT);
-        if (aud != null && !aud.isBlank()) {
+        String aud = cfg.audience(); // null when unset/blank (normalized by AuthConfig)
+        if (aud != null) {
             builder.withAudience(aud);
         }
 

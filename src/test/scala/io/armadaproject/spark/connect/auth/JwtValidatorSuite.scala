@@ -153,39 +153,36 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
     a[JWTVerificationException] should be thrownBy validator.verify(token)
   }
 
-  test("SparkConf constructor throws when issuer is missing") {
-    an[IllegalStateException] should be thrownBy new JwtValidator(new SparkConf(false))
+  private def authConf(issuerUrl: String, jwksUrl: String = null): SparkConf = {
+    val c = new SparkConf(false)
+      .set("spark.armada.connect.owner", "alice@example.com")
+      .set("spark.armada.connect.oidc.issuerUrl", issuerUrl)
+    if (jwksUrl != null) c.set("spark.armada.connect.oidc.jwksUrl", jwksUrl)
+    c
   }
 
-  test("SparkConf constructor throws when issuer is blank") {
-    val conf = new SparkConf(false).set("spark.armada.connect.oidc.issuerUrl", "  ")
-    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  test("rejects a non-https jwksUrl") {
+    an[IllegalStateException] should be thrownBy new JwtValidator(
+      AuthConfig.from(authConf(issuer, "http://idp.test/jwks"))
+    )
   }
 
-  test("SparkConf constructor rejects a non-https jwksUrl") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.connect.oidc.issuerUrl", issuer)
-      .set("spark.armada.connect.oidc.jwksUrl", "http://idp.test/jwks")
-    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  test("builds with an explicit jwksUrl (no discovery)") {
+    noException should be thrownBy new JwtValidator(
+      AuthConfig.from(authConf(issuer, "https://idp.test/jwks"))
+    )
   }
 
-  test("SparkConf constructor builds with an explicit jwksUrl (no discovery)") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.connect.oidc.issuerUrl", issuer)
-      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
-    noException should be thrownBy new JwtValidator(conf)
+  test("rejects a non-https issuer when discovery is used") {
+    an[IllegalStateException] should be thrownBy new JwtValidator(
+      AuthConfig.from(authConf("http://idp.test/"))
+    )
   }
 
-  test("SparkConf constructor rejects a non-https issuer when discovery is used") {
-    val conf = new SparkConf(false).set("spark.armada.connect.oidc.issuerUrl", "http://idp.test/")
-    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
-  }
-
-  test("SparkConf constructor rejects a non-https issuer even with an explicit jwksUrl override") {
-    val conf = new SparkConf(false)
-      .set("spark.armada.connect.oidc.issuerUrl", "http://idp.test/")
-      .set("spark.armada.connect.oidc.jwksUrl", "https://idp.test/jwks")
-    an[IllegalStateException] should be thrownBy new JwtValidator(conf)
+  test("rejects a non-https issuer even with an explicit jwksUrl override") {
+    an[IllegalStateException] should be thrownBy new JwtValidator(
+      AuthConfig.from(authConf("http://idp.test/", "https://idp.test/jwks"))
+    )
   }
 
   // --- networked discovery (fetchJwksUri) against a local HTTP server ---

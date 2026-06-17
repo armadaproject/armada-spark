@@ -39,8 +39,6 @@ public class JwtAuthInterceptor implements ServerInterceptor {
     private final JwtValidator validator;
     private final String owner;
 
-    static final String CONF_OWNER = "spark.armada.connect.owner";
-
     /**
      * No-arg constructor used by Spark Connect's interceptor registry: it instantiates
      * {@code spark.connect.grpc.interceptor.classes} via the default constructor only, so config
@@ -54,20 +52,19 @@ public class JwtAuthInterceptor implements ServerInterceptor {
         SparkEnv env = SparkEnv.get();
         if (env == null) {
             throw new IllegalStateException(
-                    "SparkEnv is not initialized; cannot read " + CONF_OWNER);
+                    "SparkEnv is not initialized; cannot read " + AuthConfig.OWNER);
         }
         return env.conf();
     }
 
-    /** Reads the owner from an explicit SparkConf (used by the no-arg ctor and tests). */
+    /** Reads config from an explicit SparkConf (used by the no-arg ctor and tests). */
     public JwtAuthInterceptor(SparkConf conf) {
-        String configuredOwner = conf.get(CONF_OWNER, null);
-        if (configuredOwner == null || configuredOwner.isBlank()) {
-            throw new IllegalStateException(
-                    CONF_OWNER + " must be set to use JwtAuthInterceptor");
-        }
-        this.owner = configuredOwner.trim();
-        this.validator = new JwtValidator(conf);
+        this(AuthConfig.from(conf));
+    }
+
+    JwtAuthInterceptor(AuthConfig cfg) {
+        this.owner = cfg.owner(); // already required and trimmed by AuthConfig
+        this.validator = new JwtValidator(cfg);
         LOG.info("JwtAuthInterceptor initialized: owner={}", owner);
     }
 
@@ -75,7 +72,7 @@ public class JwtAuthInterceptor implements ServerInterceptor {
     JwtAuthInterceptor(JwtValidator validator, String owner) {
         if (owner == null || owner.isBlank()) {
             throw new IllegalStateException(
-                    "owner must not be null or blank; set " + CONF_OWNER);
+                    "owner must not be null or blank; set " + AuthConfig.OWNER);
         }
         this.validator = validator;
         this.owner = owner.trim();
