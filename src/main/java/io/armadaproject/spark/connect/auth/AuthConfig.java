@@ -23,14 +23,29 @@ import org.apache.spark.SparkConf;
  * keys are defined here so they have a single source of truth, and {@link #from(SparkConf)}
  * applies the read/trim/required rules in one place. Optional values are {@code null} when unset
  * or blank.
+ *
+ * <p>Kept as a plain final class (not a {@code record}) because the build matrix compiles Java at
+ * levels older than 16 for some Spark/Scala combinations.
  */
-record AuthConfig(String owner, String issuerUrl, String jwksUrl, String audience) {
+final class AuthConfig {
 
     private static final String PREFIX = "spark.armada.connect.";
     static final String OWNER    = PREFIX + "owner";
     static final String ISSUER   = PREFIX + "oidc.issuerUrl";
     static final String JWKS     = PREFIX + "oidc.jwksUrl";
     static final String AUDIENCE = PREFIX + "oidc.audience";
+
+    private final String owner;
+    private final String issuerUrl;
+    private final String jwksUrl;
+    private final String audience;
+
+    private AuthConfig(String owner, String issuerUrl, String jwksUrl, String audience) {
+        this.owner     = owner;
+        this.issuerUrl = issuerUrl;
+        this.jwksUrl   = jwksUrl;
+        this.audience  = audience;
+    }
 
     /** Read and validate the connect-auth configuration from a SparkConf. */
     static AuthConfig from(SparkConf conf) {
@@ -40,6 +55,11 @@ record AuthConfig(String owner, String issuerUrl, String jwksUrl, String audienc
                 optional(conf, JWKS),
                 optional(conf, AUDIENCE));
     }
+
+    String owner()     { return owner;     }
+    String issuerUrl() { return issuerUrl; }
+    String jwksUrl()   { return jwksUrl;   }
+    String audience()  { return audience;  }
 
     private static String required(SparkConf conf, String key) {
         String value = conf.get(key, null);
