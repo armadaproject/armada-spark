@@ -158,7 +158,7 @@ fi
 
 # OAuth proxy for the Spark UI. Requires cluster deploy mode + ingress.
 OAUTH_CONF=()
-if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
+if [[ "${OAUTH_ENABLED:-false}" == "true" ]]; then
     OAUTH_CONF=(
         --conf spark.armada.driver.ingress.enabled=true
         --conf spark.armada.driver.ingress.tls.enabled=false
@@ -264,14 +264,21 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
-if [[ -z "${SCALA_VERSION:-}" ]]; then
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version -q -DforceStdout)
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version -q -DforceStdout)
+# Allow passing a MAVEN_PROFILES environment variable
+# Example: MAVEN_PROFILES="spark4.1.1,scala2.13.17"
+PROFILES_ARG=""
+if [[ -n "${MAVEN_PROFILES:-}" ]]; then
+  PROFILES_ARG="-P${MAVEN_PROFILES}"
 fi
-if [[ -z "${SPARK_VERSION:-}" ]]; then
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version -q -DforceStdout)
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version -q -DforceStdout)
+
+if [[ -z "${SCALA_VERSION:-}" ]]; then 
+  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version ${PROFILES_ARG} -q -DforceStdout) 
+  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version ${PROFILES_ARG} -q -DforceStdout) 
+fi 
+
+if [[ -z "${SPARK_VERSION:-}" ]]; then 
+  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version ${PROFILES_ARG} -q -DforceStdout) 
+  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version ${PROFILES_ARG} -q -DforceStdout) 
 fi
 
 # When using DSS, validate Spark version + Scala version against known DSS base
@@ -347,7 +354,7 @@ if [ ${#FINAL_ARGS[@]} -eq 0 ]; then
     FINAL_ARGS+=("100")
 fi
 
-if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
+if [[ "$INCLUDE_PYTHON" == "true" ]]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
 
 S3_CONF=()
