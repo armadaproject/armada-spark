@@ -56,11 +56,19 @@ runs:
   - name: Set Spark and Scala versions
     working-directory: armada-spark
     run: |
-      # Set Spark and Scala versions
-      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
-      echo "::group::changes"
-      git diff
-      echo "::endgroup::"
+      SPARK_VER="${{ inputs.spark_version }}"
+      SCALA_VER="${{ inputs.scala_version }}"
+      
+      # Compute the short binary versions (ex: 4.1.1 -> 4.1)
+      SPARK_BIN=$(echo "$SPARK_VER" | cut -d. -f1-2)
+      SCALA_BIN=$(echo "$SCALA_VER" | cut -d. -f1-2)
+      
+      # Export everything to the global GitHub Actions environment
+      echo "MAVEN_PROFILES=spark${SPARK_VER},scala${SCALA_VER}" >> $GITHUB_ENV
+      echo "SPARK_VERSION=${SPARK_VER}" >> $GITHUB_ENV
+      echo "SPARK_BIN_VERSION=${SPARK_BIN}" >> $GITHUB_ENV
+      echo "SCALA_VERSION=${SCALA_VER}" >> $GITHUB_ENV
+      echo "SCALA_BIN_VERSION=${SCALA_BIN}" >> $GITHUB_ENV
     shell: bash
   - name: Fetch mvn dependencies
     continue-on-error: true
