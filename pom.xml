@@ -167,13 +167,10 @@
             <artifactId>jwks-rsa</artifactId>
             <version>0.22.1</version>
         </dependency>
-        <!-- gRPC SPI the interceptor implements; pinned to armada-scala-client's
-             gRPC version so the main shaded JAR is unaffected. -->
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-api</artifactId>
-            <version>1.67.1</version>
-        </dependency>
+        <!-- The interceptor implements the gRPC SPI (io.grpc.ServerInterceptor). grpc-api is not
+             declared explicitly: it comes transitively from armada-scala-client, so the version
+             always matches the client's and cannot drift. -->
+
 
         <!-- Test dependencies -->
         <dependency>
