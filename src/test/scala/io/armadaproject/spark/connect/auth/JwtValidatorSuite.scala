@@ -16,6 +16,7 @@
  */
 package io.armadaproject.spark.connect.auth
 
+import java.io.ByteArrayInputStream
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
@@ -243,12 +244,15 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
     }
   }
 
-  test("fetchJwksUri rejects a discovery document larger than the size cap") {
-    // One byte over the 1 MiB cap enforced by JwtValidator.MAX_DISCOVERY_BYTES.
-    val tooBig = "a" * (1048576 + 1)
-    withServer({ case `discoveryPath` => (200, Map.empty, tooBig) }) { base =>
-      val ex = the[IllegalStateException] thrownBy JwtValidator.fetchJwksUri(base + discoveryPath)
-      ex.getMessage should include("exceeds")
-    }
+  test("readDiscoveryBody rejects a body larger than the size cap") {
+    // One byte over the 1 MiB cap. Tested directly rather than through the JDK HTTP client, whose
+    // large-stream read trips an internal assertion on some JVMs (e.g. Java 11 under -ea).
+    val tooBig = new ByteArrayInputStream(("a" * (1048576 + 1)).getBytes(StandardCharsets.UTF_8))
+    val ex =
+      the[IllegalStateException] thrownBy JwtValidator.readDiscoveryBody(
+        tooBig,
+        "https://idp.test/d"
+      )
+    ex.getMessage should include("exceeds")
   }
 }

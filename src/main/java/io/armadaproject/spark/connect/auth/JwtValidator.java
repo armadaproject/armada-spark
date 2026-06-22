@@ -159,12 +159,7 @@ public class JwtValidator {
             // Cap the body so a hostile/misconfigured endpoint can't OOM us during startup.
             String body;
             try (InputStream in = resp.body()) {
-                byte[] bytes = in.readNBytes((int) MAX_DISCOVERY_BYTES + 1);
-                if (bytes.length > MAX_DISCOVERY_BYTES) {
-                    throw new IllegalStateException("OIDC discovery document from " + discoveryUrl
-                            + " exceeds " + MAX_DISCOVERY_BYTES + " bytes");
-                }
-                body = new String(bytes, StandardCharsets.UTF_8);
+                body = readDiscoveryBody(in, discoveryUrl);
             }
             return parseJwksUri(body);
         } catch (IOException e) {
@@ -173,6 +168,19 @@ public class JwtValidator {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("OIDC discovery interrupted for " + discoveryUrl, e);
         }
+    }
+
+    /**
+     * Read a discovery body, enforcing {@link #MAX_DISCOVERY_BYTES}. Package-private so the cap is
+     * unit-testable directly, without streaming a large body through the JDK HTTP client.
+     */
+    static String readDiscoveryBody(InputStream in, String sourceUrl) throws IOException {
+        byte[] bytes = in.readNBytes((int) MAX_DISCOVERY_BYTES + 1);
+        if (bytes.length > MAX_DISCOVERY_BYTES) {
+            throw new IllegalStateException(
+                    "OIDC discovery document from " + sourceUrl + " exceeds " + MAX_DISCOVERY_BYTES + " bytes");
+        }
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     static String parseJwksUri(String discoveryJson) {
