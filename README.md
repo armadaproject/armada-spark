@@ -251,7 +251,7 @@ Conf reference:
 | --- | --- | --- | --- |
 | `spark.armada.connect.owner` | yes | none | The `sub` value the bearer token must carry to be accepted. Driver fails to start if unset. |
 | `spark.armada.connect.oidc.issuerUrl` | yes | none | OIDC issuer used for `iss` validation and JWKS discovery at `<issuer>/.well-known/openid-configuration`. Must be `https`. |
-| `spark.armada.connect.oidc.audience` | no | none | If set, the `aud` claim is enforced. |
+| `spark.armada.connect.oidc.audience` | no | none | If set, the `aud` claim is enforced. If unset, `aud` is not validated and any token the issuer minted (for any audience) is accepted when its `sub` matches the owner; the driver logs a warning at startup. |
 | `spark.armada.connect.oidc.jwksUrl` | no | discovered | Skip OIDC discovery and use this JWKS URL directly. Must be `https`. |
 
 At runtime the interceptor:

@@ -95,6 +95,16 @@ public class JwtValidator {
         String aud = cfg.audience(); // null when unset/blank (normalized by AuthConfig)
         if (aud != null) {
             builder.withAudience(aud);
+        } else {
+            // Without an audience constraint, any token the issuer minted for any relying party is
+            // accepted as long as its `sub` matches the owner. Set spark.armada.connect.oidc.audience
+            // to bind tokens to this server.
+            LOG.warn(
+                    "{} is not set: tokens for ANY audience issued by {} will be accepted. "
+                            + "Set {} to restrict tokens to this server.",
+                    AuthConfig.AUDIENCE,
+                    issuer,
+                    AuthConfig.AUDIENCE);
         }
 
         this.verifier  = builder.build();
