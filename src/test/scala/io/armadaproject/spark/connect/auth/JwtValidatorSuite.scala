@@ -242,4 +242,13 @@ class JwtValidatorSuite extends AnyFunSuite with Matchers {
       JwtValidator.fetchJwksUri(base + discoveryPath) shouldBe "https://idp.test/jwks"
     }
   }
+
+  test("fetchJwksUri rejects a discovery document larger than the size cap") {
+    // One byte over the 1 MiB cap enforced by JwtValidator.MAX_DISCOVERY_BYTES.
+    val tooBig = "a" * (1048576 + 1)
+    withServer({ case `discoveryPath` => (200, Map.empty, tooBig) }) { base =>
+      val ex = the[IllegalStateException] thrownBy JwtValidator.fetchJwksUri(base + discoveryPath)
+      ex.getMessage should include("exceeds")
+    }
+  }
 }
