@@ -27,19 +27,10 @@ import org.apache.spark.SparkConf
 
 class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
 
-  /** Regression test for the gang-cardinality vs batchSize mismatch. Pre-capture, Armada enforces
-    * the gang cardinality across the bootstrap batch — submitting more than that causes every
-    * job past the cardinality to be rejected with "cannot submit more jobs to gang than
-    * specified in gang cardinality", which the allocator then retries indefinitely. The
-    * allocator must consult backend.getGangCardinality during each tick so the cap can be
-    * applied.
-    */
   test("tryAllocateExecutors consults gangCardinality before submitting") {
     val backend = mock(classOf[ArmadaClusterManagerBackend])
-    // Drive the loop into the submit branch: gap > 0 and isInitialBatch=true.
     when(backend.getExecutorCounts).thenReturn((0, 0))
     when(backend.isReadyToAllocateMore).thenReturn(true)
-    // Cardinality < batchSize would otherwise overflow the gang. Returning 1 exercises the cap.
     when(backend.getGangCardinality).thenReturn(1)
 
     val armadaClient = mock(classOf[ArmadaClient])
@@ -55,7 +46,6 @@ class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
       backend
     )
 
-    // Register a target so the allocator's loop body executes.
     val rp = org.apache.spark.resource.ResourceProfile.getOrCreateDefaultProfile(conf)
     allocator.setTotalExpectedExecutors(Map(rp -> 4))
 
@@ -63,8 +53,6 @@ class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
     method.setAccessible(true)
     method.invoke(allocator)
 
-    // The cap is read on every submission-eligible tick. Without the cap, the allocator would
-    // submit batchSize=4 jobs and overflow Armada's cardinality=1 gang.
     verify(backend, atLeastOnce()).getGangCardinality
   }
 }

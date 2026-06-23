@@ -115,12 +115,6 @@ private[spark] class ArmadaExecutorAllocator(
               // This prevents scale-up executors from landing on a different cluster.
               val isInitialBatch = currentCount == 0 && pending == 0
               if (isInitialBatch || backend.isReadyToAllocateMore) {
-                // Pre-capture, Armada enforces the gang cardinality across the bootstrap batch:
-                // submitting more than `gangCardinality` jobs causes every job past that point to
-                // be rejected with "cannot submit more jobs to gang than specified in gang
-                // cardinality", which the allocator's retry loop then resubmits indefinitely.
-                // Cap by gangCardinality so the per-tick submission never overflows the gang.
-                // Post-capture, getGangCardinality returns 0 and only batchSize applies.
                 val gangCardinality = backend.getGangCardinality
                 val effectiveBatch =
                   if (gangCardinality > 0) math.min(batchSize, gangCardinality) else batchSize
