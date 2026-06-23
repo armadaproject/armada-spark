@@ -575,6 +575,14 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private[armada] def isReadyToAllocateMore: Boolean = modeHelper.isReadyToAllocateMore
 
+  /** Per-mode gang cardinality. Returns 0 once gang attributes have been captured (post-bootstrap)
+    * or in modes that don't use gang scheduling — in which case the allocator's batch size is the
+    * only per-tick cap. Pre-capture this is the size Armada will enforce on the gang, so the
+    * allocator must not submit more than this in a single tick or Armada rejects every job after
+    * the cardinality is exceeded.
+    */
+  private[armada] def getGangCardinality: Int = modeHelper.getGangCardinality
+
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
   private[armada] def onArmadaPreempting(jobId: String): Unit = {
