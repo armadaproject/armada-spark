@@ -76,7 +76,7 @@ runs:
     run: |
       # Fetch mvn dependencies
       echo "::group::mvn go-offline"
-      mvn --batch-mode --update-snapshots dependency:go-offline
+      mvn --batch-mode --update-snapshots dependency:go-offline -P$MAVEN_PROFILES
       echo "::endgroup::"
     shell: bash
   - name: Build test jars
@@ -84,7 +84,7 @@ runs:
     run: |
       # Build test jars
       echo "::group::mvn test-compile"
-      mvn --batch-mode test-compile
+      mvn --batch-mode test-compile -P$MAVEN_PROFILES
       echo "::endgroup::"
     shell: bash
   - name: Build package
@@ -92,7 +92,7 @@ runs:
     run: |
       # Build package
       echo "::group::mvn package"
-      mvn --batch-mode package
+      mvn --batch-mode package -P$MAVEN_PROFILES
       echo "::endgroup::"
     shell: bash
   - name: Build image

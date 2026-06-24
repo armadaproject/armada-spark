@@ -51,14 +51,14 @@ runs:
     run: |
       # Fetch mvn dependencies
       echo "::group::mvn go-offline"
-      mvn --batch-mode --update-snapshots dependency:go-offline
+      mvn --batch-mode --update-snapshots dependency:go-offline -P$MAVEN_PROFILES
       echo "::endgroup::"
     shell: bash
   - name: Build package
     run: |
       # Build package
       echo "::group::mvn install"
-      mvn --batch-mode install
+      mvn --batch-mode install -P$MAVEN_PROFILES
       echo "::endgroup::"
     shell: bash
 
