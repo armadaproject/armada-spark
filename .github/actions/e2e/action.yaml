@@ -63,8 +63,33 @@ runs:
       SPARK_BIN=$(echo "$SPARK_VER" | cut -d. -f1-2)
       SCALA_BIN=$(echo "$SCALA_VER" | cut -d. -f1-2)
       
+      # Map the Spark version to an exact profile defined in pom.xml
+      if [[ "$SPARK_VER" == 3.3.* ]]; then
+        SPARK_PROFILE="spark3.3.4"
+      elif [[ "$SPARK_VER" == 3.5.* ]]; then
+        SPARK_PROFILE="spark3.5.5"
+      elif [[ "$SPARK_VER" == 4.1.* ]]; then
+        SPARK_PROFILE="spark4.1.1"
+      else
+        SPARK_PROFILE="spark${SPARK_VER}"
+      fi
+
+      # Map the Scala version to an exact profile defined in pom.xml
+      if [[ "$SCALA_BIN" == "2.12" ]]; then
+        SCALA_PROFILE="scala2.12"
+      elif [[ "$SCALA_BIN" == "2.13" ]]; then
+        # Select the correct 2.13 profile based on the target Spark generation
+        if [[ "$SPARK_VER" == 4.* ]]; then
+          SCALA_PROFILE="scala2.13.17"
+        else
+          SCALA_PROFILE="scala2.13.8"
+        fi
+      else
+        SCALA_PROFILE="scala${SCALA_VER}"
+      fi
+      
       # Export everything to the global GitHub Actions environment
-      echo "MAVEN_PROFILES=spark${SPARK_VER},scala${SCALA_VER}" >> $GITHUB_ENV
+      echo "MAVEN_PROFILES=${SPARK_PROFILE},${SCALA_PROFILE}" >> $GITHUB_ENV
       echo "SPARK_VERSION=${SPARK_VER}" >> $GITHUB_ENV
       echo "SPARK_BIN_VERSION=${SPARK_BIN}" >> $GITHUB_ENV
       echo "SCALA_VERSION=${SCALA_VER}" >> $GITHUB_ENV
