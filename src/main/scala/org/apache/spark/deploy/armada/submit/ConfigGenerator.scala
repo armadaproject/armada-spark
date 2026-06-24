@@ -32,8 +32,15 @@ private[submit] object ConfigGenerator {
   val ENV_SPARK_CONF_DIR   = "SPARK_CONF_DIR"
 }
 
-private[submit] class ConfigGenerator(val prefix: String, val conf: SparkConf) {
-  private val confDir = Option(conf.getenv(ENV_SPARK_CONF_DIR))
+private[submit] class ConfigGenerator(
+    val prefix: String,
+    val conf: SparkConf,
+    envLookup: String => Option[String] = name => Option(System.getenv(name))
+) {
+  // Lookup precedence: caller-supplied env (defaults to System.getenv, but
+  // tests can inject a stub to keep their fixture independent of the env vars
+  // in existence.)
+  private val confDir = envLookup(ENV_SPARK_CONF_DIR)
     .orElse(conf.getOption("spark.home").map(dir => s"$dir/conf"))
 
   private val confFiles = getConfFiles

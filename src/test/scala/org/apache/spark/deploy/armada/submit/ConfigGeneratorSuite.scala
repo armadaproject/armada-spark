@@ -50,7 +50,7 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
   }
   test("Test annotations") {
     val expectedString = s"Map($prefix/spark-defaults.conf -> $configFileContents)"
-    val cg             = new ConfigGenerator(prefix, sparkConf)
+    val cg             = new ConfigGenerator(prefix, sparkConf, _ => None)
     val ann            = cg.getAnnotations
     assert(ann.toString == expectedString)
   }
@@ -70,9 +70,29 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
         |}
         |""".stripMargin
 
-    val cg  = new ConfigGenerator(prefix, sparkConf)
+    val cg  = new ConfigGenerator(prefix, sparkConf, _ => None)
     val vol = cg.getVolumes
     assert(vol.head.toProtoString == expectedString)
+  }
+
+  test("injected env takes precedence") {
+    val rogueDir = Files.createTempDirectory("rogue-spark-conf-")
+    Files.writeString(
+      rogueDir.resolve("rogue.conf"),
+      "rogue=true",
+      StandardOpenOption.CREATE
+    )
+    try {
+      val envWithRogue: String => Option[String] = {
+        case "SPARK_CONF_DIR" => Some(rogueDir.toString)
+        case _                => None
+      }
+      val cg = new ConfigGenerator(prefix, sparkConf, envWithRogue)
+      assert(cg.getAnnotations.keys.toSet == Set(s"$prefix/rogue.conf"))
+    } finally {
+      Files.deleteIfExists(rogueDir.resolve("rogue.conf"))
+      Files.deleteIfExists(rogueDir)
+    }
   }
 
   test("Test volume mounts") {
@@ -82,7 +102,7 @@ class ConfigGeneratorSuite extends AnyFunSuite with BeforeAndAfter {
         |mountPath: "${ConfigGenerator.REMOTE_CONF_DIR_NAME}"
         |""".stripMargin
 
-    val cg        = new ConfigGenerator(prefix, sparkConf)
+    val cg        = new ConfigGenerator(prefix, sparkConf, _ => None)
     val volMounts = cg.getVolumeMounts
     assert(volMounts.head.toProtoString == expectedString)
   }
