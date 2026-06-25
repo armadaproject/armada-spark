@@ -390,6 +390,12 @@ if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_S3_BUCKET_ENDPOINT:-} != "" ]]; then
     )
 fi
 
+if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_BENCHMARK_BUCKET:-} != "" ]]; then
+    S3_CONF+=(
+        --conf spark.hadoop.fs.s3a.bucket.${ARMADA_BENCHMARK_BUCKET}.endpoint=$ARMADA_BENCHMARK_ENDPOINT
+    )
+fi
+
 EVENT_LOG_CONF=()
 if [ ${#S3_CONF[@]} -gt 0 ]; then
     ARMADA_EVENT_LOG_DIR="$ARMADA_S3_USER_DIR/eventLog"
