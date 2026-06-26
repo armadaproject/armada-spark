@@ -9,7 +9,7 @@
 
     <!-- Project Coordinates -->
     <groupId>io.armadaproject.armada</groupId>
-    <artifactId>armada-cluster-manager_2.13</artifactId>
+    <artifactId>armada-cluster-manager</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -280,6 +280,7 @@
 
     <!-- Build Plugins -->
     <build>
+        <finalName>${project.artifactId}_${scala.binary.version}-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
