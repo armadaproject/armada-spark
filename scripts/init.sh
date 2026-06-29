@@ -285,12 +285,12 @@ fi
 
 # derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
 if [[ -z "${SCALA_VERSION:-}" ]]; then
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version -q -DforceStdout)
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version -q -DforceStdout)
+  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version ${MVN_OFFLINE-} -q -DforceStdout)
+  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version ${MVN_OFFLINE-} -q -DforceStdout)
 fi
 if [[ -z "${SPARK_VERSION:-}" ]]; then
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version -q -DforceStdout)
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version -q -DforceStdout)
+  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version ${MVN_OFFLINE-} -q -DforceStdout)
+  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version ${MVN_OFFLINE-} -q -DforceStdout)
 fi
 
 # When using DSS, validate Spark version + Scala version against known DSS base
