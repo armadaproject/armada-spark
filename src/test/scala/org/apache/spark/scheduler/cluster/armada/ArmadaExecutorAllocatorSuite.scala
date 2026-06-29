@@ -22,22 +22,21 @@ import io.armadaproject.armada.ArmadaClient
 import org.mockito.Mockito._
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.prop.TableDrivenPropertyChecks
 
 import org.apache.spark.SparkConf
 
-class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
+class ArmadaExecutorAllocatorSuite
+    extends AnyFunSuite
+    with Matchers
+    with TableDrivenPropertyChecks {
 
-  test("tryAllocateExecutors consults gangCardinality before submitting") {
-    val backend = mock(classOf[ArmadaClusterManagerBackend])
-    when(backend.getExecutorCounts).thenReturn((0, 0))
-    when(backend.isReadyToAllocateMore).thenReturn(true)
-    when(backend.getGangCardinality).thenReturn(1)
-
+  private def newAllocator(batchSize: Int): ArmadaExecutorAllocator = {
+    val backend      = mock(classOf[ArmadaClusterManagerBackend])
     val armadaClient = mock(classOf[ArmadaClient])
     val conf = new SparkConf(false)
-      .set("spark.armada.allocation.batchSize", "4")
-
-    val allocator = new ArmadaExecutorAllocator(
+      .set("spark.armada.allocation.batchSize", batchSize.toString)
+    new ArmadaExecutorAllocator(
       armadaClient,
       "test-queue",
       "test-jobset",
@@ -45,14 +44,34 @@ class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
       "test-app",
       backend
     )
+  }
 
-    val rp = org.apache.spark.resource.ResourceProfile.getOrCreateDefaultProfile(conf)
-    allocator.setTotalExpectedExecutors(Map(rp -> 4))
+  test("computeToAllocate caps the batch by gang cardinality") {
+    val allocator = newAllocator(batchSize = 4)
 
-    val method = classOf[ArmadaExecutorAllocator].getDeclaredMethod("tryAllocateExecutors")
-    method.setAccessible(true)
-    method.invoke(allocator)
+    // (gap, gangCardinality, expectedToAllocate)
+    val cases = Table(
+      ("gap", "gangCardinality", "expected"),
+      // gang smaller than batch -> capped to the gang size (the bug this fix targets)
+      (4, 1, 1),
+      (4, 2, 2),
+      // gang larger than batch -> batch size wins
+      (4, 10, 4),
+      // gang equals batch -> batch size
+      (4, 4, 4),
+      // no gang constraint (<= 0) -> fall back to batch size
+      (4, 0, 4),
+      (4, -1, 4),
+      // gap smaller than the effective batch -> gap wins
+      (2, 4, 2),
+      (1, 10, 1),
+      (3, 5, 3),
+      // gap = 0 -> never submit, regardless of cardinality
+      (0, 5, 0)
+    )
 
-    verify(backend, atLeastOnce()).getGangCardinality
+    forAll(cases) { (gap: Int, gangCardinality: Int, expected: Int) =>
+      allocator.computeToAllocate(gap, gangCardinality) shouldBe expected
+    }
   }
 }
