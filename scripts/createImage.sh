@@ -66,9 +66,9 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
             # spark-examples jars are not released, so we need to build these from sources.
             # The jars are platform agnostic, so a single Maven build serves every
             # target platform; only the docker image build below runs per arch.
-            ./build/mvn --batch-mode clean
-            ./build/mvn --batch-mode package -pl examples
-            ./build/mvn --batch-mode package -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION -pl assembly
+            ./build/mvn ${MVN_OFFLINE-} --batch-mode clean
+            ./build/mvn ${MVN_OFFLINE-} --batch-mode package -pl examples
+            ./build/mvn ${MVN_OFFLINE-} --batch-mode package -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION -pl assembly
             for plat in "${missing_platforms[@]}"; do
                 arch="${plat##*/}"
                 echo "Building Spark Docker image $image_prefix:$image_tag-$arch for $plat from source."

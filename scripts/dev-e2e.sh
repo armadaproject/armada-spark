@@ -153,7 +153,7 @@ init-cluster() {
   echo "Checking if image $IMAGE_NAME is available"
   if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     err "Image $IMAGE_NAME not found in local Docker instance."
-    err "Rebuild the image (cd '$scripts/..' && mvn test-compile && mvn clean package && ./scripts/createImage.sh -p), and re-run this script"
+    err "Rebuild the image (cd '$scripts/..' && mvn ${MVN_OFFLINE-} test-compile && mvn ${MVN_OFFLINE-} clean package && ./scripts/createImage.sh -p), and re-run this script"
     exit 1
   fi
 
@@ -246,7 +246,7 @@ run-test() {
 
   # Run the Scala E2E test suite
   env KUBERNETES_TRUST_CERTIFICATES=true \
-  mvn -e scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
+  mvn ${MVN_OFFLINE-} -e scalatest:test -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
     -Dcontainer.image="$IMAGE_NAME" \
     -Dscala.version="$SCALA_VERSION" \
     -Dscala.binary.version="$SCALA_BIN_VERSION" \

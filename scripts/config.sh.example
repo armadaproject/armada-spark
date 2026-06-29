@@ -34,3 +34,10 @@ ARMADA_QUEUE=test
 #ARMADA_AUTH_TOKEN=
 #ARMADA_AUTH_SCRIPT_PATH=/opt/spark/extraFiles/getAuthToken.sh
 #ARMADA_EVENT_WATCHER_USE_TLS=true
+
+# ── Maven Offline Mode ──────────────────────────────────────────────────────
+# Set this in config.sh to either "-o" or "--offline" to run Maven in offline
+# mode when your local Maven repository (e.g. $HOME/.m2/repository) is already
+# populated with dependency packages, to avoid build hangs due to origin repo
+# servers, such as Artifactory.
+export MVN_OFFLINE=""

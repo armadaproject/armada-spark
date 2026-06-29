@@ -52,7 +52,7 @@ if [ -f "$spark_dockerfile" ]; then
     fi
 fi
 ./dev/change-scala-version.sh $SCALA_BIN_VERSION
-./build/mvn clean install --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION
+./build/mvn clean install ${MVN_OFFLINE-} --batch-mode -Dscalastyle.skip=true -DskipTests  -Pkubernetes -Phadoop-cloud -Pscala-$SCALA_BIN_VERSION
 ./bin/docker-image-tool.sh -u 185 -t "$DSS_IMAGE_TAG"  -p ./resource-managers/kubernetes/docker/src/main/dockerfiles/spark/bindings/python/Dockerfile build
 cd ..
 
