@@ -19,15 +19,16 @@ It provides preconfigured Docker images, tooling for efficient image management,
 The default build targets **Spark 3.5.5** and **Scala 2.13.8**:
 
 ```bash
-mvn clean package
+mvn -Pscala2.13.8,spark3.5.5 clean package
 ```
 
-To target a different Spark/Scala version:
+To target a different Spark/Scala version, enable the matching Scala and Spark profiles:
 
 ```bash
-./scripts/set-version.sh 3.3.4 2.12.15   # Spark 3.3.4, Scala 2.12.15
-mvn clean package
+mvn -Pscala2.12.15,spark3.3.4 clean package
 ```
+
+This replaces the old `./scripts/set-version.sh` workflow.
 
 ### Supported Version Matrix
 

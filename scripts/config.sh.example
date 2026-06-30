@@ -35,6 +35,11 @@ ARMADA_QUEUE=test
 #ARMADA_AUTH_SCRIPT_PATH=/opt/spark/extraFiles/getAuthToken.sh
 #ARMADA_EVENT_WATCHER_USE_TLS=true
 
+# ── Build / Maven Profiles ──────────────────────────────────────
+# Specify the active Maven profiles for the build.
+# Example: spark4.1.1,scala2.13.17
+#MAVEN_PROFILES=""
+
 # ── Maven Offline Mode ──────────────────────────────────────────────────────
 # Set this in config.sh to either "-o" or "--offline" to run Maven in offline
 # mode when your local Maven repository (e.g. $HOME/.m2/repository) is already

@@ -21,46 +21,35 @@ runs:
     with:
       path: ~/.m2/repository
       key: ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
-      restore-keys:
-        ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
+      restore-keys: |
         ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
+  
   - name: Setup JDK
     uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
     with:
       java-version: ${{ inputs.java_version }}
       distribution: 'zulu'
 
-  - name: Set Spark and Scala versions
+  - name: Set target versions in environment
     run: |
-      # Set Spark and Scala versions
-      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
-      echo "::group::changes"
-      git diff
-      echo "::endgroup::"
+      echo "SPARK_VERSION=${{ inputs.spark_version }}" >> $GITHUB_ENV
+      echo "SCALA_VERSION=${{ inputs.scala_version }}" >> $GITHUB_ENV
     shell: bash
-  - name: Fetch mvn dependencies
-    continue-on-error: true
-    run: |
-      # Fetch mvn dependencies
-      echo "::group::mvn go-offline"
-      mvn --batch-mode --update-snapshots dependency:go-offline
-      echo "::endgroup::"
-    shell: bash
+
   - name: Build package
     run: |
-      # Build package
-      echo "::group::mvn install"
-      mvn --batch-mode install
-      echo "::endgroup::"
+      source ./scripts/init.sh
+      mvn --batch-mode clean install -P$MAVEN_PROFILES
     shell: bash
 
   - name: Build image
     if: ( ! contains(inputs.spark_version, '-SNAPSHOT') )
+    working-directory: .
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
+      SPARK_VERSION: ${{ inputs.spark_version }}
+      SCALA_VERSION: ${{ inputs.scala_version }}
     run: |
-      # Build image
-      echo "::group::createImage.sh"
       ./scripts/createImage.sh
-      echo "::endgroup::"
     shell: bash
+    

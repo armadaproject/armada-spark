@@ -20,7 +20,7 @@ mvn spotless:check
 mvn spotless:apply
 
 # Set Spark/Scala versions (e.g., Spark 3.5.5, Scala 2.13.8)
-./scripts/set-version.sh 3.5.5 2.13.8
+mvn -Pscala2.13.8,spark3.5.5 clean package
 ```
 
 **Stack:** Scala 2.13 | Maven | Spark 3.5 | Java 17 | Fabric8 Kubernetes Client | gRPC/Protobuf (via armada-scala-client)

@@ -4,13 +4,13 @@ description: Github Action to run end-to-end tests against a Spark and Scala ver
 
 inputs:
   spark_version:
-    description: Spark version to build against, e.g. "3.5.5" or "4.1.0-SNAPSHOT"
+    description: Spark version to build against
     required: true
   scala_version:
-    description: Scala version to build with, e.g. "2.13.8"
+    description: Scala version to build with
     required: true
   java_version:
-    description: Java version to build with, e.g. "11"
+    description: Java version to build with
     required: true
 
 runs:
@@ -26,80 +26,46 @@ runs:
     with:
       path: ~/.m2/repository
       key: ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
-      restore-keys:
-        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
-        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
+
   - name: Move docker
     run: |
-      # Moving docker to save space
-      echo "::group::moving Docker"
-      df -h /mnt
       sudo systemctl stop docker
-      sudo cp -rpd /var/lib/docker /mnt
       sudo mv /var/lib/docker /var/lib/docker.old
-      sudo ln -s /mnt/docker /var/lib
+      sudo ln -s /mnt/docker /var/lib/docker
       sudo systemctl start docker
-      df -h /mnt
-      echo "::endgroup::"
     shell: bash
+
   - name: Setup JDK
     uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
     with:
       java-version: ${{ inputs.java_version }}
       distribution: 'zulu'
-  - name: Setup Go
-    id: setup-go
-    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@72ecbbdfddd147af7be300cbea7f0d870004e56c # main
-    with:
-      cache-prefix: go-e2e
 
-  - name: Set Spark and Scala versions
+  - name: Set environment
     working-directory: armada-spark
     run: |
-      # Set Spark and Scala versions
-      ./scripts/set-version.sh "${{ inputs.spark_version }}" "${{ inputs.scala_version }}"
-      echo "::group::changes"
-      git diff
-      echo "::endgroup::"
+      echo "SPARK_VERSION=${{ inputs.spark_version }}" >> $GITHUB_ENV
+      echo "SCALA_VERSION=${{ inputs.scala_version }}" >> $GITHUB_ENV
     shell: bash
-  - name: Fetch mvn dependencies
-    continue-on-error: true
-    working-directory: armada-spark
-    run: |
-      # Fetch mvn dependencies
-      echo "::group::mvn go-offline"
-      mvn --batch-mode --update-snapshots dependency:go-offline
-      echo "::endgroup::"
-    shell: bash
-  - name: Build test jars
-    working-directory: armada-spark
-    run: |
-      # Build test jars
-      echo "::group::mvn test-compile"
-      mvn --batch-mode test-compile
-      echo "::endgroup::"
-    shell: bash
+
   - name: Build package
     working-directory: armada-spark
     run: |
-      # Build package
-      echo "::group::mvn package"
-      mvn --batch-mode package
-      echo "::endgroup::"
+      source ./scripts/init.sh
+      mvn --batch-mode clean package -P$MAVEN_PROFILES
     shell: bash
+
   - name: Build image
+    working-directory: armada-spark
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
     run: |
-      # Build image
-      echo "::group::createImage.sh"
-      ./armada-spark/scripts/createImage.sh -p -e
-      echo "::endgroup::"
+      ./scripts/createImage.sh -p -e
     shell: bash
+
   - name: Test job processing
-    id: submit
+    working-directory: armada-spark
     run: |
-      echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh -q test
-      echo "::endgroup::"
+      ./scripts/dev-e2e.sh -q test
     shell: bash
+    
