@@ -283,22 +283,53 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# Allow passing a MAVEN_PROFILES environment variable
-# Example: MAVEN_PROFILES="spark4.1.1,scala2.13.17"
-PROFILES_ARG=""
-if [[ -n "${MAVEN_PROFILES:-}" ]]; then
-  PROFILES_ARG="-P${MAVEN_PROFILES}"
-fi
-
+# Allow passing SCALA_VERSION and SPARK_VERSION manually (e.g., from config.sh or CI)
+# If not set, evaluate them from the root pom.xml
 if [[ -z "${SCALA_VERSION:-}" ]]; then 
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version ${PROFILES_ARG} -q -DforceStdout) 
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version ${PROFILES_ARG} -q -DforceStdout) 
+  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version) 
+  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version) 
+else
+  export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
 fi 
 
 if [[ -z "${SPARK_VERSION:-}" ]]; then 
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version ${PROFILES_ARG} -q -DforceStdout) 
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version ${PROFILES_ARG} -q -DforceStdout) 
+  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version) 
+  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version) 
+else
+  export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
 fi
+
+# Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
+if [[ -z "${MAVEN_PROFILES:-}" ]]; then
+  # Map the Spark version to an exact profile defined in pom.xml
+  if [[ "$SPARK_VERSION" == 3.3.* ]]; then
+    SPARK_PROFILE="spark3.3.4"
+  elif [[ "$SPARK_VERSION" == 3.5.* ]]; then
+    SPARK_PROFILE="spark3.5.5"
+  elif [[ "$SPARK_VERSION" == 4.1.* ]]; then
+    SPARK_PROFILE="spark4.1.1"
+  else
+    SPARK_PROFILE="spark${SPARK_VERSION}"
+  fi
+
+  # Map the Scala version to an exact profile defined in pom.xml
+  if [[ "$SCALA_BIN_VERSION" == "2.12" ]]; then
+    SCALA_PROFILE="scala2.12"
+  elif [[ "$SCALA_BIN_VERSION" == "2.13" ]]; then
+    # Select the correct 2.13 profile based on the target Spark generation
+    if [[ "$SPARK_VERSION" == 4.* ]]; then
+      SCALA_PROFILE="scala2.13.17"
+    else
+      SCALA_PROFILE="scala2.13.8"
+    fi
+  else
+    SCALA_PROFILE="scala${SCALA_VERSION}"
+  fi
+  
+  export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
+fi
+
+export PROFILES_ARG="-P${MAVEN_PROFILES}"
 
 # When using DSS, validate Spark version + Scala version against known DSS base
 # images and set DSS_PREFIX/DSS_TAG defaults
