@@ -382,9 +382,8 @@ export ARMADA_BENCHMARK_JAR ARMADA_BENCHMARK_JAR_ID
 export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples.jar}"
 
 # check the Spark version is supported
-if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
-    echo "This tool does not support Spark version ${SPARK_VERSION}."
-    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
+if [[ ! -d "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]]; then
+  safe_abort "Unsupported Spark binary version $SPARK_BIN_VERSION. Directory not found."
 fi
 
 # Distributed shuffle storage / fallback storage conf args
