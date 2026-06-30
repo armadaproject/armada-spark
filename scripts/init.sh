@@ -290,9 +290,10 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# 1. Compute MAVEN_PROFILES dynamically first 
+# 1. Compute MAVEN_PROFILES and PROFILES_ARG immediately
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
+    # Map snapshot to the base 4.1.1 profile properties for validation compatibility
     SPARK_PROFILE="spark4.1.1"
   elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
     SPARK_PROFILE="spark3.3.4"
@@ -307,34 +308,27 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
 
-# 2. Set PROFILES_ARG for use in mvn commands
 export PROFILES_ARG="-P${MAVEN_PROFILES}"
 
-# 3. Validation - Only run if NOT in GitHub Actions
+# 2. Validation - Only run if NOT in GitHub Actions
+# This now executes AFTER MAVEN_PROFILES and PROFILES_ARG are exported
 if [[ -z "$GITHUB_ACTIONS" ]]; then
   if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
-      safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set the required parameters in scripts/config.sh or pass them as command line arguments."
+      safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
   fi
 fi
 
-# 4. Evaluate versions if not set
-# Use BASH_SOURCE to find the project root regardless of how the script is sourced
+# 3. Locate Project Root reliably
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 
+# 4. Evaluate versions if not set, using the established PROFILES_ARG
 if [[ -z "${SCALA_VERSION:-}" ]]; then 
-  export SCALA_VERSION=$(cd "$project_root"; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-  export SCALA_BIN_VERSION=$(cd "$project_root"; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SCALA_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=scala.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SCALA_BIN_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
 else
   export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
 fi 
-
-if [[ -z "${SPARK_VERSION:-}" ]]; then 
-  export SPARK_VERSION=$(cd "$project_root"; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-  export SPARK_BIN_VERSION=$(cd "$project_root"; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-else
-  export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
-fi
 
 if [[ -z "${SPARK_VERSION:-}" ]]; then 
   export SPARK_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=spark.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
