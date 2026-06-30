@@ -29,14 +29,14 @@ Common scopes: `config`, `submit`, `allocator`, `event-watcher`, `e2e`, `docker`
 ## Pull Requests
 
 1. Branch from `master` (`git checkout -b feat/my-feature master`)
-2. Format code (`mvn spotless:apply`) and run tests (`mvn test`)
+2. Format code (`mvn spotless:apply`) and run tests (`mvn -Pscala2.13.8,spark3.5.5 test`)
 3. Commit using conventional commits with `--signoff`
 4. Open a PR against `master` — the PR title should also follow conventional commit format
 
 ### PR Checklist
 
-- [ ] `mvn clean package` compiles
-- [ ] `mvn test` passes
+- [ ] `mvn -Pscala2.13.8,spark3.5.5 clean package` compiles
+- [ ] `mvn -Pscala2.13.8,spark3.5.5 test` passes
 - [ ] `mvn spotless:check` passes
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 - [ ] New code includes tests
