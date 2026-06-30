@@ -67,3 +67,4 @@ runs:
       ./scripts/createImage.sh
       echo "::endgroup::"
     shell: bash
+    

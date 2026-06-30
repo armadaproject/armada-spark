@@ -197,7 +197,16 @@
 
     <profiles>
         <profile>
-            <id>scala2.12</id>
+            <id>scala2.12.15</id>
+            <properties>
+                <scala.profile.selected>true</scala.profile.selected>
+                <scala.major.version>2</scala.major.version>
+                <scala.minor.version>12</scala.minor.version>
+                <scala.patch.version>15</scala.patch.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>scala2.12.18</id>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
@@ -335,11 +344,12 @@
                           <equals arg1="${spark.profile.selected}" arg2="true" />
                           <or>
                             <and>
+                              <equals arg1="${scala.version}" arg2="2.12.15" />
+                              <equals arg1="${spark.version}" arg2="3.3.4" />
+                            </and>
+                            <and>
                               <equals arg1="${scala.version}" arg2="2.12.18" />
-                              <or>
-                                <equals arg1="${spark.version}" arg2="3.3.4" />
-                                <equals arg1="${spark.version}" arg2="3.5.5" />
-                              </or>
+                              <equals arg1="${spark.version}" arg2="3.5.5" />
                             </and>
                             <and>
                               <equals arg1="${scala.version}" arg2="2.13.8" />

@@ -325,8 +325,14 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   fi
 
   # Map the Scala version to an exact profile defined in pom.xml
+  # Map the Scala version to an exact profile defined in pom.xml
   if [[ "$SCALA_BIN_VERSION" == "2.12" ]]; then
-    SCALA_PROFILE="scala2.12"
+    # Select the correct 2.12 profile based on the target Spark generation
+    if [[ "$SPARK_VERSION" == 3.5.* ]]; then
+      SCALA_PROFILE="scala2.12.18"
+    else
+      SCALA_PROFILE="scala2.12.15"
+    fi
   elif [[ "$SCALA_BIN_VERSION" == "2.13" ]]; then
     # Select the correct 2.13 profile based on the target Spark generation
     if [[ "$SPARK_VERSION" == 4.* ]]; then
