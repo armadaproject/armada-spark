@@ -283,23 +283,28 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# Allow passing SCALA_VERSION and SPARK_VERSION manually (e.g., from config.sh or CI)
-# If not set, evaluate them from the root pom.xml
+# 1. Setup PROFILES_ARG early if the user or CI already provided MAVEN_PROFILES
+PROFILES_ARG=""
+if [[ -n "${MAVEN_PROFILES:-}" ]]; then
+  PROFILES_ARG="-P${MAVEN_PROFILES}"
+fi
+
+# 2. Evaluate versions if not set, safely including PROFILES_ARG and MVN_OFFLINE for air-gapped support
 if [[ -z "${SCALA_VERSION:-}" ]]; then 
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version) 
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version) 
+  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
 else
   export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
 fi 
 
 if [[ -z "${SPARK_VERSION:-}" ]]; then 
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version) 
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version) 
+  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
 else
   export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
 fi
 
-# Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
+# 3. Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   # Map the Spark version to an exact profile defined in pom.xml
   if [[ "$SPARK_VERSION" == 3.3.* ]]; then
@@ -329,6 +334,7 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
 
+# 4. Export the final PROFILES_ARG for the rest of the script to use
 export PROFILES_ARG="-P${MAVEN_PROFILES}"
 
 # When using DSS, validate Spark version + Scala version against known DSS base
