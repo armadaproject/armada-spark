@@ -2,8 +2,10 @@
 
 # Utility functions
 
-root="$(cd "$(dirname "$0")/.."; pwd)"
-scripts="$(cd "$(dirname "$0")"; pwd)"
+# Safely get the directory of the script whether it is executed or sourced
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+scripts="$SCRIPT_DIR"
+root="$(dirname "$scripts")"
 
 if [ -e "$scripts/config.sh" ]; then
     source "$scripts/config.sh"
