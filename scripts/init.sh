@@ -313,12 +313,11 @@ fi
 
 # 3. Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
-  # If it is a SNAPSHOT, use a generic profile or skip the strict version mapping
-  if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
-    # Fallback to a generic profile or allow the variable to resolve dynamically
-    SPARK_PROFILE="spark${SPARK_VERSION}"
-  elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
-    SPARK_PROFILE="spark3.3.4"
+    if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
+      # Instead of generating a custom name, use a generic 'snapshot' profile
+      SPARK_PROFILE="spark-snapshot"
+    elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
+      SPARK_PROFILE="spark3.3.4"
   elif [[ "$SPARK_VERSION" == 3.5.* ]]; then
     SPARK_PROFILE="spark3.5.5"
   elif [[ "$SPARK_VERSION" == 4.1.* ]]; then
@@ -326,9 +325,8 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   else
     SPARK_PROFILE="spark${SPARK_VERSION}"
   fi
-
-  SCALA_PROFILE="scala${SCALA_VERSION}"
-  export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
+    SCALA_PROFILE="scala${SCALA_VERSION}"
+    export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
 
 # 4. Export the final PROFILES_ARG for the rest of the script to use

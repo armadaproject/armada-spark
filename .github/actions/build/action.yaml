@@ -21,8 +21,7 @@ runs:
     with:
       path: ~/.m2/repository
       key: ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
-      restore-keys:
-        ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('pom.xml') }}
+      restore-keys: |
         ${{ runner.os }}-mvn-build-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
   
   - name: Setup JDK
@@ -33,38 +32,24 @@ runs:
 
   - name: Set target versions in environment
     run: |
-      # Pass the inputs into the environment so init.sh can pick them up
       echo "SPARK_VERSION=${{ inputs.spark_version }}" >> $GITHUB_ENV
       echo "SCALA_VERSION=${{ inputs.scala_version }}" >> $GITHUB_ENV
     shell: bash
 
-  - name: Fetch mvn dependencies
-    continue-on-error: true
-    run: |
-      # Source init.sh to calculate SPARK_BIN_VERSION, SCALA_BIN_VERSION, and MAVEN_PROFILES
-      source ./scripts/init.sh
-      echo "::group::mvn go-offline"
-      mvn --batch-mode --update-snapshots dependency:go-offline -P$MAVEN_PROFILES
-      echo "::endgroup::"
-    shell: bash
-
   - name: Build package
     run: |
-      # Source init.sh again for this new shell process
       source ./scripts/init.sh
-      echo "::group::mvn install"
-      mvn --batch-mode install -P$MAVEN_PROFILES
-      echo "::endgroup::"
+      mvn --batch-mode clean install -P$MAVEN_PROFILES
     shell: bash
 
   - name: Build image
     if: ( ! contains(inputs.spark_version, '-SNAPSHOT') )
+    working-directory: .
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
+      SPARK_VERSION: ${{ inputs.spark_version }}
+      SCALA_VERSION: ${{ inputs.scala_version }}
     run: |
-      echo "::group::createImage.sh"
-      # createImage.sh runs init.sh internally, so variables will be configured properly
       ./scripts/createImage.sh
-      echo "::endgroup::"
     shell: bash
     
