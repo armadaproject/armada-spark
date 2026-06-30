@@ -94,20 +94,21 @@ runs:
     shell: bash
 
   - name: Build image
+    working-directory: armada-spark
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
     run: |
-      # Build image
       echo "::group::createImage.sh"
-      ./armada-spark/scripts/createImage.sh -p -e
+      ./scripts/createImage.sh -p -e
       echo "::endgroup::"
     shell: bash
 
   - name: Test job processing
     id: submit
+    working-directory: armada-spark
     run: |
       echo "::group::dev-e2e.sh"
-      ./armada-spark/scripts/dev-e2e.sh -q test
+      ./scripts/dev-e2e.sh -q test
       echo "::endgroup::"
     shell: bash
     

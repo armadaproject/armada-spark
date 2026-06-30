@@ -557,8 +557,6 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>all</shadedClassifierName>
                         </configuration>
                     </execution>
                 </executions>
