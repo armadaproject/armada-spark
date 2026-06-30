@@ -313,8 +313,11 @@ fi
 
 # 3. Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
-  # Map the Spark version to an exact profile defined in pom.xml
-  if [[ "$SPARK_VERSION" == 3.3.* ]]; then
+  # If it is a SNAPSHOT, use a generic profile or skip the strict version mapping
+  if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
+    # Fallback to a generic profile or allow the variable to resolve dynamically
+    SPARK_PROFILE="spark${SPARK_VERSION}"
+  elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
     SPARK_PROFILE="spark3.3.4"
   elif [[ "$SPARK_VERSION" == 3.5.* ]]; then
     SPARK_PROFILE="spark3.5.5"
@@ -324,9 +327,7 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
     SPARK_PROFILE="spark${SPARK_VERSION}"
   fi
 
-  # Direct mapping avoids inference and respects manual SCALA_VERSION overrides
   SCALA_PROFILE="scala${SCALA_VERSION}"
-  
   export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
 
