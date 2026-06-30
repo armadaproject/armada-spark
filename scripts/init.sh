@@ -7,6 +7,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 scripts="$SCRIPT_DIR"
 root="$(dirname "$scripts")"
 
+# Safely abort whether executed or sourced
+safe_abort() {
+  echo "[ERROR] $1" >&2
+  if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return 1
+  else
+    exit 1
+  fi
+}
+
 if [ -e "$scripts/config.sh" ]; then
     source "$scripts/config.sh"
 fi
@@ -80,7 +90,7 @@ print_usage () {
     echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
     echo '   # Auth: Set ARMADA_AUTH_SCRIPT_PATH for authentication'
-    exit 1
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
 }
 
 while getopts "hekpi:m:P:s:c:q:M:A:ef" opt; do
@@ -131,7 +141,7 @@ if [ -z "${SPARK_LOCAL_IP:-}" ]; then
     echo "scripts/config.sh to the external IP address of this system, for example:"
     echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
     echo ""
-    exit 1
+    safe_abort "SPARK_LOCAL_IP is not set and could not be determined automatically."
   fi
 
   export SPARK_LOCAL_IP
@@ -226,13 +236,13 @@ fi
 
 if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
     echo "Error: --mode/-M must be either 'client' or 'cluster'"
-    exit 1
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
 fi
 export DEPLOY_MODE
 
 if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
     echo "Error: --allocation/-A must be either 'static' or 'dynamic'"
-    exit 1
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
 fi
 export ALLOCATION_MODE
 
@@ -357,7 +367,7 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
             ;;
         *)
             echo "Error: unsupported Spark/Scala combination for DSS: ${SPARK_VERSION} / ${SCALA_BIN_VERSION}"
-            exit 1
+            safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
             ;;
     esac
     DSS_TAG=${DSS_TAG:-latest}
@@ -379,7 +389,7 @@ export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples
 # check the Spark version is supported
 if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
     echo "This tool does not support Spark version ${SPARK_VERSION}."
-    exit 1
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
 fi
 
 # Distributed shuffle storage / fallback storage conf args
