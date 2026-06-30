@@ -115,7 +115,9 @@ private[spark] class ArmadaExecutorAllocator(
               // This prevents scale-up executors from landing on a different cluster.
               val isInitialBatch = currentCount == 0 && pending == 0
               if (isInitialBatch || backend.isReadyToAllocateMore) {
-                val toAllocate = math.min(gap, batchSize)
+                // Cardinality is 0 after the initial batch since we do not use gang scheduling
+                // for scale-up executors, so this degrades to min(gap, batchSize) on later ticks.
+                val toAllocate = computeToAllocate(gap, backend.getGangCardinality)
                 submitExecutorJobs(toAllocate, rpId)
               }
             }
@@ -128,6 +130,25 @@ private[spark] class ArmadaExecutorAllocator(
       case NonFatal(e) =>
         logError(s"Error in allocation loop: ${e.getMessage}", e)
     }
+  }
+
+  /** Computes how many executor jobs to submit in a single allocation step.
+    *
+    * The batch is capped by the gang cardinality so that the initial gang submission in client mode
+    * does not over-submit beyond the gang's size. A non-positive cardinality means "no gang
+    * constraint", in which case the configured batch size is used as-is.
+    *
+    * @param gap
+    *   the number of executors still needed (target minus current+pending)
+    * @param gangCardinality
+    *   the gang cardinality, or <= 0 when no gang constraint applies
+    * @return
+    *   the number of jobs to submit, never exceeding the gap
+    */
+  private[armada] def computeToAllocate(gap: Int, gangCardinality: Int): Int = {
+    val effectiveBatch =
+      if (gangCardinality > 0) math.min(batchSize, gangCardinality) else batchSize
+    math.min(gap, effectiveBatch)
   }
 
   /** Submit executor jobs to Armada.

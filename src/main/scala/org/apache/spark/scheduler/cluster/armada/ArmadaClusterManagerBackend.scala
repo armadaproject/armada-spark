@@ -575,6 +575,8 @@ private[spark] class ArmadaClusterManagerBackend(
 
   private[armada] def isReadyToAllocateMore: Boolean = modeHelper.isReadyToAllocateMore
 
+  private[armada] def getGangCardinality: Int = modeHelper.getGangCardinality
+
   /** Called when Armada signals a job is being preempted. Proactively start decommissioning.
     */
   private[armada] def onArmadaPreempting(jobId: String): Unit = {
