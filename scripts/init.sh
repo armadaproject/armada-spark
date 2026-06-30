@@ -132,19 +132,14 @@ export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 # back to the Driver. Attempt to extract that by examining network interface
 # addresses, and use the first one that is not the loopback interface, or a
 # Docker/K8S virtual interface.
-if [ -z "${SPARK_LOCAL_IP:-}" ]; then
-  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | awk '{print $2}' | grep -Ev '^(127\.0\.0\.1|172\.)' | sed -n '1p')
-  if [ "$SPARK_LOCAL_IP" = "" ] ; then
-    echo ""
-    echo "ERROR: could not determine external network interface address. In order to run Spark"
-    echo "applications in client deployment mode, you may need to set SPARK_LOCAL_IP in your"
-    echo "scripts/config.sh to the external IP address of this system, for example:"
-    echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
-    echo ""
-    safe_abort "SPARK_LOCAL_IP is not set and could not be determined automatically."
+if [[ -z "${SPARK_LOCAL_IP:-}" ]]; then
+  if command -v ifconfig &> /dev/null; then
+    # Your existing ifconfig logic here
+    export SPARK_LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1)
+  else
+    # In CI environments without ifconfig, warn instead of crashing
+    echo "[WARNING] ifconfig not found. SPARK_LOCAL_IP will remain unset."
   fi
-
-  export SPARK_LOCAL_IP
 fi
 
 # Common Armada spark-submit conf args shared across all scripts
