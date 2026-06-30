@@ -39,3 +39,10 @@ ARMADA_QUEUE=test
 # Specify the active Maven profiles for the build.
 # Example: spark4.1.1,scala2.13.17
 #MAVEN_PROFILES=""
+
+# ── Maven Offline Mode ──────────────────────────────────────────────────────
+# Set this in config.sh to either "-o" or "--offline" to run Maven in offline
+# mode when your local Maven repository (e.g. $HOME/.m2/repository) is already
+# populated with dependency packages, to avoid build hangs due to origin repo
+# servers, such as Artifactory.
+# export MVN_OFFLINE="-o"
