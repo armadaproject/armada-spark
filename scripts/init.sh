@@ -290,34 +290,13 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# 1. Setup PROFILES_ARG early if the user or CI already provided MAVEN_PROFILES
-PROFILES_ARG=""
-if [[ -n "${MAVEN_PROFILES:-}" ]]; then
-  PROFILES_ARG="-P${MAVEN_PROFILES}"
-fi
-
-# 2. Evaluate versions if not set, safely including PROFILES_ARG and MVN_OFFLINE for air-gapped support
-if [[ -z "${SCALA_VERSION:-}" ]]; then 
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-else
-  export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
-fi 
-
-if [[ -z "${SPARK_VERSION:-}" ]]; then 
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
-else
-  export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
-fi
-
-# 3. Compute MAVEN_PROFILES dynamically if not defined by the user in config.sh
+# 1. Compute MAVEN_PROFILES dynamically if not defined by the user
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
-    if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
-      # Instead of generating a custom name, use a generic 'snapshot' profile
-      SPARK_PROFILE="spark-snapshot"
-    elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
-      SPARK_PROFILE="spark3.3.4"
+  if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
+    # Map snapshot to a profile that pom.xml supports
+    SPARK_PROFILE="spark4.1.1" 
+  elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
+    SPARK_PROFILE="spark3.3.4"
   elif [[ "$SPARK_VERSION" == 3.5.* ]]; then
     SPARK_PROFILE="spark3.5.5"
   elif [[ "$SPARK_VERSION" == 4.1.* ]]; then
@@ -325,12 +304,36 @@ if [[ -z "${MAVEN_PROFILES:-}" ]]; then
   else
     SPARK_PROFILE="spark${SPARK_VERSION}"
   fi
-    SCALA_PROFILE="scala${SCALA_VERSION}"
-    export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
+  SCALA_PROFILE="scala${SCALA_VERSION}"
+  export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
 
-# 4. Export the final PROFILES_ARG for the rest of the script to use
+# 2. Set PROFILES_ARG for use in mvn commands
 export PROFILES_ARG="-P${MAVEN_PROFILES}"
+
+# 3. Validation - Only run if NOT in GitHub Actions
+if [[ -z "$GITHUB_ACTIONS" ]]; then
+  if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
+      echo "Error: --mode/-M must be either 'client' or 'cluster'"
+      exit 1
+  fi
+fi
+
+# 4. Evaluate versions if not set
+scripts_dir="$(dirname "$0")"
+if [[ -z "${SCALA_VERSION:-}" ]]; then 
+  export SCALA_VERSION=$(cd "$scripts_dir/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SCALA_BIN_VERSION=$(cd "$scripts_dir/.."; mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+else
+  export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
+fi 
+
+if [[ -z "${SPARK_VERSION:-}" ]]; then 
+  export SPARK_VERSION=$(cd "$scripts_dir/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SPARK_BIN_VERSION=$(cd "$scripts_dir/.."; mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+else
+  export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
+fi
 
 # When using DSS, validate Spark version + Scala version against known DSS base
 # images and set DSS_PREFIX/DSS_TAG defaults
