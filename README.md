@@ -25,7 +25,7 @@ mvn -Pscala2.13.8,spark3.5.5 clean package
 To target a different Spark/Scala version, enable the matching Scala and Spark profiles:
 
 ```bash
-mvn -Pscala2.12,spark3.3.4 clean package
+mvn -Pscala2.12.15,spark3.3.4 clean package
 ```
 
 This replaces the old `./scripts/set-version.sh` workflow.

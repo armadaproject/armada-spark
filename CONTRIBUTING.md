@@ -12,8 +12,8 @@ mvn -Pscala2.13.8,spark3.5.5 spotless:check  # Check formatting
 mvn -Pscala2.13.8,spark3.5.5 spotless:apply  # Auto-fix formatting
 scripts/dev-e2e.sh                           # Run E2E tests (requires a running Armada cluster)
 
-# Target a different supported Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.18)
-mvn -Pscala2.12,spark3.3.4 clean package
+# Target a different supported Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.15)
+mvn -Pscala2.12.15,spark3.3.4 clean package
 ```
 
 ## Commit Conventions
