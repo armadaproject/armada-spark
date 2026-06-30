@@ -7,9 +7,9 @@
 ```bash
 # The build requires explicit Spark and Scala profile selection to pass validation
 mvn -Pscala2.13.8,spark3.5.5 clean package   # Build default combo with tests
-mvn test                                     # Run unit tests only
-mvn spotless:check                           # Check formatting
-mvn spotless:apply                           # Auto-fix formatting
+mvn -Pscala2.13.8,spark3.5.5 test            # Run unit tests only
+mvn -Pscala2.13.8,spark3.5.5 spotless:check  # Check formatting
+mvn -Pscala2.13.8,spark3.5.5 spotless:apply  # Auto-fix formatting
 scripts/dev-e2e.sh                           # Run E2E tests (requires a running Armada cluster)
 
 # Target a different supported Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.18)
