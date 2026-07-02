@@ -1,13 +1,8 @@
 diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
-index d76880c..0eac6cf 100644
+index ec52d82..4fb5ace 100644
 --- a/dev/quickstart/armada-crs.yaml
 +++ b/dev/quickstart/armada-crs.yaml
- ---
- apiVersion: install.armadaproject.io/v1alpha1
- kind: Executor
-@@ -70,8 +72,12 @@ spec:
-     executorApiConnection:
-       armadaUrl: armada-scheduler.armada.svc.cluster.local:50051
+@@ -72,6 +72,10 @@ spec:
        forceNoTls: true
      metric:
        port: 9001
@@ -15,10 +10,10 @@ index d76880c..0eac6cf 100644
 +      trackedNodeLabels:
 +        - kubernetes.io/hostname
 +        - armada-spark
- ---
- apiVersion: install.armadaproject.io/v1alpha1
- kind: Lookout
-@@ -156,6 +162,9 @@ spec:
+     # Request work and report spare cluster capacity to the scheduler frequently,
+     # so a freshly started cluster becomes schedulable within seconds (default is 5s).
+     task:
+@@ -168,6 +172,9 @@ spec:
          password: psw
          dbname: scheduler
          sslmode: disable
@@ -29,10 +24,12 @@ index d76880c..0eac6cf 100644
  apiVersion: install.armadaproject.io/v1alpha1
  kind: SchedulerIngester
 diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
-index a8d45c3..4a72570 100644
+index a8d45c3..14177a8 100644
 --- a/hack/kind-config.yaml
 +++ b/hack/kind-config.yaml
-@@ -4,3 +4,18 @@ nodes:
+@@ -2,7 +2,22 @@ kind: Cluster
+ apiVersion: kind.x-k8s.io/v1alpha4
+ nodes:
  - role: control-plane
 +  kubeadmConfigPatches:
 +  - |
@@ -51,6 +48,8 @@ index a8d45c3..4a72570 100644
 +    hostPort: 9999
 +    protocol: TCP
    # Lookout UI
+   - containerPort: 30000
+     hostPort: 30000
 @@ -16,3 +31,6 @@ nodes:
      hostPort: 30002
      protocol: TCP
