@@ -41,10 +41,14 @@ import org.apache.spark.scheduler.{
   ExecutorDecommission,
   ExecutorDecommissionInfo,
   ExecutorExited,
+  ExecutorLossReason,
   TaskSchedulerImpl
 }
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{
+  RegisterExecutor,
+  StopExecutor
+}
 import org.apache.spark.scheduler.cluster.k8s.GenerateExecID
 import org.apache.spark.util.{ThreadUtils, Utils}
 
@@ -123,6 +127,13 @@ private[spark] class ArmadaClusterManagerBackend(
   private val terminalExecutors: java.util.Set[String] =
     ConcurrentHashMap.newKeySet[String]()
 
+  /** Tracks executors we have already called removeExecutor on. Used to suppress duplicate removal
+    * attempts when both onDisconnected and the Armada event watcher race to report the same exit,
+    * which otherwise produces noisy "Lost an executor X (already removed)" ERROR logs.
+    */
+  private val removedExecutors: java.util.Set[String] =
+    ConcurrentHashMap.newKeySet[String]()
+
   /** Initial executor count */
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
@@ -143,6 +154,10 @@ private[spark] class ArmadaClusterManagerBackend(
 
   /** Executor allocation manager */
   private var executorAllocator: Option[ArmadaExecutorAllocator] = None
+
+  @volatile private var stopping: Boolean = false
+
+  private[armada] def isStopping: Boolean = stopping
 
   private lazy val modeHelper = DeploymentModeHelper(conf)
 
@@ -295,22 +310,24 @@ private[spark] class ArmadaClusterManagerBackend(
   override def stop(): Unit = {
     logInfo("Stopping Armada cluster scheduler backend")
 
-    // Call parent stop - sends StopExecutor RPCs to all executors
-    Utils.tryLogNonFatalError {
-      super.stop()
-    }
+    stopping = true
 
-    // Stop executor allocator (no new executors needed during shutdown)
     Utils.tryLogNonFatalError {
       executorAllocator.foreach(_.stop())
     }
 
-    // Cancel non-terminal executor jobs if configured.
-    // The event watcher stays running during the grace period so it can
-    // receive terminal events (Succeeded/Failed) and mark executors in
-    // terminalExecutors. This allows executors that exit gracefully after
-    // receiving StopExecutor to show "Succeeded" in Armada instead of
-    // "Cancelled".
+    // Send StopExecutor to registered executors but keep the RpcEnv alive. Pods Armada is still
+    // bringing up during the grace period can complete RegisterExecutor against the live endpoint;
+    // ArmadaDriverEndpoint then immediately tells them to stop, so they exit 0 and surface in
+    // Lookout as Succeeded instead of Cancelled (or failing with RpcEndpointNotFoundException).
+    // Pre-mark every registered executor as driver-killed so CoarseGrainedSchedulerBackend rewrites
+    // their loss reason to ExecutorKilled — otherwise ExecutorMonitor counts the clean exit as
+    // "unexpectedly exited".
+    Utils.tryLogNonFatalError {
+      getExecutorIds().foreach(id => executorsPendingToRemove.put(id, true))
+      stopExecutors()
+    }
+
     if (conf.get(ARMADA_DELETE_EXECUTORS)) {
       val gracePeriod = conf.get(ARMADA_KILL_GRACE_PERIOD)
       logInfo(s"Waiting ${gracePeriod}ms for executors to exit gracefully")
@@ -322,12 +339,14 @@ private[spark] class ArmadaClusterManagerBackend(
       }
     }
 
-    // Stop event watcher after grace period so terminal events are captured
+    Utils.tryLogNonFatalError {
+      super.stop()
+    }
+
     Utils.tryLogNonFatalError {
       eventWatcher.foreach(_.stop())
     }
 
-    // Shutdown executor service
     Utils.tryLogNonFatalError {
       ThreadUtils.shutdown(executorService)
     }
@@ -375,6 +394,9 @@ private[spark] class ArmadaClusterManagerBackend(
     val executorIds = getActiveExecutorIds
 
     if (executorIds.nonEmpty) {
+      // Mark as driver-killed before Armada terminates the pods, so the resulting disconnect is
+      // classified as a deliberate kill rather than "unexpectedly exited".
+      executorIds.foreach(id => executorsPendingToRemove.put(id, true))
       cancelArmadaJobs(executorIds, "Spark application stopping - cancelling executors")
     } else {
       logInfo(s"No executor jobs to cancel")
@@ -415,9 +437,12 @@ private[spark] class ArmadaClusterManagerBackend(
   override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
     logInfo(s"Killing ${executorIds.size} executors: ${executorIds.mkString(", ")}")
 
-    // Send RPC kill signal to executors
+    // Send RPC kill signal to executors. Pre-mark in executorsPendingToRemove so the parent class
+    // rewrites the loss reason to ExecutorKilled — otherwise ExecutorMonitor counts the kill as
+    // "unexpectedly exited".
     executorIds.foreach { id =>
       markTerminal(id)
+      executorsPendingToRemove.put(id, true)
       safeRemoveExecutor(
         id,
         ExecutorExited(-1, exitCausedByApp = false, "Executor killed by Spark")
@@ -495,10 +520,16 @@ private[spark] class ArmadaClusterManagerBackend(
     safeRemoveExecutor(executorId, exitReason)
   }
 
-  /** Called by event watcher when executor job succeeds
+  /** Called by event watcher when executor job succeeds.
+    *
+    * Executors never exit 0 on their own — a Succeeded job means the driver sent StopExecutor (or
+    * the pod was reaped after a grace period). Pre-marking executorsPendingToRemove makes
+    * CoarseGrainedSchedulerBackend.removeExecutor rewrite the loss reason to ExecutorKilled, so
+    * ExecutorMonitor classifies it as "driver killed" rather than "unexpectedly exited".
     */
   private[armada] def onExecutorSucceeded(jobId: String, executorId: String): Unit = {
     markTerminal(executorId)
+    executorsPendingToRemove.put(executorId, true)
     val exitReason = ExecutorExited(
       0,
       exitCausedByApp = false,
@@ -516,8 +547,16 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Best-effort removeExecutor that tolerates RPC endpoint being gone during shutdown. During the
     * grace period the CoarseGrainedScheduler endpoint may already be stopped, so removeExecutor can
     * throw. The critical state (markTerminal) is always set before this is called.
+    *
+    * Idempotent: only the first call for an executorId reaches removeExecutor; subsequent calls are
+    * no-ops to avoid "Lost an executor X (already removed)" duplicates when both onDisconnected and
+    * the Armada event watcher race for the same exit.
     */
-  private def safeRemoveExecutor(executorId: String, reason: ExecutorExited): Unit = {
+  private def safeRemoveExecutor(executorId: String, reason: ExecutorLossReason): Unit = {
+    if (!removedExecutors.add(executorId)) {
+      logDebug(s"Skipping duplicate removeExecutor for $executorId")
+      return
+    }
     try {
       removeExecutor(executorId, reason)
     } catch {
@@ -640,8 +679,10 @@ private[spark] class ArmadaClusterManagerBackend(
     }
 
     /** Message handler chain, tried in order:
-      *   1. gangInterceptor — intercepts RegisterExecutor to capture gang node selector attributes,
-      *      then delegates to super for the actual executor registration.
+      *   1. gangInterceptor — intercepts RegisterExecutor. If the backend is stopping, replies
+      *      success and tells the executor to stop without entering Spark state. Otherwise captures
+      *      gang node selector attributes and delegates to super for the actual executor
+      *      registration.
       *   2. generateExecID — handles the custom GenerateExecID message.
       *   3. super — handles all other standard Spark driver endpoint messages.
       *
@@ -650,9 +691,23 @@ private[spark] class ArmadaClusterManagerBackend(
       */
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
       val gangInterceptor: PartialFunction[Any, Unit] = {
-        case msg @ RegisterExecutor(_, _, _, _, _, attributes, _, _) =>
-          modeHelper.captureGangAttributes(attributes)
-          super.receiveAndReply(context)(msg)
+        case msg @ RegisterExecutor(executorId, executorRef, _, _, _, attributes, _, _) =>
+          if (stopping) {
+            // Bypass full registration during shutdown: reply success so the executor doesn't
+            // exit with IllegalStateException (which Armada flags as Failed in Lookout), but
+            // skip super.receiveAndReply so we don't add it to executorDataMap / BlockManager.
+            // Then send StopExecutor so the executor exits cleanly (exit 0, Succeeded in Lookout).
+            // Skipping the full registration also avoids the "Lost an executor (already removed)"
+            // ERROR that races onDisconnected vs the Armada JobSucceeded event.
+            logInfo(
+              s"Acknowledging late RegisterExecutor for $executorId; backend is stopping"
+            )
+            context.reply(true)
+            executorRef.send(StopExecutor)
+          } else {
+            modeHelper.captureGangAttributes(attributes)
+            super.receiveAndReply(context)(msg)
+          }
       }
       gangInterceptor
         .orElse(generateExecID(context))
@@ -663,16 +718,25 @@ private[spark] class ArmadaClusterManagerBackend(
       val execId = addressToExecutorId.get(rpcAddress)
       execId match {
         case Some(id) =>
-          executorsPendingDecommission.get(id) match {
-            case Some(_) =>
-              // Expected disconnection during decommissioning
-              logDebug(s"Executor $id disconnected during decommissioning")
-              removeExecutor(id, ExecutorDecommission(None))
-
-            case None =>
-              // Unexpected disconnection
-              logWarning(s"Executor $id disconnected unexpectedly")
-              disableExecutor(id)
+          if (executorsPendingDecommission.contains(id)) {
+            // Expected disconnection during decommissioning. Parent rewrites the reason from
+            // executorsPendingDecommission, but pass ExecutorDecommission anyway so the call is
+            // self-documenting.
+            logDebug(s"Executor $id disconnected during decommissioning")
+            safeRemoveExecutor(id, ExecutorDecommission(None))
+          } else if (executorsPendingToRemove.contains(id)) {
+            // Expected disconnection: we pre-marked this executor for removal (shutdown,
+            // doKillExecutors, or onExecutorSucceeded). Remove it now so the loss reason gets
+            // rewritten to ExecutorKilled by CoarseGrainedSchedulerBackend.
+            logDebug(s"Executor $id disconnected after pre-marked removal")
+            safeRemoveExecutor(
+              id,
+              ExecutorExited(0, exitCausedByApp = false, "Driver killed executor")
+            )
+          } else {
+            // Truly unexpected disconnection
+            logWarning(s"Executor $id disconnected unexpectedly")
+            disableExecutor(id)
           }
 
         case None =>

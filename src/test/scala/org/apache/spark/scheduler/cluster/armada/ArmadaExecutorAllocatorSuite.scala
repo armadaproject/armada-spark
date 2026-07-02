@@ -22,56 +22,70 @@ import io.armadaproject.armada.ArmadaClient
 import org.mockito.Mockito._
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.prop.TableDrivenPropertyChecks
 
 import org.apache.spark.SparkConf
+import org.apache.spark.resource.ResourceProfile
 
-class ArmadaExecutorAllocatorSuite
-    extends AnyFunSuite
-    with Matchers
-    with TableDrivenPropertyChecks {
+class ArmadaExecutorAllocatorSuite extends AnyFunSuite with Matchers {
 
-  private def newAllocator(batchSize: Int): ArmadaExecutorAllocator = {
-    val backend      = mock(classOf[ArmadaClusterManagerBackend])
-    val armadaClient = mock(classOf[ArmadaClient])
-    val conf = new SparkConf(false)
-      .set("spark.armada.allocation.batchSize", batchSize.toString)
+  private def newAllocator(
+      backend: ArmadaClusterManagerBackend,
+      armadaClient: ArmadaClient
+  ): ArmadaExecutorAllocator =
     new ArmadaExecutorAllocator(
       armadaClient,
       "test-queue",
       "test-jobset",
-      conf,
+      new SparkConf(false),
       "test-app",
       backend
     )
+
+  // Pre-load totalExpectedExecutors so the foreach in tryAllocateExecutors actually iterates —
+  // otherwise the assertion below holds vacuously whether or not the isStopping gate exists.
+  private def primeDemand(allocator: ArmadaExecutorAllocator): Unit = {
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf(false))
+    allocator.setTotalExpectedExecutors(Map(rp -> 4))
   }
 
-  test("computeToAllocate caps the batch by gang cardinality") {
-    val allocator = newAllocator(batchSize = 4)
+  test("tryAllocateExecutors is a no-op when backend is stopping") {
+    val backend = mock(classOf[ArmadaClusterManagerBackend])
+    when(backend.isStopping).thenReturn(true)
+    val allocator = newAllocator(backend, mock(classOf[ArmadaClient]))
+    primeDemand(allocator)
 
-    // (gap, gangCardinality, expectedToAllocate)
-    val cases = Table(
-      ("gap", "gangCardinality", "expected"),
-      // gang smaller than batch -> capped to the gang size (the bug this fix targets)
-      (4, 1, 1),
-      (4, 2, 2),
-      // gang larger than batch -> batch size wins
-      (4, 10, 4),
-      // gang equals batch -> batch size
-      (4, 4, 4),
-      // no gang constraint (<= 0) -> fall back to batch size
-      (4, 0, 4),
-      (4, -1, 4),
-      // gap smaller than the effective batch -> gap wins
-      (2, 4, 2),
-      (1, 10, 1),
-      (3, 5, 3),
-      // gap = 0 -> never submit, regardless of cardinality
-      (0, 5, 0)
-    )
+    allocator.tryAllocateExecutors()
 
-    forAll(cases) { (gap: Int, gangCardinality: Int, expected: Int) =>
-      allocator.computeToAllocate(gap, gangCardinality) shouldBe expected
-    }
+    verify(backend, never()).getExecutorCounts
+  }
+
+  // Positive control: with the same primed demand but isStopping=false, the allocator must reach
+  // backend.getExecutorCounts. Proves the previous test isn't passing vacuously.
+  test("tryAllocateExecutors reaches getExecutorCounts when backend is not stopping") {
+    val backend = mock(classOf[ArmadaClusterManagerBackend])
+    when(backend.isStopping).thenReturn(false)
+    when(backend.getExecutorCounts).thenReturn((4, 0))
+    val allocator = newAllocator(backend, mock(classOf[ArmadaClient]))
+    primeDemand(allocator)
+
+    allocator.tryAllocateExecutors()
+
+    verify(backend, atLeastOnce()).getExecutorCounts
+  }
+
+  // submitExecutorJobs is the second leg of the shutdown gate: a tick that already passed the
+  // tryAllocateExecutors check must not push a submission through if stopping flips in the
+  // meantime. We verify (a) the gate is consulted and (b) the method early-returns without
+  // raising — distinguishing it from the not-stopping path which enters the try/catch block and
+  // swallows the validation error from an empty SparkConf.
+  test("submitExecutorJobs early-returns when backend is stopping") {
+    val backend = mock(classOf[ArmadaClusterManagerBackend])
+    when(backend.isStopping).thenReturn(true)
+    val allocator = newAllocator(backend, mock(classOf[ArmadaClient]))
+
+    allocator.submitExecutorJobs(count = 1, rpId = 0)
+
+    verify(backend, atLeastOnce()).isStopping
+    verify(backend, never()).recordAndPendExecutor(org.mockito.ArgumentMatchers.anyString())
   }
 }

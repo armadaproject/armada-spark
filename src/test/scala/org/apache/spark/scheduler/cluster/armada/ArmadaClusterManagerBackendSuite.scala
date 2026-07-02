@@ -18,6 +18,7 @@
 package org.apache.spark.scheduler.cluster.armada
 
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.util.control.NonFatal
 
@@ -28,7 +29,7 @@ import org.mockito.Mockito._
 
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.scheduler.TaskSchedulerImpl
+import org.apache.spark.scheduler.{ExecutorLossReason, TaskSchedulerImpl}
 
 class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -42,6 +43,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
   before {
     sparkConf = new SparkConf(false)
       .set("spark.app.id", "test-app-123")
+      // Short grace period so backend.stop() in `after` doesn't block the suite for 30s each run.
+      .set("spark.armada.killGracePeriod", "10ms")
 
     sc = mock(classOf[SparkContext])
     env = mock(classOf[SparkEnv])
@@ -278,6 +281,83 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     backend.getActiveExecutorIds.size shouldBe numJobs / 2
   }
 
+  test("isStopping is false before stop() and true after") {
+    sparkConf.set("spark.armada.deleteExecutors", "false")
+    backend.isStopping shouldBe false
+    ignoreRpcErrors { backend.stop() }
+    backend.isStopping shouldBe true
+  }
+
+  // ========================================================================
+  // Pre-marked-removal tests
+  //
+  // CoarseGrainedSchedulerBackend.removeExecutor reads executorsPendingToRemove via
+  //   executorsPendingToRemove.remove(executorId).getOrElse(false)
+  // The boolean value MUST be true to flip the rewrite-to-ExecutorKilled branch on
+  // (and to skip task-failure accounting). Storing false silently disables the rewrite.
+  // ========================================================================
+
+  test("onExecutorSucceeded pre-marks executor with value true") {
+    val execId = backend.recordExecutor("job-1")
+    ignoreRpcErrors { backend.onExecutorSucceeded("job-1", execId) }
+    backend.executorsPendingToRemove.get(execId) shouldBe Some(true)
+  }
+
+  test("doKillExecutors pre-marks executor with value true") {
+    val execId = backend.recordExecutor("job-1")
+    ignoreRpcErrors { backend.doKillExecutors(Seq(execId)) }
+    backend.executorsPendingToRemove.get(execId) shouldBe Some(true)
+  }
+
+  test("stop pre-marks all known executors with value true") {
+    sparkConf.set("spark.armada.deleteExecutors", "false")
+    val executorService = Executors.newScheduledThreadPool(1)
+    val testable = new TestableArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      executorService,
+      "armada://localhost:50051"
+    )
+    try {
+      testable.simulateExecutorRegistration("e1")
+      testable.simulateExecutorRegistration("e2")
+      ignoreRpcErrors { testable.stop() }
+      testable.executorsPendingToRemove.get("e1") shouldBe Some(true)
+      testable.executorsPendingToRemove.get("e2") shouldBe Some(true)
+    } finally {
+      executorService.shutdownNow()
+    }
+  }
+
+  // ========================================================================
+  // Dedup tests
+  //
+  // onDisconnected and the Armada event watcher race to report the same exit. Without
+  // the removedExecutors gate, both call safeRemoveExecutor -> removeExecutor, and Spark's
+  // TaskSchedulerImpl logs "Lost an executor X (already removed)" on the second call.
+  // ========================================================================
+
+  test("safeRemoveExecutor only calls removeExecutor once per executor") {
+    val executorService = Executors.newScheduledThreadPool(1)
+    val testable = new TestableArmadaClusterManagerBackend(
+      taskScheduler,
+      sc,
+      executorService,
+      "armada://localhost:50051"
+    )
+    try {
+      val execId = testable.recordExecutor("job-1")
+      // Two event-watcher callbacks for the same executor (succeed-then-fail can happen if
+      // events arrive after we've also seen a disconnect).
+      testable.onExecutorSucceeded("job-1", execId)
+      testable.onExecutorFailed("job-1", execId, 1, "after-the-fact failure")
+      // Second call must be a no-op: removeExecutor on the parent must have run exactly once.
+      testable.removeExecutorCallCount.get() shouldBe 1
+    } finally {
+      executorService.shutdownNow()
+    }
+  }
+
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,
       sc: SparkContext,
@@ -287,6 +367,8 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
 
     private val testRegisteredExecutors = scala.collection.mutable.Set.empty[String]
 
+    val removeExecutorCallCount = new AtomicInteger(0)
+
     def simulateExecutorRegistration(executorId: String): Unit = {
       testRegisteredExecutors += executorId
     }
@@ -295,6 +377,12 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     // isn't being used in this test
     override def getExecutorIds(): Seq[String] = synchronized {
       testRegisteredExecutors.toSeq
+    }
+
+    // Count removeExecutor invocations and skip super so unit tests don't trigger
+    // NPE from the parent's `driverEndpoint.send(...)`.
+    override protected def removeExecutor(executorId: String, reason: ExecutorLossReason): Unit = {
+      removeExecutorCallCount.incrementAndGet()
     }
   }
 }

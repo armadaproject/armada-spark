@@ -98,7 +98,10 @@ private[spark] class ArmadaExecutorAllocator(
 
   /** Main allocation loop - checks demand and submits jobs if needed.
     */
-  private def tryAllocateExecutors(): Unit = {
+  private[armada] def tryAllocateExecutors(): Unit = {
+    if (backend.isStopping) {
+      return
+    }
     try {
       totalExpectedExecutors.asScala.foreach { case (rpId, target) =>
         val rp = rpIdToResourceProfile.synchronized {
@@ -153,7 +156,10 @@ private[spark] class ArmadaExecutorAllocator(
 
   /** Submit executor jobs to Armada.
     */
-  private def submitExecutorJobs(count: Int, rpId: Int): Unit = {
+  private[armada] def submitExecutorJobs(count: Int, rpId: Int): Unit = {
+    if (backend.isStopping) {
+      return
+    }
 
     try {
       // Build minimal context for Armada submission using existing SparkConf

@@ -451,7 +451,7 @@ private[spark] object Config {
       .doc("Grace period in milliseconds before forcefully killing executors.")
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(_ > 0, "Grace period must be positive")
-      .createWithDefaultString("5s")
+      .createWithDefaultString("10s")
 
   val ARMADA_ALLOCATION_BATCH_SIZE: ConfigEntry[Int] =
     ConfigBuilder("spark.armada.allocation.batchSize")
