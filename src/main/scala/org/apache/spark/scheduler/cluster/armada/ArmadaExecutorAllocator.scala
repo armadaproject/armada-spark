@@ -98,7 +98,7 @@ private[spark] class ArmadaExecutorAllocator(
 
   /** Main allocation loop - checks demand and submits jobs if needed.
     */
-  private def tryAllocateExecutors(): Unit = {
+  private[armada] def tryAllocateExecutors(): Unit = {
     if (backend.isStopping) {
       return
     }
@@ -156,7 +156,7 @@ private[spark] class ArmadaExecutorAllocator(
 
   /** Submit executor jobs to Armada.
     */
-  private def submitExecutorJobs(count: Int, rpId: Int): Unit = {
+  private[armada] def submitExecutorJobs(count: Int, rpId: Int): Unit = {
     if (backend.isStopping) {
       return
     }
