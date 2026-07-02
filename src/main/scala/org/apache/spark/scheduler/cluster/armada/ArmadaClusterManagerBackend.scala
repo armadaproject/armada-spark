@@ -144,6 +144,10 @@ private[spark] class ArmadaClusterManagerBackend(
   /** Executor allocation manager */
   private var executorAllocator: Option[ArmadaExecutorAllocator] = None
 
+  @volatile private var stopping: Boolean = false
+
+  private[armada] def isStopping: Boolean = stopping
+
   private lazy val modeHelper = DeploymentModeHelper(conf)
 
   override def applicationId(): String = {
@@ -295,22 +299,22 @@ private[spark] class ArmadaClusterManagerBackend(
   override def stop(): Unit = {
     logInfo("Stopping Armada cluster scheduler backend")
 
-    // Call parent stop - sends StopExecutor RPCs to all executors
-    Utils.tryLogNonFatalError {
-      super.stop()
-    }
+    stopping = true
 
-    // Stop executor allocator (no new executors needed during shutdown)
     Utils.tryLogNonFatalError {
       executorAllocator.foreach(_.stop())
     }
 
-    // Cancel non-terminal executor jobs if configured.
-    // The event watcher stays running during the grace period so it can
-    // receive terminal events (Succeeded/Failed) and mark executors in
-    // terminalExecutors. This allows executors that exit gracefully after
-    // receiving StopExecutor to show "Succeeded" in Armada instead of
-    // "Cancelled".
+    if (conf.get(ARMADA_DELETE_EXECUTORS)) {
+      Utils.tryLogNonFatalError {
+        cancelPendingExecutorJobs()
+      }
+    }
+
+    Utils.tryLogNonFatalError {
+      super.stop()
+    }
+
     if (conf.get(ARMADA_DELETE_EXECUTORS)) {
       val gracePeriod = conf.get(ARMADA_KILL_GRACE_PERIOD)
       logInfo(s"Waiting ${gracePeriod}ms for executors to exit gracefully")
@@ -378,6 +382,18 @@ private[spark] class ArmadaClusterManagerBackend(
       cancelArmadaJobs(executorIds, "Spark application stopping - cancelling executors")
     } else {
       logInfo(s"No executor jobs to cancel")
+    }
+  }
+
+  private def cancelPendingExecutorJobs(): Unit = {
+    val pendingIds = pendingExecutors.synchronized {
+      pendingExecutors.toSeq
+    }
+    if (pendingIds.nonEmpty) {
+      cancelArmadaJobs(pendingIds, "Spark application stopping - cancelling pending executors")
+      pendingIds.foreach(markTerminal)
+    } else {
+      logDebug("No pending executor jobs to cancel")
     }
   }
 

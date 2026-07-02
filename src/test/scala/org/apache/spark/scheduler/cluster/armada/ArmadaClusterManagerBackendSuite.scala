@@ -278,6 +278,13 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     backend.getActiveExecutorIds.size shouldBe numJobs / 2
   }
 
+  test("isStopping is false before stop() and true after") {
+    sparkConf.set("spark.armada.deleteExecutors", "false")
+    backend.isStopping shouldBe false
+    ignoreRpcErrors { backend.stop() }
+    backend.isStopping shouldBe true
+  }
+
   private class TestableArmadaClusterManagerBackend(
       scheduler: TaskSchedulerImpl,
       sc: SparkContext,
