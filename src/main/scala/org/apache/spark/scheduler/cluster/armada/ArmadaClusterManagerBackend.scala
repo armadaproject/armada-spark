@@ -475,11 +475,36 @@ private[spark] class ArmadaClusterManagerBackend(
       exitCode: Int,
       reason: String
   ): Unit = {
+    // If the executor is already terminal, do nothing
+    if (terminalExecutors.contains(executorId)) return
 
     val exitReason = ExecutorExited(
       exitCode,
       exitCausedByApp = exitCode != 0,
       s"Armada job $jobId failed: $reason"
+    )
+
+    markTerminal(executorId)
+    safeRemoveExecutor(executorId, exitReason)
+  }
+
+  /** Called by the event watcher when an executor job is preempted by the Armada scheduler.
+    *
+    * Preemption is an EXTERNAL, infrastructure-initiated loss - NOT an application/task failure. We
+    * report exitCausedByApp = false so Spark does not count it against spark.task.maxFailures and
+    * instead transparently re-runs the preempted executor's tasks on the surviving executors
+    */
+  private[armada] def onExecutorPreempted(
+      jobId: String,
+      executorId: String,
+      reason: String
+  ): Unit = {
+    if (terminalExecutors.contains(executorId)) return
+
+    val exitReason = ExecutorExited(
+      -1,
+      exitCausedByApp = false,
+      s"Armada job $jobId was preempted: $reason"
     )
 
     markTerminal(executorId)
