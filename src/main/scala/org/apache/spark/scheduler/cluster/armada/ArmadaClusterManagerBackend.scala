@@ -535,9 +535,10 @@ private[spark] class ArmadaClusterManagerBackend(
     }
   }
 
-  /** Mark an executor as having reached a terminal state and clean it from pending set.
+  /** Atomically marks an executor terminal and removes it from the pending set. Returns true iff
+    * this call performed the transition, so concurrent callers can guard on it.
     */
-  private def markTerminal(executorId: String): Unit = {
+  private def markTerminal(executorId: String): Boolean = {
     pendingExecutors.synchronized {
       pendingExecutors -= executorId
       terminalExecutors.add(executorId)
@@ -549,11 +550,12 @@ private[spark] class ArmadaClusterManagerBackend(
     * Armada can emit more than one terminal event for a single executor (e.g. both a JobPreempted
     * and a JobFailed for one preemption), so this is idempotent: once an executor is terminal,
     * subsequent calls are no-ops. Every terminal handler funnels through here, so the guard cannot
-    * be accidentally omitted from one of them.
+    * be accidentally omitted from one of them. markTerminal's atomic check-and-set ensures that
+    * even when two threads race to terminate the same executor, only one reaches safeRemoveExecutor
+    * (and therefore Spark's task-failure accounting).
     */
   private def terminate(executorId: String, reason: ExecutorExited): Unit = {
-    if (terminalExecutors.contains(executorId)) return
-    markTerminal(executorId)
+    if (!markTerminal(executorId)) return
     safeRemoveExecutor(executorId, reason)
   }
 

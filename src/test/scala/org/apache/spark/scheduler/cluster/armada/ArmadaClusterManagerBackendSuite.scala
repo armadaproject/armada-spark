@@ -346,6 +346,33 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
+  // The terminal guard must be atomic: when multiple threads terminate the SAME executor
+  // concurrently (e.g. the event watcher delivering a JobPreempted while doKillExecutors fires on
+  // the allocation thread), removeExecutor - and therefore Spark's task-failure accounting - must
+  // fire exactly once. A non-atomic contains-then-add guard would occasionally remove twice.
+  test("terminate is atomic under concurrent terminal events for the same executor") {
+    val cap = newCapturingBackend()
+    try {
+      (1 to 300).foreach { _ =>
+        val execId = cap.recordExecutor(java.util.UUID.randomUUID().toString)
+        val before = cap.removeCount.get()
+        val threads = (1 to 8).map { i =>
+          new Thread {
+            override def run(): Unit =
+              if (i % 2 == 0) cap.onExecutorPreempted("job", execId, "Preempted by Armada")
+              else cap.onExecutorFailed("job", execId, 1, "boom")
+          }
+        }
+        threads.foreach(_.start())
+        threads.foreach(_.join())
+        (cap.removeCount.get() - before) shouldBe 1
+      }
+    } finally {
+      try { cap.stop() }
+      catch { case NonFatal(_) => }
+    }
+  }
+
   private def newCapturingBackend(): CapturingRemovalBackend =
     new CapturingRemovalBackend(
       taskScheduler,
@@ -364,9 +391,11 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
       masterURL: String
   ) extends ArmadaClusterManagerBackend(scheduler, sc, executorService, masterURL) {
 
+    val removeCount = new java.util.concurrent.atomic.AtomicInteger(0)
     @volatile var lastReason: Option[ExecutorLossReason] = None
 
     override def removeExecutor(executorId: String, reason: ExecutorLossReason): Unit = {
+      removeCount.incrementAndGet()
       lastReason = Some(reason)
     }
   }
