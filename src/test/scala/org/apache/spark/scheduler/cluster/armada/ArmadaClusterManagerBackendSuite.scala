@@ -329,6 +329,23 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
+  // All terminal handlers share the guard, so a second terminal event of a different type for an
+  // already-terminal executor (e.g. a JobCancelled after a JobPreempted) is a no-op.
+  test("terminal handlers are idempotent across event types (preempt then cancel)") {
+    val cap = newCapturingBackend()
+    try {
+      val execId = cap.recordExecutor("job-1")
+      cap.onExecutorPreempted("job-1", execId, "Preempted by Armada")
+
+      cap.lastReason = None
+      cap.onExecutorCancelled("job-1", execId)
+      cap.lastReason shouldBe None
+    } finally {
+      try { cap.stop() }
+      catch { case NonFatal(_) => }
+    }
+  }
+
   private def newCapturingBackend(): CapturingRemovalBackend =
     new CapturingRemovalBackend(
       taskScheduler,

@@ -417,11 +417,7 @@ private[spark] class ArmadaClusterManagerBackend(
 
     // Send RPC kill signal to executors
     executorIds.foreach { id =>
-      markTerminal(id)
-      safeRemoveExecutor(
-        id,
-        ExecutorExited(-1, exitCausedByApp = false, "Executor killed by Spark")
-      )
+      terminate(id, ExecutorExited(-1, exitCausedByApp = false, "Executor killed by Spark"))
     }
 
     // Cancel Armada jobs after grace period
@@ -475,17 +471,14 @@ private[spark] class ArmadaClusterManagerBackend(
       exitCode: Int,
       reason: String
   ): Unit = {
-    // If the executor is already terminal, do nothing
-    if (terminalExecutors.contains(executorId)) return
-
-    val exitReason = ExecutorExited(
-      exitCode,
-      exitCausedByApp = exitCode != 0,
-      s"Armada job $jobId failed: $reason"
+    terminate(
+      executorId,
+      ExecutorExited(
+        exitCode,
+        exitCausedByApp = exitCode != 0,
+        s"Armada job $jobId failed: $reason"
+      )
     )
-
-    markTerminal(executorId)
-    safeRemoveExecutor(executorId, exitReason)
   }
 
   /** Called by the event watcher when an executor job is preempted by the Armada scheduler.
@@ -499,37 +492,28 @@ private[spark] class ArmadaClusterManagerBackend(
       executorId: String,
       reason: String
   ): Unit = {
-    if (terminalExecutors.contains(executorId)) return
-
-    val exitReason = ExecutorExited(
-      -1,
-      exitCausedByApp = false,
-      s"Armada job $jobId was preempted: $reason"
+    terminate(
+      executorId,
+      ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId was preempted: $reason")
     )
-
-    markTerminal(executorId)
-    safeRemoveExecutor(executorId, exitReason)
   }
 
   /** Called by event watcher when executor job is cancelled
     */
   private[armada] def onExecutorCancelled(jobId: String, executorId: String): Unit = {
-    val exitReason = ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId was cancelled")
-
-    markTerminal(executorId)
-    safeRemoveExecutor(executorId, exitReason)
+    terminate(
+      executorId,
+      ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId was cancelled")
+    )
   }
 
   /** Called by event watcher when executor job succeeds
     */
   private[armada] def onExecutorSucceeded(jobId: String, executorId: String): Unit = {
-    markTerminal(executorId)
-    val exitReason = ExecutorExited(
-      0,
-      exitCausedByApp = false,
-      s"Armada job $jobId succeeded"
+    terminate(
+      executorId,
+      ExecutorExited(0, exitCausedByApp = false, s"Armada job $jobId succeeded")
     )
-    safeRemoveExecutor(executorId, exitReason)
   }
 
   /** Returns executor IDs that are NOT in a terminal state.
@@ -558,6 +542,19 @@ private[spark] class ArmadaClusterManagerBackend(
       pendingExecutors -= executorId
       terminalExecutors.add(executorId)
     }
+  }
+
+  /** Reports an executor's terminal transition to Spark exactly once.
+    *
+    * Armada can emit more than one terminal event for a single executor (e.g. both a JobPreempted
+    * and a JobFailed for one preemption), so this is idempotent: once an executor is terminal,
+    * subsequent calls are no-ops. Every terminal handler funnels through here, so the guard cannot
+    * be accidentally omitted from one of them.
+    */
+  private def terminate(executorId: String, reason: ExecutorExited): Unit = {
+    if (terminalExecutors.contains(executorId)) return
+    markTerminal(executorId)
+    safeRemoveExecutor(executorId, reason)
   }
 
   private[armada] def onExecutorSubmitted(jobId: String): Unit = {
@@ -631,11 +628,10 @@ private[spark] class ArmadaClusterManagerBackend(
       reason: String
   ): Unit = {
 
-    val exitReason =
+    terminate(
+      executorId,
       ExecutorExited(-1, exitCausedByApp = false, s"Armada job $jobId unable to schedule: $reason")
-
-    markTerminal(executorId)
-    safeRemoveExecutor(executorId, exitReason)
+    )
   }
 
   // ========================================================================
