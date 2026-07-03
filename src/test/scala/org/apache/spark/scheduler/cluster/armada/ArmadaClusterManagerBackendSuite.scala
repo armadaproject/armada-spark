@@ -296,7 +296,9 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
   }
 
   // A genuine executor crash (nonzero exit) must still be reported as app-caused so Spark counts it.
-  test("onExecutorFailed with a nonzero exit code reports an app-caused loss (exitCausedByApp = true)") {
+  test(
+    "onExecutorFailed with a nonzero exit code reports an app-caused loss (exitCausedByApp = true)"
+  ) {
     val cap = newCapturingBackend()
     try {
       val execId = cap.recordExecutor("job-fail")
