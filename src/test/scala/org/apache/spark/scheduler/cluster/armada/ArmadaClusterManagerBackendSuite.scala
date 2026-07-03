@@ -28,7 +28,7 @@ import org.mockito.Mockito._
 
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.scheduler.TaskSchedulerImpl
+import org.apache.spark.scheduler.{ExecutorExited, ExecutorLossReason, TaskSchedulerImpl}
 
 class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter with Matchers {
 
@@ -276,6 +276,80 @@ class ArmadaClusterManagerBackendSuite extends AnyFunSuite with BeforeAndAfter w
     threads.foreach(_.join())
 
     backend.getActiveExecutorIds.size shouldBe numJobs / 2
+  }
+
+  // Preemption is an external loss - Spark must NOT count it as a task failure, otherwise a single
+  // preempted scale-up executor aborts the whole job (see #148).
+  test("onExecutorPreempted reports an external loss (exitCausedByApp = false)") {
+    val cap = newCapturingBackend()
+    try {
+      val execId = cap.recordExecutor("job-preempt")
+      cap.onExecutorPreempted("job-preempt", execId, "Preempted by Armada")
+
+      cap.lastReason shouldBe defined
+      cap.lastReason.get shouldBe a[ExecutorExited]
+      cap.lastReason.get.asInstanceOf[ExecutorExited].exitCausedByApp shouldBe false
+    } finally {
+      try { cap.stop() }
+      catch { case NonFatal(_) => }
+    }
+  }
+
+  // A genuine executor crash (nonzero exit) must still be reported as app-caused so Spark counts it.
+  test("onExecutorFailed with a nonzero exit code reports an app-caused loss (exitCausedByApp = true)") {
+    val cap = newCapturingBackend()
+    try {
+      val execId = cap.recordExecutor("job-fail")
+      cap.onExecutorFailed("job-fail", execId, 1, "OOM")
+
+      cap.lastReason.get.asInstanceOf[ExecutorExited].exitCausedByApp shouldBe true
+    } finally {
+      try { cap.stop() }
+      catch { case NonFatal(_) => }
+    }
+  }
+
+  // Armada emits both a JobPreempted and a JobFailed event for one preemption; the terminal guard
+  // must make the second one a no-op so the loss is reported to Spark exactly once.
+  test("onExecutorPreempted is idempotent once the executor is terminal") {
+    val cap = newCapturingBackend()
+    try {
+      val execId = cap.recordExecutor("job-1")
+      cap.onExecutorPreempted("job-1", execId, "Preempted by Armada")
+      cap.getActiveExecutorIds should not contain execId
+
+      cap.lastReason = None
+      cap.onExecutorPreempted("job-1", execId, "Preempted by Armada")
+      cap.lastReason shouldBe None
+    } finally {
+      try { cap.stop() }
+      catch { case NonFatal(_) => }
+    }
+  }
+
+  private def newCapturingBackend(): CapturingRemovalBackend =
+    new CapturingRemovalBackend(
+      taskScheduler,
+      sc,
+      Executors.newScheduledThreadPool(1),
+      "armada://localhost:50051"
+    )
+
+  /** Captures the ExecutorLossReason passed to removeExecutor so tests can assert exitCausedByApp
+    * without triggering Spark's RPC layer (which NPEs in unit tests).
+    */
+  private class CapturingRemovalBackend(
+      scheduler: TaskSchedulerImpl,
+      sc: SparkContext,
+      executorService: java.util.concurrent.ScheduledExecutorService,
+      masterURL: String
+  ) extends ArmadaClusterManagerBackend(scheduler, sc, executorService, masterURL) {
+
+    @volatile var lastReason: Option[ExecutorLossReason] = None
+
+    override def removeExecutor(executorId: String, reason: ExecutorLossReason): Unit = {
+      lastReason = Some(reason)
+    }
   }
 
   private class TestableArmadaClusterManagerBackend(
