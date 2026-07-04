@@ -29,10 +29,18 @@ runs:
 
   - name: Move docker
     run: |
-      sudo systemctl stop docker
+      echo "::group::moving Docker"
+      # Stop both the socket and the service to prevent auto-restart
+      sudo systemctl stop docker.socket docker.service
+      
+      # Now move the directory
       sudo mv /var/lib/docker /var/lib/docker.old
       sudo ln -s /mnt/docker /var/lib/docker
+      
+      # Restart the service
       sudo systemctl start docker
+      df -h /mnt
+      echo "::endgroup::"
     shell: bash
 
   - name: Setup JDK
@@ -68,4 +76,3 @@ runs:
     run: |
       ./scripts/dev-e2e.sh -q test
     shell: bash
-    

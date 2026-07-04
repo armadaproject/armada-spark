@@ -429,7 +429,7 @@
                         </goals>
                         <configuration>
                             <outputDirectory>${project.basedir}/extraJars</outputDirectory>
-                            <finalName>test-feature-step</finalName>
+                            <classifier>test-feature-step</classifier> 
                             <includes>
                                 <include>org/apache/spark/deploy/armada/e2e/featurestep/**</include>
                             </includes>
@@ -570,6 +570,8 @@
               <artifactId>scalatest-maven-plugin</artifactId>
               <version>${scalatest-maven-plugin.version}</version>
               <configuration>
+                <skipTests>${skipTests}</skipTests> 
+                
                 <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
                 <junitxml>.</junitxml>
                 <filereports>SparkTestSuite.txt</filereports>

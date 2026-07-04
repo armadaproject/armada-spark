@@ -312,7 +312,7 @@ export PROFILES_ARG="-P${MAVEN_PROFILES}"
 
 # 2. Validation - Only run if NOT in GitHub Actions
 # This now executes AFTER MAVEN_PROFILES and PROFILES_ARG are exported
-if [[ -z "$GITHUB_ACTIONS" ]]; then
+if [[ -z "${GITHUB_ACTIONS-}" ]]; then
   if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
       safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
   fi
