@@ -229,10 +229,6 @@ fi
 
 # Validation
 
-if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
-    echo "Error: --mode/-M must be either 'client' or 'cluster'"
-    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
-fi
 export DEPLOY_MODE
 
 if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
