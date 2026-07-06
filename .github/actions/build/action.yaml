@@ -38,8 +38,11 @@ runs:
 
   - name: Build package
     run: |
+      # Build package
+      echo "::group::mvn install"
       source ./scripts/init.sh
       mvn --batch-mode clean install -P$MAVEN_PROFILES
+      echo "::endgroup::"
     shell: bash
 
   - name: Build image
@@ -50,6 +53,9 @@ runs:
       SPARK_VERSION: ${{ inputs.spark_version }}
       SCALA_VERSION: ${{ inputs.scala_version }}
     run: |
+      # Build image
+      echo "::group::createImage.sh"
       ./scripts/createImage.sh
+      echo "::endgroup::"
     shell: bash
     

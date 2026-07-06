@@ -4,13 +4,13 @@ description: Github Action to run end-to-end tests against a Spark and Scala ver
 
 inputs:
   spark_version:
-    description: Spark version to build against
+    description: Spark version to build against, e.g. "3.5.5" or "4.1.0-SNAPSHOT"
     required: true
   scala_version:
-    description: Scala version to build with
+    description: Scala version to build with, e.g. "2.13.8"
     required: true
   java_version:
-    description: Java version to build with
+    description: Java version to build with, e.g. "11"
     required: true
 
 runs:
@@ -26,22 +26,28 @@ runs:
     with:
       path: ~/.m2/repository
       key: ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+      restore-keys: |
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-${{ hashFiles('armada-spark/pom.xml') }}
+        ${{ runner.os }}-mvn-e2e-${{ inputs.spark_version }}-${{ inputs.scala_version }}-
 
   - name: Move docker
     run: |
+      # Moving docker to save space and preventing auto-restart
       echo "::group::moving Docker"
-      # Stop both the socket and the service to prevent auto-restart
+      df -h /mnt
       sudo systemctl stop docker.socket docker.service
-      
-      # Now move the directory
-      sudo mv /var/lib/docker /var/lib/docker.old
+      sudo mv /var/lib/docker /mnt/docker
       sudo ln -s /mnt/docker /var/lib/docker
-      
-      # Restart the service
       sudo systemctl start docker
       df -h /mnt
       echo "::endgroup::"
     shell: bash
+
+  - name: Setup Go
+    id: setup-go
+    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@72ecbbdfddd147af7be300cbea7f0d870004e56c # main
+    with:
+      cache-prefix: go-e2e
 
   - name: Setup JDK
     uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -59,8 +65,11 @@ runs:
   - name: Build package
     working-directory: armada-spark
     run: |
+      # Build package
+      echo "::group::mvn package"
       source ./scripts/init.sh
       mvn --batch-mode clean package -P$MAVEN_PROFILES
+      echo "::endgroup::"
     shell: bash
 
   - name: Build image
@@ -68,11 +77,17 @@ runs:
     env:
       JAVA_VERSION: ${{ inputs.java_version }}
     run: |
+      # Build image
+      echo "::group::createImage.sh"
       ./scripts/createImage.sh -p -e
+      echo "::endgroup::"
     shell: bash
 
   - name: Test job processing
+    id: submit
     working-directory: armada-spark
     run: |
+      echo "::group::dev-e2e.sh"
       ./scripts/dev-e2e.sh -q test
+      echo "::endgroup::"
     shell: bash
