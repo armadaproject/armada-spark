@@ -288,14 +288,14 @@ fi
 
 # 1. Compute MAVEN_PROFILES and PROFILES_ARG immediately
 if [[ -z "${MAVEN_PROFILES:-}" ]]; then
-  if [[ "$SPARK_VERSION" == *"-SNAPSHOT" ]]; then
+  if [[ "${SPARK_VERSION-}" == *"-SNAPSHOT" ]]; then
     # Map snapshot to the base 4.1.1 profile properties for validation compatibility
     SPARK_PROFILE="spark4.1.1"
-  elif [[ "$SPARK_VERSION" == 3.3.* ]]; then
+  elif [[ "${SPARK_VERSION-}" == 3.3.* ]]; then
     SPARK_PROFILE="spark3.3.4"
-  elif [[ "$SPARK_VERSION" == 3.5.* ]]; then
+  elif [[ "${SPARK_VERSION-}" == 3.5.* ]]; then
     SPARK_PROFILE="spark3.5.5"
-  elif [[ "$SPARK_VERSION" == 4.1.* ]]; then
+  elif [[ "${SPARK_VERSION-}" == 4.1.* ]]; then
     SPARK_PROFILE="spark4.1.1"
   else
     SPARK_PROFILE="spark${SPARK_VERSION}"

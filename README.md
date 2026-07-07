@@ -13,6 +13,12 @@ It provides preconfigured Docker images, tooling for efficient image management,
 - **Apache Maven** 3.9.6+
 - *(Optional)* [kind](https://kind.sigs.k8s.io/) for local clusters
 - An accessible Armada server and Lookout endpoint — see the [Armada Operator Quickstart](https://github.com/armadaproject/armada-operator) to set one up
+- Before running build or test scripts, you must define the target Spark and Scala versions. These are used to select the correct build profiles and dependencies. You can configure these by creating a scripts/config.sh file (refer to scripts/config.sh.example) or by exporting them in your environment:
+```
+export SPARK_VERSION="3.5.5"
+export SCALA_VERSION="2.13.18"
+```
+If these variables are not set, the build scripts will fail with an error. Ensure your environment matches the supported version matrix defined in the project configuration.
 
 ### Build
 
