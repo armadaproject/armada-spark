@@ -262,7 +262,7 @@ private[spark] class ArmadaEventWatcher(
     }
   }
 
-  private def handleFailed(event: JobFailedEvent): Unit = {
+  private[armada] def handleFailed(event: JobFailedEvent): Unit = {
     val jobId      = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
@@ -306,7 +306,7 @@ private[spark] class ArmadaEventWatcher(
     }
   }
 
-  private def handlePreempted(event: JobPreemptedEvent): Unit = {
+  private[armada] def handlePreempted(event: JobPreemptedEvent): Unit = {
     val jobId      = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
