@@ -1,13 +1,8 @@
 diff --git a/dev/quickstart/armada-crs.yaml b/dev/quickstart/armada-crs.yaml
-index d76880c..0eac6cf 100644
+index 1fb86d5..5989a39 100644
 --- a/dev/quickstart/armada-crs.yaml
 +++ b/dev/quickstart/armada-crs.yaml
- ---
- apiVersion: install.armadaproject.io/v1alpha1
- kind: Executor
-@@ -70,8 +72,12 @@ spec:
-     executorApiConnection:
-       armadaUrl: armada-scheduler.armada.svc.cluster.local:50051
+@@ -72,6 +72,10 @@ spec:
        forceNoTls: true
      metric:
        port: 9001
@@ -18,21 +13,32 @@ index d76880c..0eac6cf 100644
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: Lookout
-@@ -156,6 +162,9 @@ spec:
+@@ -158,6 +162,18 @@ spec:
          password: psw
          dbname: scheduler
          sslmode: disable
 +    scheduling:
 +      indexedNodeLabels:
 +        - armada-spark
++      priorityClasses:
++        armada-default:
++          priority: 1000
++          preemptible: false
++        armada-preemptible:
++          priority: 900
++          preemptible: true
++      defaultPriorityClassName: armada-default
++      priorityClassNameOverride: ""
  ---
  apiVersion: install.armadaproject.io/v1alpha1
  kind: SchedulerIngester
 diff --git a/hack/kind-config.yaml b/hack/kind-config.yaml
-index a8d45c3..4a72570 100644
+index a8d45c3..0a636dc 100644
 --- a/hack/kind-config.yaml
 +++ b/hack/kind-config.yaml
-@@ -4,3 +4,18 @@ nodes:
+@@ -2,7 +2,26 @@ kind: Cluster
+ apiVersion: kind.x-k8s.io/v1alpha4
+ nodes:
  - role: control-plane
 +  kubeadmConfigPatches:
 +  - |
@@ -50,8 +56,14 @@ index a8d45c3..4a72570 100644
 +  - containerPort: 80
 +    hostPort: 9999
 +    protocol: TCP
++  # nginx ingress HTTPS (host 9443 -> container 443) for Spark Connect TLS
++  - containerPort: 443
++    hostPort: 9443
++    protocol: TCP
    # Lookout UI
-@@ -16,3 +31,6 @@ nodes:
+   - containerPort: 30000
+     hostPort: 30000
+@@ -16,3 +35,6 @@ nodes:
      hostPort: 30002
      protocol: TCP
  - role: worker

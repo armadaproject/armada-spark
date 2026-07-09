@@ -80,6 +80,15 @@ SPARK_SUBMIT_ARGS+=("${EVENT_LOG_CONF[@]-}")
 # Add extra conf
 SPARK_SUBMIT_ARGS+=("${EXTRA_CONF[@]}")
 
+# Caller-injected extra --conf (newline-separated tokens). Appended after all
+# built-in conf so duplicate keys resolve to the caller's value (spark-submit
+# keeps the last occurrence). Used by scripts/test/preemption/run.sh.
+if [ -n "${SPARK_SUBMIT_EXTRA_CONF:-}" ]; then
+    while IFS= read -r _tok; do
+        [ -n "$_tok" ] && SPARK_SUBMIT_ARGS+=("$_tok")
+    done <<< "$SPARK_SUBMIT_EXTRA_CONF"
+fi
+
 # Add application and final args
 SPARK_SUBMIT_ARGS+=($FIRST_ARG "${FINAL_ARGS[@]}")
 
@@ -95,5 +104,11 @@ unset _filtered_args _arg
 
 # Run spark-submit via docker. In cluster mode, the Scala application watches
 # the driver job internally and exits with the appropriate code.
+if [ "${DRY_RUN:-false}" == "true" ]; then
+    echo "SUBMIT_ARG: docker run ${DOCKER_ENV_ARGS[*]} -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME /opt/spark/bin/spark-submit"
+    for _a in "${SPARK_SUBMIT_ARGS[@]}"; do echo "SUBMIT_ARG: $_a"; done
+    exit 0
+fi
+
 docker run "${DOCKER_ENV_ARGS[@]}" -v $scripts/../conf:/opt/spark/conf --rm --network host $IMAGE_NAME \
     /opt/spark/bin/spark-submit "${SPARK_SUBMIT_ARGS[@]}"
