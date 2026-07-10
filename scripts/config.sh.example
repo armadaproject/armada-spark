@@ -6,7 +6,7 @@
 ARMADA_MASTER=armada://localhost:30002
 ARMADA_QUEUE=test
 export SPARK_VERSION="3.5.5"
-export SCALA_VERSION="2.13.18"
+export SCALA_VERSION="2.13.8"
 
 # ── Image ────────────────────────────────────────────────────────
 #IMAGE_NAME=spark:armada

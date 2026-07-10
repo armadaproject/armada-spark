@@ -16,7 +16,7 @@ It provides preconfigured Docker images, tooling for efficient image management,
 - Before running build or test scripts, you must define the target Spark and Scala versions. These are used to select the correct build profiles and dependencies. You can configure these by creating a scripts/config.sh file (refer to scripts/config.sh.example) or by exporting them in your environment:
 ```
 export SPARK_VERSION="3.5.5"
-export SCALA_VERSION="2.13.18"
+export SCALA_VERSION="2.13.8"
 ```
 If these variables are not set, the build scripts will fail with an error. Ensure your environment matches the supported version matrix defined in the project configuration.
 

@@ -246,7 +246,9 @@ run-test() {
 
   # Run the Scala E2E test suite
   env KUBERNETES_TRUST_CERTIFICATES=true \
-  mvn ${MVN_OFFLINE-} ${PROFILES_ARG} -e scalatest:test \    -Dcontainer.image="$IMAGE_NAME" \
+  mvn ${MVN_OFFLINE-} ${PROFILES_ARG} -e scalatest:test \
+    -Dsuites="org.apache.spark.deploy.armada.e2e.ArmadaSparkE2E" \
+    -Dcontainer.image="$IMAGE_NAME" \
     -Dscala.version="$SCALA_VERSION" \
     -Dscala.binary.version="$SCALA_BIN_VERSION" \
     -Dspark.version="$SPARK_VERSION" \
