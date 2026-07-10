@@ -49,6 +49,20 @@ private[spark] class ArmadaEventWatcher(
 ) extends Logging {
 
   @volatile private var running = false
+
+  // Armada surfaces a preempted executor as a JobFailed event *in addition to* the typed
+  // JobPreemptedEvent. The JobFailed event's structured `cause` is the generic `Error`, so the only
+  // signal distinguishing a preemption-driven failure from a genuine crash is the free-text
+  // `reason`. Every Armada preemption description contains "preempt" (as "Preempted"/"preemption"/
+  // "preempting") - urgency, fair-share, market-based, fairness-optimiser, and reschedule-failure
+  // variants alike - so this lowercase substring matches all of them. See the templates at:
+  // https://github.com/armadaproject/armada/blob/v0.21.6/internal/scheduler/scheduling/preemption_description.go#L11-L18
+  //
+  // This is a safety net for the case where the JobFailed event is processed before the
+  // JobPreemptedEvent; the typed JobPreemptedEvent (handlePreempted) remains the primary,
+  // non-string preemption signal.
+  private val PreemptionReasonMarker = "preempt"
+
   private val watcherThread = new Thread("armada-event-watcher") {
     setDaemon(true)
     override def run(): Unit = watchEvents()
@@ -248,7 +262,7 @@ private[spark] class ArmadaEventWatcher(
     }
   }
 
-  private def handleFailed(event: JobFailedEvent): Unit = {
+  private[armada] def handleFailed(event: JobFailedEvent): Unit = {
     val jobId      = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
@@ -256,8 +270,16 @@ private[spark] class ArmadaEventWatcher(
       val reason     = Option(event.reason).filter(_.nonEmpty).getOrElse("Unknown failure")
       val causeStr   = Option(event.cause).map(c => s"Cause: ${c.name}").getOrElse("")
       val fullReason = Seq(reason, causeStr).filter(s => s != null && s.nonEmpty).mkString(", ")
-      logWarning(s"Executor $executorId (job $jobId) failed: $fullReason (exit code: $exitCode)")
-      backend.onExecutorFailed(jobId, executorId, exitCode, fullReason)
+      // Route a preemption-driven JobFailed event to the external-loss path (see
+      // PreemptionReasonMarker) so Spark re-runs the lost tasks instead of counting them against
+      // spark.task.maxFailures and aborting the job.
+      if (fullReason.toLowerCase.contains(PreemptionReasonMarker)) {
+        logInfo(s"Executor $executorId (job $jobId) failed due to preemption: $fullReason")
+        backend.onExecutorPreempted(jobId, executorId, fullReason)
+      } else {
+        logWarning(s"Executor $executorId (job $jobId) failed: $fullReason (exit code: $exitCode)")
+        backend.onExecutorFailed(jobId, executorId, exitCode, fullReason)
+      }
     } else {
       logInfo(s"Received failed event for unknown job $jobId")
     }
@@ -284,12 +306,12 @@ private[spark] class ArmadaEventWatcher(
     }
   }
 
-  private def handlePreempted(event: JobPreemptedEvent): Unit = {
+  private[armada] def handlePreempted(event: JobPreemptedEvent): Unit = {
     val jobId      = event.jobId
     val executorId = jobIdToExecutor.get(jobId)
     if (executorId != null) {
       logInfo(s"Executor $executorId (job $jobId) was preempted")
-      backend.onExecutorFailed(jobId, executorId, -1, "Preempted by Armada")
+      backend.onExecutorPreempted(jobId, executorId, "Preempted by Armada")
     }
   }
 
