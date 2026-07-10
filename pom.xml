@@ -198,6 +198,12 @@
     <profiles>
         <profile>
             <id>scala2.12.15</id>
+            <activation>
+                <property>
+                    <name>env.SCALA_VERSION</name>
+                    <value>2.12.15</value>
+                </property>
+            </activation>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
@@ -207,6 +213,12 @@
         </profile>
         <profile>
             <id>scala2.12.18</id>
+            <activation>
+                <property>
+                    <name>env.SCALA_VERSION</name>
+                    <value>2.12.18</value>
+                </property>
+            </activation>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
@@ -216,6 +228,12 @@
         </profile>
         <profile>
             <id>scala2.13.8</id>
+            <activation>
+                <property>
+                    <name>env.SCALA_VERSION</name>
+                    <value>2.13.8</value>
+                </property>
+            </activation>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
@@ -225,6 +243,12 @@
         </profile>
         <profile>
             <id>scala2.13.17</id>
+            <activation>
+                <property>
+                    <name>env.SCALA_VERSION</name>
+                    <value>2.13.17</value>
+                </property>
+            </activation>
             <properties>
                 <scala.profile.selected>true</scala.profile.selected>
                 <scala.major.version>2</scala.major.version>
@@ -234,6 +258,12 @@
         </profile>
         <profile>
             <id>spark3.3.4</id>
+            <activation>
+                <property>
+                    <name>env.SPARK_VERSION</name>
+                    <value>3.3.4</value>
+                </property>
+            </activation>
             <properties>
                 <spark.profile.selected>true</spark.profile.selected>
                 <spark.major.version>3</spark.major.version>
@@ -246,6 +276,12 @@
         </profile>
         <profile>
             <id>spark3.5.5</id>
+            <activation>
+                <property>
+                    <name>env.SPARK_VERSION</name>
+                    <value>3.5.5</value>
+                </property>
+            </activation>
             <properties>
                 <spark.profile.selected>true</spark.profile.selected>
                 <spark.major.version>3</spark.major.version>
@@ -258,6 +294,12 @@
         </profile>
         <profile>
             <id>spark4.1.1</id>
+            <activation>
+                <property>
+                    <name>env.SPARK_VERSION</name>
+                    <value>4.1.1</value>
+                </property>
+            </activation>
             <properties>
                 <spark.profile.selected>true</spark.profile.selected>
                 <spark.major.version>4</spark.major.version>
