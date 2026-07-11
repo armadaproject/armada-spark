@@ -66,6 +66,77 @@ fetch-armadactl() {
   curl --silent --location "${dl_url}/v${ARMADACTL_VERSION}/$dl_file" | tar -C "$scripts" -xzf - armadactl
 }
 
+# `kind load docker-image` fails when a locally-tagged image resolves to a
+# multi-platform manifest index (e.g. anything pulled by tag under Docker's
+# containerd-backed image store, which keeps the full index as the tag's
+# descriptor even though only the host platform's content was downloaded).
+# kind issues `ctr images import --all-platforms` against it, which then
+# fails looking for blobs of platforms that were never pulled:
+#   "ctr: content digest sha256:...: not found"
+# Resolve the image to the single-platform manifest digest for the host
+# platform and re-tag locally so `docker image inspect` no longer reports
+# an index, avoiding the all-platforms import path entirely.
+pin-single-platform-image() {
+  local image="$1"
+
+  if ! command -v jq &> /dev/null; then
+    err "'jq' command not found; cannot verify $image is a single-platform image."
+    err 'Install it (e.g. "apt-get install jq" or "brew install jq") and re-run this script.'
+    exit 1
+  fi
+
+  local descriptor_media_type
+  descriptor_media_type=$(docker image inspect "$image" --format '{{json .Descriptor.mediaType}}' 2>/dev/null || echo '""')
+
+  case "$descriptor_media_type" in
+    *manifest.list*|*image.index*) ;;
+    *) return 0 ;; # already a single-platform manifest; nothing to do
+  esac
+
+  local goarch
+  case "$arch" in
+    x86_64) goarch='amd64' ;;
+    aarch64|arm64) goarch='arm64' ;;
+    *) goarch="$arch" ;;
+  esac
+  local goos
+  goos=$(echo "$os" | tr '[:upper:]' '[:lower:]')
+
+  # `docker manifest inspect` only succeeds for images backed by a registry;
+  # locally-built images (e.g. IMAGE_NAME from `docker createImage.sh`) can
+  # also report an index descriptor (build attestations) but have all their
+  # content already present locally, so kind load works fine as-is. Guard
+  # the pipeline with `|| true` so a lookup failure here (under `set -e -o
+  # pipefail`) doesn't abort the whole script.
+  local digest
+  digest=$( (docker manifest inspect "$image" 2>/dev/null \
+    | jq -r --arg os "$goos" --arg arch "$goarch" \
+      '.manifests[]? | select(.platform.os == $os and .platform.architecture == $arch and ((.platform.variant // "") == "")) | .digest') || true)
+  digest=$(echo "$digest" | head -n1)
+
+  if [ -z "$digest" ]; then
+    echo "Could not resolve a $goos/$goarch manifest for $image via registry lookup (may be a locally-built image); leaving as-is."
+    return 0
+  fi
+
+  local repo="${image%%:*}"
+  repo="${repo%%@*}"
+
+  if ! docker pull "$repo@$digest"; then
+    err "Could not pull $repo@$digest; please try running"
+    err "  docker pull $repo@$digest"
+    err "then run this script again"
+    exit 1
+  fi
+
+  if ! docker tag "$repo@$digest" "$image"; then
+    err "Error running"
+    err "  docker tag $repo@$digest $image"
+    err "Please try it manually, then run this script again"
+    exit 1
+  fi
+}
+
 armadactl-retry() {
   for attempt in {1..10}; do
     if "$scripts"/armadactl "$@" > /dev/null 2>&1; then
@@ -161,27 +232,7 @@ init-cluster() {
   if ! docker image inspect "$INIT_CONTAINER_IMAGE" > /dev/null 2>&1; then
     echo "Image $INIT_CONTAINER_IMAGE not found in local Docker instance; pulling it from Docker Hub."
 
-    # On MacOS systems with arch64 CPUs, we must specify pulling the arm64-specific manifest by
-    # its platform digest (not the multi-arch index), then re-tag it locally as busybox:latest
-    # otherwise the subsequent `kind load docker-image busybox:latest` step fails.
-    ARM64_BUSYBOX_IMG='busybox@sha256:c4e5b27bf840ba1ebd5568b6b914f6926f3559b2ad4f505b1f37aae483b907d6'
-    if [ "$os" = "Darwin" ] && [ "$arch" = 'arm64' ]; then
-      if ! docker pull "$ARM64_BUSYBOX_IMG"; then
-        err "Could not pull $ARM64_BUSYBOX_IMG; please try running"
-        err "  docker pull $ARM64_BUSYBOX_IMG"
-        err "then run this script again"
-        exit 1
-      fi
-
-      if ! docker tag "$ARM64_BUSYBOX_IMG" "$INIT_CONTAINER_IMAGE"; then
-        err "Error running"
-        err "  docker tag $ARM64_BUSYBOX_IMG $INIT_CONTAINER_IMAGE"
-        err "Please try it manually, then run this script again"
-        exit 1
-      fi
-
-    # Linux systems and MacOS systems on amd64 processors
-    elif ! docker pull "$INIT_CONTAINER_IMAGE"; then
+    if ! docker pull "$INIT_CONTAINER_IMAGE"; then
       err "Could not pull $INIT_CONTAINER_IMAGE; please try running"
       err "  docker pull $INIT_CONTAINER_IMAGE"
       err "then run this script again"
@@ -214,6 +265,7 @@ init-cluster() {
 
   if [[ "$ARMADA_MASTER" == *"//localhost"* || "$ARMADA_MASTER" == *"//host.docker.internal"* ]] ; then
     for IMG in "$IMAGE_NAME" "$INIT_CONTAINER_IMAGE"; do
+      pin-single-platform-image "$IMG"
       TMPDIR="$scripts/.tmp" "$AOHOME/bin/tooling/kind" load docker-image "$IMG" --name armada 2>&1 \
         | log_group "Loading Docker image $IMG into Armada (Kind) cluster";
     done
