@@ -63,6 +63,7 @@ mvn clean package
 | `-p` | Include Python     |                            |
 | `-h` | Display help       |                            |
 
+
 By default the image is built for the host architecture only and loaded into
 the local docker daemon. Set `PUSH=true` to build a multi-arch image
 (`linux/amd64` + `linux/arm64`) and push it as a manifest list to the registry
@@ -224,9 +225,17 @@ Pass `-C` to run in Spark Connect mode (experimental). The Spark Connect server 
 ./scripts/runJupyter.sh -C
 ```
 
+**First run: the Spark Connect jar must be baked into the image.** The jar is optional in the image build, so the very first time you use `-C` you need to download it and rebuild, in this exact order:
+
+1. `./scripts/runJupyter.sh -C` - downloads the Spark Connect jar into `extraJars/`, then stops and asks you to rebuild.
+2. `./scripts/createImage.sh` - rebuilds the image with the jar baked into `/opt/spark/jars`.
+3. `./scripts/runJupyter.sh -C` - run again; the server now starts.
+
+The jar lives at `local:///opt/spark/jars/...`, which is on the driver's classpath only once it's baked into the image, so the rebuild is required.
+
 Use `kubectl port-forward` command for the connect port (`15002`). Allocation follows `-A static|dynamic` (default dynamic); in static mode set `EXECUTOR_INSTANCES` to choose the executor count. 
 
-See [`spark_connect_demo.ipynb`](example/jupyter/notebooks/spark_connect_demo.ipynb).
+See `[spark_connect_demo.ipynb](example/jupyter/notebooks/spark_connect_demo.ipynb)`.
 
 ### Spark History Server
 
