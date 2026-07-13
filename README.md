@@ -225,6 +225,8 @@ Pass `-C` to run in Spark Connect mode (experimental). The Spark Connect server 
 ./scripts/runJupyter.sh -C
 ```
 
+Spark Connect requires a Python-enabled image, so set `INCLUDE_PYTHON=true` in `scripts/config.sh` before building (or pass `-p` to `createImage.sh`).
+
 **First run: the Spark Connect jar must be baked into the image.** The jar is optional in the image build, so the very first time you use `-C` you need to download it and rebuild, in this exact order:
 
 1. `./scripts/runJupyter.sh -C` - downloads the Spark Connect jar into `extraJars/`, then stops and asks you to rebuild.
