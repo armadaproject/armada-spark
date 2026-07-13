@@ -134,8 +134,8 @@ export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 # Docker/K8S virtual interface.
 if [[ -z "${SPARK_LOCAL_IP:-}" ]]; then
   if command -v ifconfig &> /dev/null; then
-    # Your existing ifconfig logic here
-    export SPARK_LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1)
+    # Extract the first non-loopback, non-Docker/K8S bridge address
+    export SPARK_LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -Ev '^(127\.0\.0\.1|172\.)' | head -n 1)
   else
     # In CI environments without ifconfig, warn instead of crashing
     echo "[WARNING] ifconfig not found. SPARK_LOCAL_IP will remain unset."
