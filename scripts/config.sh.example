@@ -10,6 +10,8 @@ export SCALA_VERSION="2.13.8"
 
 # ── Image ────────────────────────────────────────────────────────
 #IMAGE_NAME=spark:armada
+# Required for Jupyter and Spark Connect (installs Python/PySpark in the image):
+#INCLUDE_PYTHON=true
 
 # ── Kind (local dev cluster) ─────────────────────────────────────
 #USE_KIND=true
