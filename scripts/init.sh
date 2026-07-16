@@ -396,6 +396,23 @@ if [[ ${#S3_CONF[@]} -gt 0 && ${ARMADA_BENCHMARK_BUCKET:-} != "" ]]; then
     )
 fi
 
+# Deliver the DB password to pods as $ARMADA_JDBC_PASSWORD from a K8s Secret via
+# secretKeyRef, mirroring the S3 armada-secret pattern. No-op unless JDBC_SECRET_KEY is set.
+JDBC_CONF=()
+if [[ ${JDBC_SECRET_KEY:-} != "" ]]; then
+    JDBC_PASSWORD_ITEM="${JDBC_PASSWORD_ITEM:-password}"
+    # Driver needs the ref only in cluster mode; a client-mode driver runs
+    # locally, not as a pod, so only executors get it.
+    if [[ "$DEPLOY_MODE" != "client" ]]; then
+        JDBC_CONF+=(
+            --conf spark.kubernetes.driver.secretKeyRef.ARMADA_JDBC_PASSWORD=$JDBC_SECRET_KEY:$JDBC_PASSWORD_ITEM
+        )
+    fi
+    JDBC_CONF+=(
+        --conf spark.kubernetes.executor.secretKeyRef.ARMADA_JDBC_PASSWORD=$JDBC_SECRET_KEY:$JDBC_PASSWORD_ITEM
+    )
+fi
+
 EVENT_LOG_CONF=()
 if [ ${#S3_CONF[@]} -gt 0 ]; then
     ARMADA_EVENT_LOG_DIR="$ARMADA_S3_USER_DIR/eventLog"

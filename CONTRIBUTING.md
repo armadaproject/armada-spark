@@ -10,6 +10,7 @@ mvn test                   # Run unit tests only
 mvn spotless:check         # Check formatting
 mvn spotless:apply         # Auto-fix formatting
 scripts/dev-e2e.sh         # Run E2E tests (requires a running Armada cluster)
+scripts/tests/run.sh       # Run script-driven integration suites (submit real jobs; see scripts/tests/README.md)
 
 # Target a different Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.15)
 ./scripts/set-version.sh 3.3.4 2.12.15

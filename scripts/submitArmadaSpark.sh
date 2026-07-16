@@ -57,6 +57,7 @@ SPARK_SUBMIT_ARGS=(
     --name $NAME
     $CLASS_PROMPT $CLASS_ARG
     "${S3_CONF[@]-}" \
+    ${JDBC_CONF[@]+"${JDBC_CONF[@]}"} \
     "${ARMADA_COMMON_CONF[@]}" \
 )
 
