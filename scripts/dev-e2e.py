@@ -14,7 +14,7 @@ import shutil
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPTS_DIR, ".."))
 AOREPO = 'https://github.com/armadaproject/armada-operator.git'
-AOHOME = os.path.join(PROJECT_ROOT, 'armada-operator')
+AOHOME = os.path.abspath(os.path.join(PROJECT_ROOT, "..", "armada-operator"))
 ARMADACTL_VERSION = '0.20.23'
 ARMADACTL_PATH = os.path.join(SCRIPTS_DIR, 'armadactl')
 
@@ -282,9 +282,6 @@ def init_cluster():
 def run_test():
     print("Running Scala E2E test suite...")
 
-    # Update PATH
-    os.environ['PATH'] = f"{SCRIPTS_DIR}:{os.path.join(AOHOME, 'bin', 'tooling')}:{os.environ.get('PATH', '')}"
-
     os.chdir(PROJECT_ROOT)
 
     tls_args = []
@@ -338,6 +335,7 @@ def run_test():
 def main():
     init_script = os.path.join(SCRIPTS_DIR, 'init.sh')
     source_env_script(init_script)
+    os.environ['PATH'] = f"{SCRIPTS_DIR}:{os.path.join(AOHOME, 'bin', 'tooling')}:{os.environ.get('PATH', '')}"
     init_cluster()
     run_test()
 
