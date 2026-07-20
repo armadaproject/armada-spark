@@ -239,6 +239,51 @@ Use `kubectl port-forward` command for the connect port (`15002`). Allocation fo
 
 See `[spark_connect_demo.ipynb](example/jupyter/notebooks/spark_connect_demo.ipynb)`.
 
+##### Securing Spark Connect with JWT
+
+The Spark Connect server can be locked down so only the user who submitted it can issue gRPC calls. The interceptor (`io.armadaproject.spark.connect.auth.JwtAuthInterceptor`) ships in a separate `connect-auth` JAR (`armada-cluster-manager_*-connect-auth.jar`) that relocates `io.grpc` to Spark Connect's `org.sparkproject.connect.grpc` namespace, so the interceptor implements the gRPC type the Connect runtime expects. The JAR is baked into the image.
+
+Enable it by registering the interceptor and providing its configuration as Spark confs on the Connect server (cluster-mode submit):
+
+```bash
+--conf spark.connect.grpc.interceptor.classes=io.armadaproject.spark.connect.auth.JwtAuthInterceptor
+--conf spark.armada.connect.owner=<token-sub-value>
+--conf spark.armada.connect.oidc.issuerUrl=https://idp.example/
+--conf spark.armada.connect.oidc.audience=spark-connect           # optional, aud not enforced if unset
+--conf spark.armada.connect.oidc.jwksUrl=https://idp.example/jwks  # optional, default is OIDC discovery
+```
+
+The caller's identity is always the token's `sub` claim (IdP-assigned and immutable,
+so it cannot be self-asserted). Set `owner` to that `sub` value.
+
+Conf reference:
+
+| Conf | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `spark.armada.connect.owner` | yes | none | The `sub` value the bearer token must carry to be accepted. Driver fails to start if unset. |
+| `spark.armada.connect.oidc.issuerUrl` | yes | none | OIDC issuer used for `iss` validation and JWKS discovery at `<issuer>/.well-known/openid-configuration`. Must be `https`. |
+| `spark.armada.connect.oidc.audience` | no | none | If set, the `aud` claim is enforced. If unset, `aud` is not validated and any token the issuer minted (for any audience) is accepted when its `sub` matches the owner; the driver logs a warning at startup. |
+| `spark.armada.connect.oidc.jwksUrl` | no | discovered | Skip OIDC discovery and use this JWKS URL directly. Must be `https`. |
+
+At runtime the interceptor:
+
+- requires a bearer JWT on every gRPC call,
+- validates signature, issuer, expiry, and (when set) audience,
+- compares the token's `sub` claim against `spark.armada.connect.owner`, rejecting non-matches with `PERMISSION_DENIED`.
+
+Only RS256-signed tokens are supported; tokens signed with other algorithms (e.g. ES256) are
+rejected. A token must carry an `exp` claim: one without an expiry is rejected rather than treated
+as non-expiring.
+
+Obtain a JWT from your OIDC provider and pass it from the client:
+
+```python
+from pyspark.sql import SparkSession
+token = "<jwt>"
+spark = SparkSession.builder.remote(f"sc://spark-connect.example.com:443/;use_ssl=true;token={token}").getOrCreate()
+spark.range(10).count()
+```
+
 ### Spark History Server
 
 View event logs from completed jobs:
