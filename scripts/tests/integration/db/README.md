@@ -18,9 +18,11 @@ The JDBC driver jar is not in the base image, and `--packages` will not resolve
 under `MVN_OFFLINE`. Bake the driver in, then stage the jobs and rebuild:
 
 ```bash
-cp postgresql-<version>.jar extraJars/     # or your DB's JDBC driver
-./scripts/tests/prep_jobs.sh
+curl -Lo extraJars/postgresql-42.7.4.jar \
+  https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
+python3 scripts/tests/run.py prep
 ./scripts/createImage.sh
+kind load docker-image spark:armada --name armada
 ```
 
 Configure `ARMADA_MASTER`, `ARMADA_QUEUE`, `ARMADA_NAMESPACE`, and (secured
@@ -28,14 +30,44 @@ cluster) `ARMADA_AUTH_TOKEN` as for `submitArmadaSpark.sh`.
 
 ## Run
 
+Either let the harness start a database:
+
 ```bash
-JDBC_URL=jdbc:postgresql://host:5432/db JDBC_USER=u JDBC_PASSWORD=p \
-  ./scripts/tests/integration/db/db_test.sh -M cluster -A static
+python3 scripts/tests/run.py -k db --start-db --mode cluster
 ```
 
-SKIPs when `JDBC_URL` is unset. Timeout guarding (the `HUNG until timeout`
-detection) needs GNU `timeout` or `gtimeout`; on macOS install it with
-`brew install coreutils`, otherwise submissions run unguarded.
+Or point it at your own. The database must be reachable from driver and
+executor pods, which means it has to be on the kind docker network. A database
+published on `localhost` will NOT work:
+
+```bash
+docker run -d --name spark-pg --network kind \
+  -e POSTGRES_USER=spark -e POSTGRES_PASSWORD=sparkpw -e POSTGRES_DB=sparktest \
+  postgres:16
+IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' spark-pg)
+```
+
+Values you export in your shell take precedence over `scripts/config.sh`, so you
+can point a single run at a different database without editing the file.
+
+To force the suite to SKIP without editing `config.sh`, pass an empty value:
+`JDBC_URL= python3 scripts/tests/run.py integration`. Use an empty string rather
+than `env -u JDBC_URL`. The environment is overlaid onto `config.sh` as a merge,
+and a merge cannot express absence, so unsetting a variable leaves `config.sh`'s
+value in place.
+
+```bash
+export JDBC_URL="jdbc:postgresql://$IP:5432/sparktest"
+export JDBC_USER=spark
+export JDBC_PASSWORD=sparkpw
+```
+
+```bash
+python3 scripts/tests/run.py -k db --mode cluster
+```
+
+SKIPs when `JDBC_URL` is unset and `--start-db` is not passed.
+`--start-db` and a preset `JDBC_URL` are mutually exclusive.
 
 ## Credential delivery
 
@@ -53,5 +85,17 @@ detection) needs GNU `timeout` or `gtimeout`; on macOS install it with
 | `JDBC_USER` / `JDBC_PASSWORD` / `JDBC_DRIVER` | empty / empty / `org.postgresql.Driver` | credentials (argv) + driver class |
 | `JDBC_ROWS` | `100000` | rows to write/read |
 | `JDBC_SECRET_KEY` / `JDBC_PASSWORD_ITEM` | _(unset)_ / `password` | K8s Secret + key; injects the password via secretKeyRef instead of argv |
-| `DB_VERIFY_USER` / `DB_VERIFY_PASSWORD` / `DB_VERIFY_DRIVER_JAR` | _(unset)_ | optional out-of-Spark row-count check; skips if unset. Jar auto-discovery only finds `postgresql-*.jar`; for other DBs set `DB_VERIFY_DRIVER_JAR` |
-| `SUBMIT_TIMEOUT` | `900` | per-submission timeout (seconds) |
+
+These are set in `scripts/config.sh`. Per-run options are pytest flags instead:
+
+| Flag | Default | Effect |
+|------|---------|--------|
+| `--mode` | from `config.sh` (`DEPLOY_MODE`), falling back to `cluster` | deploy mode forwarded to `submitArmadaSpark.sh` |
+| `--allocation` | from `config.sh` (`ALLOCATION_MODE`), falling back to `dynamic` | allocation mode forwarded to `submitArmadaSpark.sh` |
+| `--start-db` | off | start a throwaway Postgres on the kind network for this run |
+| `--submit-timeout` | `900` | per-submission timeout (seconds) |
+
+The bash suite also had an optional out-of-Spark row-count check driven by
+`DB_VERIFY_USER` / `DB_VERIFY_PASSWORD` / `DB_VERIFY_DRIVER_JAR`, which compiled
+a small Java program to query the table directly. It was not carried over. J1
+verifies its write by reading it back through Spark.
