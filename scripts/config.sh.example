@@ -40,8 +40,9 @@ export SCALA_VERSION="2.13.8"
 #ARMADA_EVENT_WATCHER_USE_TLS=true
 
 # ── Build / Maven Profiles ──────────────────────────────────────
-# Specify the active Maven profiles for the build.
-# Example: spark4.1.1,scala2.13.17
+# By default, Maven profiles are automatically derived from the SPARK_VERSION 
+# and SCALA_VERSION defined above. You only need to set this if you are 
+# testing a custom profile combination.
 #MAVEN_PROFILES=""
 
 # ── Maven Offline Mode ──────────────────────────────────────────────────────

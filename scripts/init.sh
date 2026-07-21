@@ -87,7 +87,7 @@ print_usage () {
     echo '   DEPLOY_MODE=cluster'
     echo '   ALLOCATION_MODE=dynamic'
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
-    echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
+    echo "   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_${SCALA_BIN_VERSION:-2.13}-${SPARK_VERSION:-3.5.5}.jar"
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
     echo '   # Auth: Set ARMADA_AUTH_SCRIPT_PATH for authentication'
     safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
@@ -306,12 +306,10 @@ fi
 
 export PROFILES_ARG="-P${MAVEN_PROFILES}"
 
-# 2. Validation - Only run if NOT in GitHub Actions
+# 2. Validation
 # This now executes AFTER MAVEN_PROFILES and PROFILES_ARG are exported
-if [[ -z "${GITHUB_ACTIONS-}" ]]; then
-  if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
-      safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
-  fi
+if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
+    safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
 fi
 
 # 3. Locate Project Root reliably

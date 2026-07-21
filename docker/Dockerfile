@@ -29,8 +29,7 @@ ARG scala_binary_version=2.13
 ARG spark_version=3.3.3
 ARG include_python=false
 
-COPY target/armada-cluster-manager_${scala_binary_version}-*.jar /opt/spark/jars/
-COPY target/armada-cluster-manager-*-all.jar /opt/spark/jars/
+COPY target/armada-cluster-manager_*-all.jar /opt/spark/jars/
 COPY extraFiles /opt/spark/extraFiles
 COPY extraJars/* /opt/spark/jars
 COPY docker/jupyter-entrypoint.sh /opt/spark/bin/jupyter-entrypoint.sh

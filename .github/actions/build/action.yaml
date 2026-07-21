@@ -34,6 +34,7 @@ runs:
     run: |
       echo "SPARK_VERSION=${{ inputs.spark_version }}" >> $GITHUB_ENV
       echo "SCALA_VERSION=${{ inputs.scala_version }}" >> $GITHUB_ENV
+      echo "DEPLOY_MODE=client" >> $GITHUB_ENV
     shell: bash
 
   - name: Build package

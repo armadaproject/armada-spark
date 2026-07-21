@@ -9,7 +9,7 @@
 
     <!-- Project Coordinates -->
     <groupId>io.armadaproject.armada</groupId>
-    <artifactId>armada-cluster-manager</artifactId>
+    <artifactId>armada-cluster-manager_${scala.binary.version}</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
