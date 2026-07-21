@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.outcome import assert_success, matched, tail
+from harness.outcome import assert_success, driver_failed, matched, tail
 
 JOB = "/opt/spark/extraFiles/jobs/db/db_roundtrip.py"
 
@@ -113,23 +113,36 @@ def test_j3_bad_credentials_fail_fast(submit_job, jdbc, table, rows, cluster_mod
     #
     # This check is client-mode only, and that limitation is real rather than an
     # oversight. In cluster mode the driver runs as a remote Armada pod whose
-    # stdout the submitting process never sees, so the only thing observable
-    # here is "Container driver failed with exit code 1". The database error
-    # text is not present to match against at all. This is the same asymmetry
+    # stdout the submitting process never sees, so the database error text is
+    # not present to match against at all. This is the same asymmetry
     # assert_success handles by checking the Armada job status line instead of
     # the payload sentinel.
-    #
-    # So in cluster mode this case verifies what IS observable: that bad
-    # credentials cause a fast, non-zero failure. It cannot verify the failure
-    # was specifically an auth failure. Proving that would mean pulling the
-    # driver's logs back out of Armada, which the harness does not do today.
-    if not cluster_mode:
-        assert matched(
-            result, "28P01|password authentication failed|authentication failed|permission denied"
-        ), (
-            f"bad-credential write failed for an unrecognized reason, not a known auth error "
-            f"(rc={result.returncode})\n{tail(result)}"
+    if cluster_mode:
+        # A bare non-zero exit is too weak to stand in for the auth check. Queue
+        # rejection, an image pull failure, or any submission-level error also
+        # exits non-zero without the driver ever running, so the bogus
+        # credential would never have been tested. This status line is printed
+        # only after the driver pod ran and failed (ArmadaClientApplication
+        # logs it on the JobFailed event), which rules those modes out.
+        #
+        # It still cannot prove the failure was specifically an auth failure. A
+        # transient database or network error after J1 and J2 passed would look
+        # the same. Closing that gap means reading the driver's logs, and
+        # armadactl has no logs subcommand, so it would require direct kubectl
+        # access to the cluster that this harness does not otherwise assume.
+        assert driver_failed(result), (
+            f"bad-credential write exited {result.returncode} but no "
+            f"'Driver job ... FAILED' status was seen, so the driver may not have run "
+            f"at all and the credential was never tested\n{tail(result)}"
         )
+        return
+
+    assert matched(
+        result, "28P01|password authentication failed|authentication failed|permission denied"
+    ), (
+        f"bad-credential write failed for an unrecognized reason, not a known auth error "
+        f"(rc={result.returncode})\n{tail(result)}"
+    )
 
 
 def test_j4_drop_table(submit_job, jdbc, table, rows, cluster_mode):

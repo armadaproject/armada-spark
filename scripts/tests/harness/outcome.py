@@ -29,6 +29,7 @@ import re
 from .submit import SubmitResult
 
 DRIVER_SUCCEEDED_PATTERN = r"Driver job .* SUCCEEDED"
+DRIVER_FAILED_PATTERN = r"Driver job \S+ FAILED"
 
 
 def matched(result: SubmitResult, pattern: str) -> bool:
@@ -37,6 +38,16 @@ def matched(result: SubmitResult, pattern: str) -> bool:
 
 def driver_succeeded(result: SubmitResult) -> bool:
     return result.returncode == 0 and matched(result, DRIVER_SUCCEEDED_PATTERN)
+
+
+def driver_failed(result: SubmitResult) -> bool:
+    """True when the driver pod ran and reported failure.
+
+    Distinct from a bare non-zero exit: queue rejection, an image pull failure,
+    or any submission-level error exits non-zero without the driver ever
+    running, and none of those print this status line.
+    """
+    return result.returncode != 0 and matched(result, DRIVER_FAILED_PATTERN)
 
 
 def tail(result: SubmitResult, lines: int = 30) -> str:

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from harness.outcome import assert_success, driver_succeeded, matched, tail
+from harness.outcome import assert_success, driver_failed, driver_succeeded, matched, tail
 from harness.submit import SubmitResult
 
 
@@ -42,6 +42,17 @@ def test_driver_succeeded_requires_zero_exit():
 
 def test_driver_succeeded_requires_the_status_line():
     assert not driver_succeeded(_result("submitted fine, no status"))
+
+
+def test_driver_failed_requires_the_status_line():
+    assert driver_failed(_result("Driver job abc FAILED: boom", returncode=1))
+    # The case this exists to catch: a submission that never got as far as
+    # running the driver, so nothing about the job under test was exercised.
+    assert not driver_failed(_result("error: queue rejected submission", returncode=1))
+
+
+def test_driver_failed_requires_nonzero_exit():
+    assert not driver_failed(_result("Driver job abc FAILED: boom"))
 
 
 def test_assert_success_cluster_mode_checks_driver_status():
