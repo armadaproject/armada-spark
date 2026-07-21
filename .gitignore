@@ -100,3 +100,9 @@ example/files
 # Claude Code
 plans/
 .claude/settings.local.json
+
+# Python test harness
+scripts/tests/.venv/
+scripts/tests/*.egg-info/
+__pycache__/
+*.pyc

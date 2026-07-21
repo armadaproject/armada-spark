@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "armada-spark-tests"
+version = "0.1.0"
+description = "Script-driven integration test harness for armada-spark"
+requires-python = ">=3.9"
+dependencies = ["pytest>=8.0,<9.0"]
+
+[tool.setuptools]
+packages = ["harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["unit", "integration"]
+addopts = "-ra"
+markers = [
+    "integration: submits real Spark jobs; skips when infra is unconfigured",
+]

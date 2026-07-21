@@ -1,0 +1,49 @@
+name: Python Tests
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - 'scripts/tests/**'
+      - '.github/workflows/python-tests.yaml'
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - 'scripts/tests/**'
+      - '.github/workflows/python-tests.yaml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  unit:
+    name: Harness unit tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The harness is run by developers on macOS laptops and by CI on Linux,
+        # so both platforms are exercised here. This catches path handling,
+        # venv layout, and shell differences between the two.
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # scripts/tests/pyproject.toml declares requires-python = ">=3.9", so the
+      # oldest supported interpreter is pinned here. Using the runner default
+      # would silently test only a newer Python and let the declared floor rot.
+      - name: Set up Python 3.9
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.9'
+
+      # run.py bootstraps scripts/tests/.venv and forwards arguments to pytest.
+      # Only the unit suite is run: it needs no cluster, no docker, and no
+      # Armada. The integration suite requires a live Armada cluster and is
+      # therefore not run here.
+      - name: Run harness unit tests
+        run: python3 scripts/tests/run.py unit
