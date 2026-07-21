@@ -9,6 +9,7 @@ import tarfile
 import time
 import re
 import shutil
+import json
 
 # Setup base directories
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -182,8 +183,70 @@ def start_armada():
     end_log_group()
 
 def check_image(image_name):
-    return subprocess.run(['docker', 'image', 'inspect', image_name], 
+    return subprocess.run(['docker', 'image', 'inspect', image_name],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+def pin_single_platform_image(image):
+    """Resolve a locally-tagged multi-platform image to the host platform's single-platform
+    manifest digest and re-tag it locally.
+
+    `kind load docker-image` fails when a locally-tagged image resolves to a multi-platform
+    manifest index (e.g. anything pulled by tag under Docker's containerd-backed image store,
+    which keeps the full index as the tag's descriptor even though only the host platform's
+    content was downloaded). kind issues `ctr images import --all-platforms` against it, which
+    then fails looking for blobs of platforms that were never pulled:
+      "ctr: content digest sha256:...: not found"
+    """
+    proc = subprocess.run(['docker', 'image', 'inspect', image, '--format', '{{json .Descriptor.mediaType}}'],
+                          capture_output=True, text=True)
+    media_type = proc.stdout.strip().strip('"') if proc.returncode == 0 else ''
+    if 'manifest.list' not in media_type and 'image.index' not in media_type:
+        return  # already a single-platform manifest; nothing to do
+
+    machine = platform.machine()
+    if machine == 'x86_64':
+        goarch = 'amd64'
+    elif machine in ('aarch64', 'arm64'):
+        goarch = 'arm64'
+    else:
+        goarch = machine
+    goos = platform.system().lower()
+
+    # `docker manifest inspect` only succeeds for images backed by a registry; locally-built
+    # images (e.g. IMAGE_NAME from createImage.sh) can also report an index descriptor (build
+    # attestations) but have all their content already present locally, so kind load works
+    # fine as-is. A lookup failure here just leaves the image as-is rather than aborting.
+    digest = None
+    manifest_proc = subprocess.run(['docker', 'manifest', 'inspect', image], capture_output=True, text=True)
+    if manifest_proc.returncode == 0:
+        try:
+            manifest = json.loads(manifest_proc.stdout)
+            for entry in manifest.get('manifests', []):
+                plat = entry.get('platform', {})
+                if plat.get('os') == goos and plat.get('architecture') == goarch and not plat.get('variant'):
+                    digest = entry.get('digest')
+                    break
+        except json.JSONDecodeError:
+            digest = None
+
+    if not digest:
+        print(f"Could not resolve a {goos}/{goarch} manifest for {image} via registry lookup "
+              "(may be a locally-built image); leaving as-is.")
+        return
+
+    repo = image.split(':', 1)[0].split('@', 1)[0]
+
+    if subprocess.run(['docker', 'pull', f"{repo}@{digest}"]).returncode != 0:
+        err(f"Could not pull {repo}@{digest}; please try running")
+        err(f"  docker pull {repo}@{digest}")
+        err("then run this script again")
+        sys.exit(1)
+
+    if subprocess.run(['docker', 'tag', f"{repo}@{digest}", image]).returncode != 0:
+        err("Error running")
+        err(f"  docker tag {repo}@{digest} {image}")
+        err("Please try it manually, then run this script again")
+        sys.exit(1)
 
 def init_cluster():
     image_name = os.environ.get('IMAGE_NAME')
@@ -264,8 +327,9 @@ def init_cluster():
         env_with_tmp['TMPDIR'] = tmp_dir
         
         for img in [image_name, init_container_image]:
+            pin_single_platform_image(img)
             log_group(f"Loading Docker image {img} into Armada (Kind) cluster")
-            subprocess.run([kind_tool, 'load', 'docker-image', img, '--name', 'armada'], 
+            subprocess.run([kind_tool, 'load', 'docker-image', img, '--name', 'armada'],
                            env=env_with_tmp, check=True)
             end_log_group()
 
