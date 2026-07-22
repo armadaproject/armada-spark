@@ -25,19 +25,19 @@ RED = '\033[0;31m'
 NC = '\033[0m'
 
 def log(msg):
-    print(f"{GREEN}{msg}{NC}")
+    print(f"{GREEN}{msg}{NC}", flush=True)
 
 def err(msg):
-    print(f"{RED}{msg}{NC}", file=sys.stderr)
+    print(f"{RED}{msg}{NC}", file=sys.stderr, flush=True)
 
 def log_group(msg):
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        print(f"::group::{msg}")
-    print(msg)
+        print(f"::group::{msg}", flush=True)
+    print(msg, flush=True)
 
 def end_log_group():
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        print("::endgroup::")
+        print("::endgroup::", flush=True)
 
 def source_env_script(script_path):
     """Sources a bash script and loads exported variables into the Python environment."""
@@ -238,11 +238,11 @@ def init_cluster():
         err(f"ARMADA_QUEUE is not defined. Please set it in {SCRIPTS_DIR}/config.sh")
         sys.exit(1)
 
-    print("Checking for armadactl ..")
+    print("Checking for armadactl ..", flush=True)
     if not (os.path.isfile(ARMADACTL_PATH) and os.access(ARMADACTL_PATH, os.X_OK)):
         fetch_armadactl()
 
-    print(f"Checking if image {image_name} is available")
+    print(f"Checking if image {image_name} is available", flush=True)
     if not check_image(image_name):
         err(f"Image {image_name} not found in local Docker instance.")
         err("Rebuild the image and re-run this script.")
