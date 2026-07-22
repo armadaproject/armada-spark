@@ -114,18 +114,6 @@ def armadactl_retry(*args):
     err(f"Running \"{' '.join(cmd)}\" failed after {attempt} attempts")
     return False
 
-def get_external_ip():
-    """Extracts the first valid external IP address using native text parsing."""
-    try:
-        proc = subprocess.run(['ifconfig', '-a'], capture_output=True, text=True, check=True)
-        for line in proc.stdout.splitlines():
-            if 'inet ' in line and '127.0.0' not in line and '172.' not in line:
-                parts = line.split()
-                if len(parts) >= 2:
-                    return parts[1]
-    except subprocess.CalledProcessError:
-        pass
-    return None
 
 def start_armada():
     log_group("Using armada-operator to start Armada; this may take up to 5 minutes")
@@ -137,29 +125,12 @@ def start_armada():
             err("There was a problem cloning the armada-operator repo; exiting now")
             sys.exit(1)
         
-        log("Patching armada-operator")
-        patch_file = os.path.join(PROJECT_ROOT, 'e2e', 'armada-operator.patch')
-        with open(patch_file, 'r') as f:
-            if subprocess.run(['patch', '-p1', '-d', f"{AOHOME}/"], stdin=f).returncode != 0:
-                err(f"There was an error patching the repo copy {AOHOME}")
-                sys.exit(1)
-
-    external_ip = get_external_ip()
-    if not external_ip:
-        err("Unable to find any IP addresses on an external interface on this system; exiting now")
-        sys.exit(1)
-
-    # Patch Kind config
-    kind_config = os.path.join(AOHOME, 'hack', 'kind-config.yaml')
-    try:
-        with open(kind_config, 'r') as file:
-            config_data = file.read()
-        config_data = config_data.replace('192.168.12.135', external_ip)
-        with open(kind_config, 'w') as file:
-            file.write(config_data)
-    except IOError as e:
-        err(f"There was an error modifying {kind_config}: {e}")
-        sys.exit(1)
+    log("Patching armada-operator")
+    patch_file = os.path.join(PROJECT_ROOT, 'e2e', 'armada-operator.patch')
+    with open(patch_file, 'r') as f:
+        if subprocess.run(['patch', '-p1', '-d', f"{AOHOME}/"], stdin=f).returncode != 0:
+            err(f"There was an error patching the repo copy {AOHOME}")
+            sys.exit(1)
 
     print("Running 'make kind-all' to install and start Armada; this may take up to 6 minutes")
     make_proc = subprocess.run(['make', 'kind-all'], cwd=AOHOME, capture_output=True, text=True)
