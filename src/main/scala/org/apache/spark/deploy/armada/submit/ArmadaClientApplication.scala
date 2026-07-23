@@ -1589,8 +1589,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       "memory" -> {
         armadaJobConfig.cliConfig.driverResources.limitMemory
           .map(value => Quantity(Option(value)))
-          .orElse(templateResources.flatMap(_.limits.get("memory")))
           .orElse(derivedMemory)
+          .orElse(templateResources.flatMap(_.limits.get("memory")))
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1605,8 +1605,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       "memory" -> {
         armadaJobConfig.cliConfig.driverResources.requestMemory
           .map(value => Quantity(Option(value)))
-          .orElse(templateResources.flatMap(_.requests.get("memory")))
           .orElse(derivedMemory)
+          .orElse(templateResources.flatMap(_.requests.get("memory")))
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1724,8 +1724,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       "memory" -> {
         armadaJobConfig.cliConfig.executorResources.limitMemory
           .map(value => Quantity(Option(value)))
-          .orElse(templateResources.flatMap(_.limits.get("memory")))
           .orElse(derivedMemory)
+          .orElse(templateResources.flatMap(_.limits.get("memory")))
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1740,8 +1740,8 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       "memory" -> {
         armadaJobConfig.cliConfig.executorResources.requestMemory
           .map(value => Quantity(Option(value)))
-          .orElse(templateResources.flatMap(_.requests.get("memory")))
           .orElse(derivedMemory)
+          .orElse(templateResources.flatMap(_.requests.get("memory")))
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
