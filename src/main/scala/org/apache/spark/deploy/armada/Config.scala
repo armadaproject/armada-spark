@@ -397,6 +397,12 @@ private[spark] object Config {
 
   val DEFAULT_MEM                   = "1Gi"
   val DEFAULT_SPARK_EXECUTOR_MEMORY = "1g"
+
+  // Floor for derived non-heap memory overhead, matching Spark's own default. Defined here rather
+  // than reused from Spark because it moved between releases: 3.3 and 3.5 expose it as
+  // ResourceProfile.MEMORY_OVERHEAD_MIN_MIB, while 4.1 replaced it with the
+  // spark.{driver,executor}.minMemoryOverhead config entries.
+  val MIN_MEMORY_OVERHEAD_MIB = 384L
   val ARMADA_DRIVER_LIMIT_MEMORY: OptionalConfigEntry[String] =
     ConfigBuilder("spark.armada.driver.limit.memory")
       .doc("Specify the hard memory limit for the driver pod")
