@@ -132,17 +132,25 @@ def start_armada():
             err(f"There was an error patching the repo copy {AOHOME}")
             sys.exit(1)
 
-    print("Running 'make kind-all' to install and start Armada; this may take up to 6 minutes")
-    make_proc = subprocess.run(['make', 'kind-all'], cwd=AOHOME, capture_output=True, text=True)
-    with open("armada-start.txt", "w") as f:
-        f.write(make_proc.stdout)
-        f.write(make_proc.stderr)
+    print("Running 'make kind-all' to install and start Armada; this may take up to 6 minutes", flush=True)
     
-    if make_proc.returncode != 0:
-        print(make_proc.stdout)
-        print(make_proc.stderr)
-        print("")
-        err("There was a problem starting Armada; exiting now")
+    try:
+        with open("armada-start.txt", "w") as f:
+            # Popen lets us stream the output in real-time
+            make_proc = subprocess.Popen(['make', 'kind-all'], cwd=AOHOME, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            
+            for line in make_proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                f.write(line)
+            
+            make_proc.wait()
+            
+            if make_proc.returncode != 0:
+                err("There was a problem starting Armada; exiting now")
+                sys.exit(1)
+    except Exception as e:
+        err(f"Failed to execute make kind-all: {e}")
         sys.exit(1)
 
     print("Extracting TLS client certificate files from Kind cluster")
