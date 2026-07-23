@@ -231,12 +231,6 @@ fi
 
 export DEPLOY_MODE
 
-if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
-    echo "Error: --allocation/-A must be either 'static' or 'dynamic'"
-    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
-fi
-export ALLOCATION_MODE
-
 if [ "$ALLOCATION_MODE" = "static" ]; then
     STATIC_MODE=true
 else
@@ -311,6 +305,12 @@ export PROFILES_ARG="-P${MAVEN_PROFILES}"
 if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
     safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
 fi
+
+if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
+    echo "Error: --allocation/-A must be either 'static' or 'dynamic'"
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
+fi
+export ALLOCATION_MODE
 
 # 3. Locate Project Root reliably
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
