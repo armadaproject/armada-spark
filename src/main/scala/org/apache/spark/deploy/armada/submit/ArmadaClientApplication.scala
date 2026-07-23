@@ -62,6 +62,7 @@ import org.apache.spark.deploy.armada.Config.{
   DEFAULT_MEM,
   DEFAULT_SPARK_EXECUTOR_CORES,
   DEFAULT_SPARK_EXECUTOR_MEMORY,
+  MIN_MEMORY_OVERHEAD_MIB,
   commaSeparatedAnnotationsToMap,
   commaSeparatedLabelsToMap
 }
@@ -88,9 +89,22 @@ import org.apache.spark.deploy.k8s.Config.{
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.internal.config.{DRIVER_PORT, DRIVER_HOST_ADDRESS, DYN_ALLOCATION_ENABLED}
+import org.apache.spark.internal.config.{
+  ConfigEntry,
+  DRIVER_HOST_ADDRESS,
+  DRIVER_MEMORY,
+  DRIVER_MEMORY_OVERHEAD,
+  DRIVER_MEMORY_OVERHEAD_FACTOR,
+  DRIVER_PORT,
+  DYN_ALLOCATION_ENABLED,
+  EXECUTOR_MEMORY,
+  EXECUTOR_MEMORY_OVERHEAD,
+  EXECUTOR_MEMORY_OVERHEAD_FACTOR,
+  OptionalConfigEntry
+}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.KubernetesExecutorBuilder
+import org.apache.spark.util.Utils
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import scala.util.control.NonFatal
@@ -1563,11 +1577,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val templateResources = extractResourcesFromTemplate(armadaJobConfig.driverJobItemTemplate)
 
+    val derivedMemory = derivePodMemory(
+      conf,
+      DRIVER_MEMORY,
+      DRIVER_MEMORY_OVERHEAD,
+      DRIVER_MEMORY_OVERHEAD_FACTOR,
+      includeOffHeap = false
+    ).map(value => Quantity(Option(value)))
+
     val driverLimits = Map(
       "memory" -> {
         armadaJobConfig.cliConfig.driverResources.limitMemory
           .map(value => Quantity(Option(value)))
           .orElse(templateResources.flatMap(_.limits.get("memory")))
+          .orElse(derivedMemory)
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1583,6 +1606,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig.cliConfig.driverResources.requestMemory
           .map(value => Quantity(Option(value)))
           .orElse(templateResources.flatMap(_.requests.get("memory")))
+          .orElse(derivedMemory)
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1688,11 +1712,20 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
 
     val templateResources = extractResourcesFromTemplate(armadaJobConfig.executorJobItemTemplate)
 
+    val derivedMemory = derivePodMemory(
+      conf,
+      EXECUTOR_MEMORY,
+      EXECUTOR_MEMORY_OVERHEAD,
+      EXECUTOR_MEMORY_OVERHEAD_FACTOR,
+      includeOffHeap = true
+    ).map(value => Quantity(Option(value)))
+
     val executorLimits = Map(
       "memory" -> {
         armadaJobConfig.cliConfig.executorResources.limitMemory
           .map(value => Quantity(Option(value)))
           .orElse(templateResources.flatMap(_.limits.get("memory")))
+          .orElse(derivedMemory)
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1708,6 +1741,7 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
         armadaJobConfig.cliConfig.executorResources.requestMemory
           .map(value => Quantity(Option(value)))
           .orElse(templateResources.flatMap(_.requests.get("memory")))
+          .orElse(derivedMemory)
           .getOrElse(Quantity(Option(DEFAULT_MEM)))
       },
       "cpu" -> {
@@ -1936,6 +1970,51 @@ private[spark] class ArmadaClientApplication extends SparkApplication {
       container <- podSpec.containers.headOption
       res       <- container.resources
     } yield res
+  }
+
+  /** Derives the pod memory a Spark process needs from its JVM heap size.
+    *
+    * Mirrors how Spark sizes pods on Kubernetes, where no separate pod memory setting is exposed
+    * and the container is always heap plus non-heap overhead. Without this, a job that raises
+    * `spark.executor.memory` alone keeps the default pod size and is OOMKilled. The heap, overhead
+    * and overhead fraction all come from Spark's own config entries, which are stable across the
+    * Spark versions we build against.
+    *
+    * Returns None when the heap size is not configured, leaving existing behaviour untouched for
+    * jobs that never asked for a particular size.
+    *
+    * @param conf
+    *   Spark configuration to read the heap and overhead settings from
+    * @param memoryConf
+    *   Heap config entry, e.g. `EXECUTOR_MEMORY`
+    * @param overheadConf
+    *   Explicit overhead config entry, e.g. `EXECUTOR_MEMORY_OVERHEAD`
+    * @param overheadFactorConf
+    *   Overhead fraction config entry, used when no explicit overhead is set
+    * @param includeOffHeap
+    *   Whether to add off-heap memory, as Spark does for executors but not for drivers
+    * @return
+    *   Quantity string such as `31539Mi`, or None if the heap size is unset
+    */
+  private[submit] def derivePodMemory(
+      conf: SparkConf,
+      memoryConf: ConfigEntry[Long],
+      overheadConf: OptionalConfigEntry[Long],
+      overheadFactorConf: ConfigEntry[Double],
+      includeOffHeap: Boolean
+  ): Option[String] = {
+    if (!conf.contains(memoryConf.key)) {
+      None
+    } else {
+      val heapMiB = conf.get(memoryConf)
+      val overheadMiB = conf
+        .get(overheadConf)
+        .getOrElse {
+          math.max((conf.get(overheadFactorConf) * heapMiB).toLong, MIN_MEMORY_OVERHEAD_MIB)
+        }
+      val offHeapMiB = if (includeOffHeap) Utils.executorOffHeapMemorySizeAsMb(conf).toLong else 0L
+      Some(s"${heapMiB + overheadMiB + offHeapMiB}Mi")
+    }
   }
 
   /** Extracts additional resource types from template resources, excluding memory and CPU.
