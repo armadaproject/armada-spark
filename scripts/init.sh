@@ -2,8 +2,8 @@
 
 # Utility functions
 
-root="$(cd "$(dirname "$0")/.."; pwd)"
-scripts="$(cd "$(dirname "$0")"; pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
 
 if [ -e "$scripts/config.sh" ]; then
     source "$scripts/config.sh"
@@ -406,4 +406,3 @@ if [ ${#S3_CONF[@]} -gt 0 ]; then
         --conf spark.history.fs.logDirectory=$ARMADA_EVENT_LOG_DIR
     )
 fi
-
