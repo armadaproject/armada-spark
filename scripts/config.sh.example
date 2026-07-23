@@ -5,6 +5,8 @@
 # ── Required ─────────────────────────────────────────────────────
 ARMADA_MASTER=armada://localhost:30002
 ARMADA_QUEUE=test
+export SPARK_VERSION="3.5.5"
+export SCALA_VERSION="2.13.8"
 
 # ── Image ────────────────────────────────────────────────────────
 #IMAGE_NAME=spark:armada
@@ -36,6 +38,12 @@ ARMADA_QUEUE=test
 #ARMADA_AUTH_TOKEN=
 #ARMADA_AUTH_SCRIPT_PATH=/opt/spark/extraFiles/getAuthToken.sh
 #ARMADA_EVENT_WATCHER_USE_TLS=true
+
+# ── Build / Maven Profiles ──────────────────────────────────────
+# By default, Maven profiles are automatically derived from the SPARK_VERSION 
+# and SCALA_VERSION defined above. You only need to set this if you are 
+# testing a custom profile combination.
+#MAVEN_PROFILES=""
 
 # ── Maven Offline Mode ──────────────────────────────────────────────────────
 # Set this in config.sh to either "-o" or "--offline" to run Maven in offline

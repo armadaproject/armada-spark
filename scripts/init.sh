@@ -2,8 +2,20 @@
 
 # Utility functions
 
-root="$(cd "$(dirname "$0")/.."; pwd)"
-scripts="$(cd "$(dirname "$0")"; pwd)"
+# Safely get the directory of the script whether it is executed or sourced
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+scripts="$SCRIPT_DIR"
+root="$(dirname "$scripts")"
+
+# Helper for script exit status - handles sourced vs executed context
+safe_abort() {
+    echo "$1"
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return 1
+    else
+        exit 1
+    fi
+}
 
 if [ -e "$scripts/config.sh" ]; then
     source "$scripts/config.sh"
@@ -75,10 +87,10 @@ print_usage () {
     echo '   DEPLOY_MODE=cluster'
     echo '   ALLOCATION_MODE=dynamic'
     echo '   PYTHON_SCRIPT=/opt/spark/examples/src/main/python/pi.py'
-    echo '   SCALA_CLASS=org.apache.spark.examples.SparkPi'
+    echo "   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_${SCALA_BIN_VERSION:-2.13}-${SPARK_VERSION:-3.5.5}.jar"
     echo '   CLASS_PATH=local:///opt/spark/extraFiles/spark-examples_2.12-3.5.3.jar'
     echo '   # Auth: Set ARMADA_AUTH_SCRIPT_PATH for authentication'
-    exit 1
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
 }
 
 while getopts "hekpi:m:P:s:c:q:M:A:ef" opt; do
@@ -120,19 +132,14 @@ export SPARK_SECRET_KEY="${SPARK_SECRET_KEY:-armada-secret}"
 # back to the Driver. Attempt to extract that by examining network interface
 # addresses, and use the first one that is not the loopback interface, or a
 # Docker/K8S virtual interface.
-if [ -z "${SPARK_LOCAL_IP:-}" ]; then
-  SPARK_LOCAL_IP=$(ifconfig -a | grep -w 'inet' | awk '{print $2}' | grep -Ev '^(127\.0\.0\.1|172\.)' | sed -n '1p')
-  if [ "$SPARK_LOCAL_IP" = "" ] ; then
-    echo ""
-    echo "ERROR: could not determine external network interface address. In order to run Spark"
-    echo "applications in client deployment mode, you may need to set SPARK_LOCAL_IP in your"
-    echo "scripts/config.sh to the external IP address of this system, for example:"
-    echo "  export SPARK_LOCAL_IP=\"192.168.1.555\""
-    echo ""
-    exit 1
+if [[ -z "${SPARK_LOCAL_IP:-}" ]]; then
+  if command -v ifconfig &> /dev/null; then
+    # Extract the first non-loopback, non-Docker/K8S bridge address
+    export SPARK_LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -Ev '^(127\.0\.0\.1|172\.)' | head -n 1)
+  else
+    # In CI environments without ifconfig, warn instead of crashing
+    echo "[WARNING] ifconfig not found. SPARK_LOCAL_IP will remain unset."
   fi
-
-  export SPARK_LOCAL_IP
 fi
 
 # Common Armada spark-submit conf args shared across all scripts
@@ -158,7 +165,7 @@ fi
 
 # OAuth proxy for the Spark UI. Requires cluster deploy mode + ingress.
 OAUTH_CONF=()
-if [ "${OAUTH_ENABLED:-false}" == "true" ]; then
+if [[ "${OAUTH_ENABLED:-false}" == "true" ]]; then
     OAUTH_CONF=(
         --conf spark.armada.driver.ingress.enabled=true
         --conf spark.armada.driver.ingress.tls.enabled="${OAUTH_INGRESS_TLS_ENABLED:-false}"
@@ -197,8 +204,8 @@ fi
 DEPLOY_MODE_ARGS=()
 if [ "$DEPLOY_MODE" = "client" ]; then
     DEPLOY_MODE_ARGS=(
-        --conf spark.driver.host=$SPARK_DRIVER_HOST
-        --conf spark.driver.port=$SPARK_DRIVER_PORT
+        --conf spark.driver.host=${SPARK_DRIVER_HOST:-"172.18.0.1"}
+        --conf spark.driver.port=${SPARK_DRIVER_PORT:-"7078"}
         --conf spark.driver.bindAddress=0.0.0.0
     )
 else
@@ -222,17 +229,7 @@ fi
 
 # Validation
 
-if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
-    echo "Error: --mode/-M must be either 'client' or 'cluster'"
-    exit 1
-fi
 export DEPLOY_MODE
-
-if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
-    echo "Error: --allocation/-A must be either 'static' or 'dynamic'"
-    exit 1
-fi
-export ALLOCATION_MODE
 
 if [ "$ALLOCATION_MODE" = "static" ]; then
     STATIC_MODE=true
@@ -283,14 +280,55 @@ else
     INCLUDE_PYTHON=true
 fi
 
-# derive Scala and Spark versions from pom.xml, set via ./scripts/set-version.sh
-if [[ -z "${SCALA_VERSION:-}" ]]; then
-  export SCALA_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.version ${MVN_OFFLINE-} -q -DforceStdout)
-  export SCALA_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=scala.binary.version ${MVN_OFFLINE-} -q -DforceStdout)
+# 1. Compute MAVEN_PROFILES and PROFILES_ARG immediately
+if [[ -z "${MAVEN_PROFILES:-}" ]]; then
+  if [[ "${SPARK_VERSION-}" == *"-SNAPSHOT" ]]; then
+    # Map snapshot to the base 4.1.1 profile properties for validation compatibility
+    SPARK_PROFILE="spark4.1.1"
+  elif [[ "${SPARK_VERSION-}" == 3.3.* ]]; then
+    SPARK_PROFILE="spark3.3.4"
+  elif [[ "${SPARK_VERSION-}" == 3.5.* ]]; then
+    SPARK_PROFILE="spark3.5.5"
+  elif [[ "${SPARK_VERSION-}" == 4.1.* ]]; then
+    SPARK_PROFILE="spark4.1.1"
+  else
+    SPARK_PROFILE="spark${SPARK_VERSION}"
+  fi
+  SCALA_PROFILE="scala${SCALA_VERSION}"
+  export MAVEN_PROFILES="${SPARK_PROFILE},${SCALA_PROFILE}"
 fi
-if [[ -z "${SPARK_VERSION:-}" ]]; then
-  export SPARK_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.version ${MVN_OFFLINE-} -q -DforceStdout)
-  export SPARK_BIN_VERSION=$(cd "$scripts/.."; mvn help:evaluate -Dexpression=spark.binary.version ${MVN_OFFLINE-} -q -DforceStdout)
+
+export PROFILES_ARG="-P${MAVEN_PROFILES}"
+
+# 2. Validation
+# This now executes AFTER MAVEN_PROFILES and PROFILES_ARG are exported
+if [[ "$DEPLOY_MODE" != "client" && "$DEPLOY_MODE" != "cluster" ]]; then
+    safe_abort "Error: --mode/-M must be either 'client' or 'cluster'. Please set parameters in scripts/config.sh or pass as arguments."
+fi
+
+if [[ "$ALLOCATION_MODE" != "static" && "$ALLOCATION_MODE" != "dynamic" ]]; then
+    echo "Error: --allocation/-A must be either 'static' or 'dynamic'"
+    safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
+fi
+export ALLOCATION_MODE
+
+# 3. Locate Project Root reliably
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "$script_dir/.." && pwd)"
+
+# 4. Evaluate versions if not set, using the established PROFILES_ARG
+if [[ -z "${SCALA_VERSION:-}" ]]; then 
+  export SCALA_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=scala.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SCALA_BIN_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=scala.binary.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+else
+  export SCALA_BIN_VERSION=$(echo "$SCALA_VERSION" | cut -d. -f1-2)
+fi 
+
+if [[ -z "${SPARK_VERSION:-}" ]]; then 
+  export SPARK_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=spark.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+  export SPARK_BIN_VERSION=$(mvn help:evaluate -q -DforceStdout -Dexpression=spark.binary.version -f "$project_root/pom.xml" ${PROFILES_ARG} ${MVN_OFFLINE-}) 
+else
+  export SPARK_BIN_VERSION=$(echo "$SPARK_VERSION" | cut -d. -f1-2)
 fi
 
 # When using DSS, validate Spark version + Scala version against known DSS base
@@ -311,7 +349,7 @@ if [ "$USE_DISTRIBUTED_SHUFFLE_STORAGE" = "true" ]; then
             ;;
         *)
             echo "Error: unsupported Spark/Scala combination for DSS: ${SPARK_VERSION} / ${SCALA_BIN_VERSION}"
-            exit 1
+            safe_abort "Please set the required parameters in scripts/config.sh or pass them as command line arguments."
             ;;
     esac
     DSS_TAG=${DSS_TAG:-latest}
@@ -331,9 +369,8 @@ export ARMADA_BENCHMARK_JAR ARMADA_BENCHMARK_JAR_ID
 export CLASS_PATH="${CLASS_PATH:-local:///opt/spark/examples/jars/spark-examples.jar}"
 
 # check the Spark version is supported
-if ! [ -e "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]; then
-    echo "This tool does not support Spark version ${SPARK_VERSION}."
-    exit 1
+if [[ ! -d "$root/src/main/scala-spark-$SPARK_BIN_VERSION" ]]; then
+  safe_abort "Unsupported Spark binary version $SPARK_BIN_VERSION. Directory not found."
 fi
 
 # Distributed shuffle storage / fallback storage conf args
@@ -366,7 +403,7 @@ if [ ${#FINAL_ARGS[@]} -eq 0 ]; then
     FINAL_ARGS+=("100")
 fi
 
-if [ "$INCLUDE_PYTHON" == "true" ]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
+if [[ "$INCLUDE_PYTHON" == "true" ]]; then WITH_PYTHON="-python3"; else WITH_PYTHON=""; fi
 image_tag="$SPARK_VERSION-scala$SCALA_BIN_VERSION-java${JAVA_VERSION:-17}$WITH_PYTHON-ubuntu"
 
 S3_CONF=()

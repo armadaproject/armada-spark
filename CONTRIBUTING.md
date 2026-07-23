@@ -5,14 +5,15 @@
 **Prerequisites:** Java 17, Maven 3.9.6+, Scala 2.13.8
 
 ```bash
-mvn clean package          # Build with tests
-mvn test                   # Run unit tests only
-mvn spotless:check         # Check formatting
-mvn spotless:apply         # Auto-fix formatting
-scripts/dev-e2e.sh         # Run E2E tests (requires a running Armada cluster)
+# The build requires explicit Spark and Scala profile selection to pass validation
+mvn -Pscala2.13.8,spark3.5.5 clean package   # Build default combo with tests
+mvn -Pscala2.13.8,spark3.5.5 test            # Run unit tests only
+mvn -Pscala2.13.8,spark3.5.5 spotless:check  # Check formatting
+mvn -Pscala2.13.8,spark3.5.5 spotless:apply  # Auto-fix formatting
+scripts/dev-e2e.sh                           # Run E2E tests (requires a running Armada cluster)
 
-# Target a different Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.15)
-./scripts/set-version.sh 3.3.4 2.12.15
+# Target a different supported Spark/Scala version (e.g., Spark 3.3.4, Scala 2.12.15)
+mvn -Pscala2.12.15,spark3.3.4 clean package
 ```
 
 ## Commit Conventions
@@ -28,14 +29,14 @@ Common scopes: `config`, `submit`, `allocator`, `event-watcher`, `e2e`, `docker`
 ## Pull Requests
 
 1. Branch from `master` (`git checkout -b feat/my-feature master`)
-2. Format code (`mvn spotless:apply`) and run tests (`mvn test`)
+2. Format code (`mvn spotless:apply`) and run tests (`mvn -Pscala2.13.8,spark3.5.5 test`)
 3. Commit using conventional commits with `--signoff`
 4. Open a PR against `master` — the PR title should also follow conventional commit format
 
 ### PR Checklist
 
-- [ ] `mvn clean package` compiles
-- [ ] `mvn test` passes
+- [ ] `mvn -Pscala2.13.8,spark3.5.5 clean package` compiles
+- [ ] `mvn -Pscala2.13.8,spark3.5.5 test` passes
 - [ ] `mvn spotless:check` passes
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 - [ ] New code includes tests

@@ -10,7 +10,7 @@ Armada.
 
 Clone `armada-spark` to a local directory, then run:
 ```bash
-./scripts/set-version.sh 3.5.5 2.13.8
+mvn -Pscala2.13.8,spark3.5.5 clean package
 ```
 This sets up `armada-spark` to be built with Spark 3.5.5 and Scala 2.13.8.
 
