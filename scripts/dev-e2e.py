@@ -127,9 +127,21 @@ def start_armada():
         
     log("Patching armada-operator")
     patch_file = os.path.join(PROJECT_ROOT, 'e2e', 'armada-operator.patch')
+
     with open(patch_file, 'r') as f:
-        if subprocess.run(['patch', '-p1', '-d', f"{AOHOME}/"], stdin=f).returncode != 0:
-            err(f"There was an error patching the repo copy {AOHOME}")
+        # -N (--forward) ignores patches that are already applied
+        # --batch prevents patch from prompting interactively on failure
+        res = subprocess.run(
+            ['patch', '-p1', '-N', '--batch', '-d', f"{AOHOME}/"],
+            stdin=f,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Returncode 0 means success; returncode 1 with "skipping" is safe for re-runs
+        if res.returncode != 0 and "ignored" not in res.stderr and "skipping" not in res.stderr:
+            err(f"There was an error patching the repo copy {AOHOME}: {res.stderr}")
             sys.exit(1)
 
     print("Running 'make kind-all' to install and start Armada; this may take up to 6 minutes", flush=True)
