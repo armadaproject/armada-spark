@@ -204,8 +204,8 @@ fi
 DEPLOY_MODE_ARGS=()
 if [ "$DEPLOY_MODE" = "client" ]; then
     DEPLOY_MODE_ARGS=(
-        --conf spark.driver.host=$SPARK_DRIVER_HOST
-        --conf spark.driver.port=$SPARK_DRIVER_PORT
+        --conf spark.driver.host=${SPARK_DRIVER_HOST:-"172.18.0.1"}
+        --conf spark.driver.port=${SPARK_DRIVER_PORT:-"7078"}
         --conf spark.driver.bindAddress=0.0.0.0
     )
 else
