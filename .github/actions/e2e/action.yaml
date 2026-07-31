@@ -49,7 +49,7 @@ runs:
       distribution: 'zulu'
   - name: Setup Go
     id: setup-go
-    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@72ecbbdfddd147af7be300cbea7f0d870004e56c # main
+    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@5fc51b4c183b1f333c5f3f13fc88b8c8815d79b8 # main
     with:
       cache-prefix: go-e2e
 
