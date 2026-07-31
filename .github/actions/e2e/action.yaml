@@ -47,11 +47,26 @@ runs:
     with:
       java-version: ${{ inputs.java_version }}
       distribution: 'zulu'
+  # Inlined from armadaproject/armada-operator's setup-go-cache composite action:
+  # that action calls actions/setup-go@v5 and actions/cache@v3 without pinning
+  # them to a commit SHA, which armada-spark's CI policy requires of every
+  # action, including ones nested inside third-party composite actions.
   - name: Setup Go
     id: setup-go
-    uses: armadaproject/armada-operator/.github/actions/setup-go-cache@72ecbbdfddd147af7be300cbea7f0d870004e56c # main
+    uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
     with:
-      cache-prefix: go-e2e
+      go-version: '1.22'
+      check-latest: true
+      cache: false
+  - name: Determine Go cache path
+    id: cache-info
+    shell: bash
+    run: echo path=$(go env GOCACHE) >> "$GITHUB_OUTPUT"
+  - name: Restore Go build cache
+    uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+    with:
+      path: ${{ steps.cache-info.outputs.path }}
+      key: go-e2e-go-${{ steps.setup-go.outputs.go-version }}-mod-${{ hashFiles('go.sum') }}
 
   - name: Set Spark and Scala versions
     working-directory: armada-spark
