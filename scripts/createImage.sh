@@ -49,6 +49,14 @@ elif [[ "$SPARK_VERSION" == "3."* ]] && ( [[ "$SCALA_BIN_VERSION" == "2.13" ]] |
             if [[ ! -d ".spark-$SPARK_VERSION" ]]; then
                 echo "Checking out Spark sources for tag v$SPARK_VERSION."
                 git clone https://github.com/apache/spark --branch v$SPARK_VERSION --depth 1 --no-tags ".spark-$SPARK_VERSION"
+                # Pin third-party GitHub Actions to immutable commit SHAs in the checked-out workflows.
+                for wf in ".spark-$SPARK_VERSION"/.github/workflows/*.yml ".spark-$SPARK_VERSION"/.github/workflows/*.yaml; do
+                    [ -f "$wf" ] || continue
+                    # For Spark 3.5.5 release
+                    sed -i -e 's|uses: actions/cache@v3|uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0|g' "$wf"
+                    sed -i -e 's|uses: actions/setup-go@v5|uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0|g' "$wf"
+                    # TODO add others for Spark 3.3.4 and 4.1.1
+                done
             fi
             cd ".spark-$SPARK_VERSION"
             # Spark 3.3.4 does not compile without this fix
