@@ -773,13 +773,13 @@ private[spark] class SparkSubmit extends Logging {
       ),
       OptionAssigner(
         args.executorCores,
-        STANDALONE | YARN | KUBERNETES,
+        STANDALONE | YARN | KUBERNETES | ARMADA,
         ALL_DEPLOY_MODES,
         confKey = EXECUTOR_CORES.key
       ),
       OptionAssigner(
         args.executorMemory,
-        STANDALONE | YARN | KUBERNETES,
+        STANDALONE | YARN | KUBERNETES | ARMADA,
         ALL_DEPLOY_MODES,
         confKey = EXECUTOR_MEMORY.key
       ),
@@ -805,13 +805,13 @@ private[spark] class SparkSubmit extends Logging {
       OptionAssigner(args.jars, STANDALONE | KUBERNETES | ARMADA, ALL_DEPLOY_MODES, confKey = JARS.key),
       OptionAssigner(
         args.driverMemory,
-        STANDALONE | YARN | KUBERNETES,
+        STANDALONE | YARN | KUBERNETES | ARMADA,
         CLUSTER,
         confKey = DRIVER_MEMORY.key
       ),
       OptionAssigner(
         args.driverCores,
-        STANDALONE | YARN | KUBERNETES,
+        STANDALONE | YARN | KUBERNETES | ARMADA,
         CLUSTER,
         confKey = DRIVER_CORES.key
       ),

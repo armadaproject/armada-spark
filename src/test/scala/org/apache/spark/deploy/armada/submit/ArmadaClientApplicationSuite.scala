@@ -39,6 +39,14 @@ import k8s.io.api.core.v1.generated.{
 }
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.armada.Config
+import org.apache.spark.internal.config.{
+  DRIVER_MEMORY,
+  DRIVER_MEMORY_OVERHEAD,
+  DRIVER_MEMORY_OVERHEAD_FACTOR,
+  EXECUTOR_MEMORY,
+  EXECUTOR_MEMORY_OVERHEAD,
+  EXECUTOR_MEMORY_OVERHEAD_FACTOR
+}
 import org.apache.spark.deploy.k8s.submit.JavaMainAppResource
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
@@ -2935,6 +2943,86 @@ class ArmadaClientApplicationSuite extends AnyFunSuite with BeforeAndAfter with 
     envNames should contain("SPARK_HOME")
     envNames should not contain "HADOOP_CONF_DIR"
     envNames should have size 1
+  }
+
+  private def deriveExecutorMemory(conf: SparkConf): Option[String] =
+    armadaClientApp.derivePodMemory(
+      conf,
+      EXECUTOR_MEMORY,
+      EXECUTOR_MEMORY_OVERHEAD,
+      EXECUTOR_MEMORY_OVERHEAD_FACTOR,
+      includeOffHeap = true
+    )
+
+  test("pod memory is not derived when the heap size is unset") {
+    deriveExecutorMemory(new SparkConf(false)) shouldBe None
+  }
+
+  test("pod memory is heap plus the default overhead fraction") {
+    val conf = new SparkConf(false).set("spark.executor.memory", "28g")
+    // 28g is 28672 MiB, overhead is 10% of that
+    deriveExecutorMemory(conf) shouldBe Some("31539Mi")
+  }
+
+  test("pod memory overhead honours the minimum for small heaps") {
+    val conf = new SparkConf(false).set("spark.executor.memory", "1g")
+    // 10% of 1024 MiB is below the 384 MiB floor, so the floor applies
+    deriveExecutorMemory(conf) shouldBe Some("1408Mi")
+  }
+
+  test("explicit memory overhead takes precedence over the fraction") {
+    val conf = new SparkConf(false)
+      .set("spark.executor.memory", "4g")
+      .set("spark.executor.memoryOverhead", "2g")
+    deriveExecutorMemory(conf) shouldBe Some("6144Mi")
+  }
+
+  test("memory overhead fraction is configurable") {
+    val conf = new SparkConf(false)
+      .set("spark.executor.memory", "10g")
+      .set("spark.executor.memoryOverheadFactor", "0.2")
+    deriveExecutorMemory(conf) shouldBe Some("12288Mi")
+  }
+
+  test("off-heap memory is added when enabled") {
+    val conf = new SparkConf(false)
+      .set("spark.executor.memory", "4g")
+      .set("spark.memory.offHeap.enabled", "true")
+      .set("spark.memory.offHeap.size", "1g")
+    // 4096 heap + 409 overhead + 1024 off-heap
+    deriveExecutorMemory(conf) shouldBe Some("5529Mi")
+  }
+
+  test("off-heap memory is ignored when disabled") {
+    val conf = new SparkConf(false)
+      .set("spark.executor.memory", "4g")
+      .set("spark.memory.offHeap.size", "1g")
+    deriveExecutorMemory(conf) shouldBe Some("4505Mi")
+  }
+
+  test("driver pod memory derives from the driver heap size") {
+    val conf = new SparkConf(false).set("spark.driver.memory", "8g")
+    armadaClientApp.derivePodMemory(
+      conf,
+      DRIVER_MEMORY,
+      DRIVER_MEMORY_OVERHEAD,
+      DRIVER_MEMORY_OVERHEAD_FACTOR,
+      includeOffHeap = false
+    ) shouldBe Some("9011Mi")
+  }
+
+  test("driver pod memory ignores off-heap memory, matching Spark on Kubernetes") {
+    val conf = new SparkConf(false)
+      .set("spark.driver.memory", "4g")
+      .set("spark.memory.offHeap.enabled", "true")
+      .set("spark.memory.offHeap.size", "1g")
+    armadaClientApp.derivePodMemory(
+      conf,
+      DRIVER_MEMORY,
+      DRIVER_MEMORY_OVERHEAD,
+      DRIVER_MEMORY_OVERHEAD_FACTOR,
+      includeOffHeap = false
+    ) shouldBe Some("4505Mi")
   }
 
 }
